@@ -1,5 +1,6 @@
 import asyncio
 import logging
+import os
 import sys
 
 from aiogram import Bot, Dispatcher
@@ -37,6 +38,22 @@ from aiohttp import web
 async def health_check(request):
     return web.Response(text="200 OK (Health Check)", status=200)
 
+
+async def start_health_server() -> web.AppRunner:
+    """Open Render's HTTP port before any external API request can delay startup."""
+    app = web.Application()
+    app.router.add_get("/", health_check)
+    app.router.add_get("/health", health_check)
+
+    runner = web.AppRunner(app)
+    await runner.setup()
+
+    port = int(os.environ.get("PORT", 8080))
+    site = web.TCPSite(runner, "0.0.0.0", port)
+    await site.start()
+    logger.info("🌐 Health-check сервер запущен на 0.0.0.0:%s", port)
+    return runner
+
 # ─── Точка входа ──────────────────────────────────────────────────────────────
 async def main() -> None:
     logger.info("🚀 Запуск АгроБота...")
@@ -54,26 +71,13 @@ async def main() -> None:
     # Инициализация базы данных SQLite
     init_db()
 
-    # Удаляем накопившиеся апдейты до старта
-    await bot.delete_webhook(drop_pending_updates=True)
-
-    logger.info("✅ Бот запущен. Нажмите Ctrl+C для остановки.")
-
-    # Настройка легковесного aiohttp сервера для Health Check
-    app = web.Application()
-    app.router.add_get("/", health_check)
-    app.router.add_get("/health", health_check)
-    
-    runner = web.AppRunner(app)
-    await runner.setup()
-    
-    import os
-    port = int(os.environ.get("PORT", 8080))
-    site = web.TCPSite(runner, "0.0.0.0", port)
-    await site.start()
-    logger.info(f"🌐 Health-check сервер запущен на 0.0.0.0:{port}")
-
+    # Render считает сервис готовым только после открытия PORT. Запускаем HTTP
+    # endpoint до первого сетевого обращения к Telegram, которое может задержаться.
+    runner = await start_health_server()
     try:
+        # Удаляем накопившиеся апдейты до старта
+        await bot.delete_webhook(drop_pending_updates=True)
+        logger.info("✅ Бот запущен. Нажмите Ctrl+C для остановки.")
         await dp.start_polling(bot)
     finally:
         await bot.session.close()
