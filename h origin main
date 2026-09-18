@@ -1,0 +1,8 @@
+[33m0992936[m[33m ([m[1;36mHEAD[m[33m -> [m[1;32mmain[m[33m)[m chore: update frontend revision
+[33m960236c[m feat: add catalog premium emoji to bot reports
+[33m329eda5[m feat: modernize Telegram bot with secure webhook
+[33mc829f6a[m fix: expose health port before Telegram startup
+[33m6b79e2c[m[33m ([m[1;31morigin/main[m[33m)[m feat: compact telegram report format
+[33m09252ae[m feat: compact telegram report format
+[33ma950497[m feat: compact telegram report format
+[33m16ad1a1[m feat: compact telegram report format
