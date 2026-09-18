@@ -8,12 +8,14 @@ try:
     from i18n import t
     from keyboards.inline import get_history_carousel_keyboard, get_lang_keyboard
     from keyboards.reply import get_main_reply_keyboard
-    from user_state import get_history, get_lang, set_lang
+    from user_state import get_lang, set_lang
+    from db import get_user_history
 except ImportError:
     from bot.i18n import t
     from bot.keyboards.inline import get_history_carousel_keyboard, get_lang_keyboard
     from bot.keyboards.reply import get_main_reply_keyboard
-    from bot.user_state import get_history, get_lang, set_lang
+    from bot.user_state import get_lang, set_lang
+    from bot.db import get_user_history
 
 start_router = Router()
 logger = logging.getLogger(__name__)
@@ -72,37 +74,17 @@ async def lang_chosen(callback: CallbackQuery) -> None:
 # ─── 📊 История расчетов (Карусель с инлайн-пагинацией) ───────────────────────
 def format_history_card(rec: dict, lang: str, page: int, total: int) -> str:
     """Форматирует одну карточку замера для карусели истории."""
-    saved_m3 = rec.get("saved_m3", 0.0)
-    savings_t = rec.get("savings_tenge", 0)
-    area = rec.get("area", "—")
-    unit = rec.get("unit", "га")
-    area_m2 = rec.get("area_m2")
-    if area_m2 is None:
-        try:
-            area_num = float(area)
-            area_m2 = int(area_num * 10000 if "га" in str(unit) or "hectare" in str(unit) else area_num * 100)
-        except Exception:
-            area_m2 = 0
-    else:
-        area_m2 = int(area_m2)
-
     return t(
         lang,
         "history_carousel_card",
         page=page,
         total=total,
         date=rec.get("date", "—"),
-        crop=rec.get("crop_name", rec.get("crop", "—")),
-        kc=rec.get("kc", 1.15),
-        area=area,
-        unit=unit,
-        area_m2=area_m2,
-        field_type=rec.get("field_type_name", "—"),
-        salinity=rec.get("saline_name", "—"),
-        irrig=rec.get("irrig_name", "—"),
-        volume=rec.get("volume_str", "—"),
-        saved_volume=rec.get("saved_water_str", f"{saved_m3:.1f} м³"),
-        savings_tenge=f"{savings_t:,}".replace(",", " "),
+        crop_name=rec.get("crop_name", "—"),
+        area_text=rec.get("area_text", "—"),
+        irrigation_text=rec.get("irrigation_text", "—"),
+        volume_text=rec.get("volume_text", "—"),
+        savings_text=rec.get("savings_text", "—"),
     )
 
 
@@ -116,7 +98,7 @@ async def show_history(message: Message) -> None:
     """
     user_id = message.from_user.id
     lang = get_lang(user_id)
-    history = get_history(user_id)
+    history = get_user_history(user_id)
 
     if not history:
         await message.answer(
@@ -142,7 +124,7 @@ async def show_history_inline(callback: CallbackQuery) -> None:
     """Обработчик инлайн-кнопки истории (когда обычная кнопка WebApp заблокирована)."""
     user_id = callback.from_user.id
     lang = get_lang(user_id)
-    history = get_history(user_id)
+    history = get_user_history(user_id)
 
     if not history:
         await callback.answer(t(lang, "history_empty"), show_alert=True)
@@ -165,7 +147,7 @@ async def handle_history_page(callback: CallbackQuery) -> None:
     """Плавное переключение страниц карусели истории через edit_text."""
     user_id = callback.from_user.id
     lang = get_lang(user_id)
-    history = get_history(user_id)
+    history = get_user_history(user_id)
 
     if not history:
         await callback.answer(t(lang, "history_empty"), show_alert=True)

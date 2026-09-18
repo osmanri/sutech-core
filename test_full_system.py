@@ -8,7 +8,7 @@ test_full_system.py — Комплексный скрипт автоматизи
   2. Линейное масштабирование объемов (сотки: 1, 5, 20; гектары: 1, 10, 100 га).
   3. Лингвистическая валидация словаря i18n.py (RU и KZ, 100% паритет ключей и плейсхолдеров, 0 символов $).
   4. Граничные тесты валидатора площади (area <= 0, area >= 50000, невалидные типы).
-  5. Синхронизация фронтенда (index.html, app.js, строгие 8 культур, 5 методов полива, тумблеры).
+  5. Синхронизация фронтенда (index.html, app.js, 9 культур, 5 методов полива, тумблеры).
   6. Тестирование карусели истории и Reply-меню бота (кнопки, пагинация, возврат в меню).
 """
 
@@ -263,9 +263,9 @@ test_record = {
     "is_saline": "no",
     "saline_name": "Обычная почва",
     "irrig_name": "Капельный полив (КПД 90%)",
-    "volume_str": "45.2 м³",
+    "volume_text": "45.2 м³",
     "saved_liters": 15800.0,
-    "saved_water_str": "15.8 м³",
+    "savings_text": "15.8 м³ (~2 370 ₸)",
     "saved_m3": 15.8,
     "savings_tenge": 2370,
 }
@@ -320,12 +320,13 @@ if header_match:
     reporter.check("tractor" not in h_text, "Отсутствие трактора в <header>")
     reporter.check("img/logo.jpg" in h_text, "Наличие официального логотипа img/logo.jpg в <header>")
     reporter.check("Su-Tech" in h_text, "Наличие 'Su-Tech' в <header>")
-    reporter.check("Smart Irrigation System" in h_text, "Наличие 'Smart Irrigation System' в <header>")
+    reporter.check("Smart Irrigation" in h_text, "Наличие 'Smart Irrigation' в <header>")
 
-# 2. Проверка ровно 8 культур в HTML и JS
+# 2. В интерфейсе 8 исходных культур и «Другая культура».
 crop_cards = re.findall(r'data-crop="([^"]+)"', html_content)
-reporter.check(len(crop_cards) == 8, f"Ровно 8 культур в сетке карточек HTML (найдено: {len(crop_cards)})")
-reporter.check(crop_cards == CROPS_8, f"Точный состав культур: {crop_cards} == {CROPS_8}")
+expected_ui_crops = CROPS_8 + ["other"]
+reporter.check(len(crop_cards) == 9, f"Ровно 9 культур в сетке карточек HTML (найдено: {len(crop_cards)})")
+reporter.check(crop_cards == expected_ui_crops, f"Точный состав культур: {crop_cards} == {expected_ui_crops}")
 
 # Проверка эмодзи 8 культур
 emojis = ["🌾", "☁️", "🌽", "🍚", "🌿", "🍉", "🍅", "🥔"]

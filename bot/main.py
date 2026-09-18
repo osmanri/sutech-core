@@ -9,6 +9,7 @@ from aiogram.enums import ParseMode
 from config import BOT_TOKEN
 from handlers.start import start_router
 from handlers.webapp import webapp_router
+from db import init_db
 
 # ─── Логирование ──────────────────────────────────────────────────────────────
 if sys.platform == "win32":
@@ -49,6 +50,9 @@ async def main() -> None:
     # Регистрируем роутеры в порядке приоритета
     dp.include_router(start_router)
     dp.include_router(webapp_router)
+
+    # Инициализация базы данных SQLite
+    init_db()
 
     # Удаляем накопившиеся апдейты до старта
     await bot.delete_webhook(drop_pending_updates=True)

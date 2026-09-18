@@ -15,7 +15,7 @@ try:
 except ImportError:
     from bot.i18n import t
     from bot.keyboards.inline import get_report_inline_keyboard
-    from bot.user_state import add_history, get_lang
+    from bot.user_state import get_lang
 
 webapp_router = Router()
 logger = logging.getLogger(__name__)
@@ -62,6 +62,7 @@ async def fetch_meteo(lat: float, lon: float) -> dict:
     params = {
         "latitude": lat,
         "longitude": lon,
+        "wind_speed_unit": "ms",
         "current": (
             "temperature_2m,"
             "soil_moisture_3_to_9cm,"
@@ -211,6 +212,25 @@ def calculate_water_demand(
     }
 
 
+def format_compact_report(lang, crop, irrigation_type, area_m2, temperature, wind_speed, soil_moisture, result):
+    """Six-line localized report; always hectares and cubic metres, including small fields."""
+    def number(value, precision):
+        return f"{value:,.{precision}f}".rstrip("0").rstrip(".").replace(",", " ")
+
+    return t(
+        lang, "compact_report",
+        crop=t(lang, f"report_crop_{crop}"),
+        irrigation=t(lang, f"report_irrig_{irrigation_type}"),
+        area_ha=number(area_m2 / 10000, 6),
+        temp=f"{temperature:.1f}",
+        wind=f"{wind_speed:.1f}",
+        moisture=f"{soil_moisture:.3f}",
+        volume_m3=number(result["total_liters"] / 1000, 4),
+        savings=f"{result['savings_tenge']:,}".replace(",", " "),
+        decision=t(lang, "decision_irrigate" if result["needs_irrigation"] else "decision_normal"),
+    )
+
+
 @webapp_router.message(F.web_app_data)
 async def handle_webapp_data(message: Message, state: FSMContext) -> None:
     """
@@ -219,7 +239,7 @@ async def handle_webapp_data(message: Message, state: FSMContext) -> None:
     Производит полный агрономический, климатический и гидрологический расчет по модели FAO-56.
     """
     await state.clear()
-    
+
     user_id = message.from_user.id
     lang = get_lang(user_id)
 
@@ -228,16 +248,27 @@ async def handle_webapp_data(message: Message, state: FSMContext) -> None:
         logger.debug("RAW web_app_data от user_id=%s: %s", user_id, raw)
 
         data = json.loads(raw)
+        if data.get("lang") in ("ru", "kz"):
+            lang = data["lang"]
 
         # Координаты
-        lat: float | None = data.get("latitude") or data.get("lat")
-        lon: float | None = data.get("longitude") or data.get("lon")
+        lat: float | None = data.get("latitude", data.get("lat"))
+        lon: float | None = data.get("longitude", data.get("lon"))
 
         if lat is None or lon is None:
             logger.warning(
                 "Координаты не найдены в payload. Ключи в data: %s | raw: %s",
                 list(data.keys()), raw,
             )
+            await message.answer(t(lang, "err_no_coords"))
+            return
+
+        try:
+            lat, lon = float(lat), float(lon)
+        except (TypeError, ValueError):
+            await message.answer(t(lang, "err_no_coords"))
+            return
+        if not (math.isfinite(lat) and math.isfinite(lon) and -90 <= lat <= 90 and -180 <= lon <= 180):
             await message.answer(t(lang, "err_no_coords"))
             return
 
@@ -347,94 +378,30 @@ async def handle_webapp_data(message: Message, state: FSMContext) -> None:
         irrig_name      = t(lang, f"irrig_{irrigation_type}")
         field_type_name = t(lang, f"field_type_{field_type}")
         saline_name     = t(lang, f"saline_{is_saline}")
-        saline_note     = t(lang, f"saline_note_{is_saline}")
-
-        # Блок координат
-        coords_block = t(lang, "field_coords", lat=lat, lon=lon)
-
-        # Блок параметров участка
-        field_block = (
-            t(lang, "field_params_header") + "\n"
-            + t(lang, "field_crop", crop=crop_name, kc=result["kc"]) + "\n"
-            + t(lang, "field_area", area=area, unit=unit_name, area_m2=int(area_m2)) + "\n"
-            + t(lang, "field_type_row", field_type=field_type_name) + "\n"
-            + t(lang, "field_saline_row", salinity=saline_name) + "\n"
-            + t(lang, "field_irrig", irrigation=irrig_name)
+        final_message = format_compact_report(
+            lang, crop, irrigation_type, area_m2,
+            temperature, wind_speed, soil_moisture, result,
         )
 
-        # Блок метеоусловий и агрофизики
-        climate_block = (
-            t(lang, "climate_header") + "\n"
-            + t(
-                lang,
-                "climate_data",
-                temp=temperature,
-                wind=result["u2_wind"],
-                rad=result["radiation_eff"],
-                moisture=f"{soil_moisture:.3f}",
-                et0=f"{result['et0_mm_day']:.2f}",
-                etc=f"{result['etc_mm_day']:.2f}",
-            )
+        # Сохраняем расчет в историю пользователя навсегда (SQLite)
+        from bot.db import save_calculation
+        created_at = datetime.now().strftime("%d.%m.%Y %H:%M")
+        crop_text = f"{crop_name} (Kc = {result['kc']})"
+        area_text = f"{area} {unit_name} ({area_m2:,} м²)".replace(",", " ")
+        irrigation_text = f"{field_type_name} | {saline_name} | {irrig_name}"
+        volume_text = result["volume_str"]
+        savings_text = f"{result['saved_water_str']} (~{result['savings_tenge']:,} ₸)".replace(",", " ")
+
+        save_calculation(
+            user_id=user_id,
+            crop_name=crop_text,
+            area_text=area_text,
+            irrigation_text=irrigation_text,
+            volume_text=volume_text,
+            savings_text=savings_text,
+            lang=lang,
+            created_at=created_at
         )
-
-        # Блок итоговой рекомендации
-        rec_label = t(lang, "rec_label")
-        if result["needs_irrigation"]:
-            rec_text = t(
-                lang,
-                "rec_irrigate_field",
-                volume=result["volume_str"],
-                saline_note=saline_note,
-            )
-        else:
-            rec_text = t(lang, "rec_no_irrigation", moisture=f"{soil_moisture:.3f}")
-
-        formatted_savings = f"{result['savings_tenge']:,}".replace(",", " ")
-
-        # Блок экономической и экологической экономии (ETc * 1.35 - V)
-        savings_block = t(
-            lang,
-            "savings",
-            saved_volume=result["saved_water_str"],
-            value=formatted_savings,
-        )
-
-        webapp_hint = t(lang, "open_webapp_hint")
-
-        # Сборка единого итогового сообщения отчета
-        final_message = (
-            t(lang, "analysis_header") + "\n\n"
-            + coords_block + "\n\n"
-            + field_block + "\n\n"
-            + climate_block + "\n\n"
-            + rec_label + "\n"
-            + rec_text + "\n\n"
-            + savings_block + "\n\n"
-            + webapp_hint
-        )
-
-        # Сохраняем расчет в историю пользователя (последние 5 записей)
-        record = {
-            "date": datetime.now().strftime("%d.%m.%Y %H:%M"),
-            "crop": crop,
-            "crop_name": crop_name,
-            "kc": result["kc"],
-            "area": area,
-            "area_m2": area_m2,
-            "unit": unit_name,
-            "field_type": field_type,
-            "field_type_name": field_type_name,
-            "is_saline": is_saline,
-            "saline_name": saline_name,
-            "irrigation_type": irrigation_type,
-            "irrig_name": irrig_name,
-            "volume_str": result["volume_str"],
-            "saved_liters": result["saved_liters"],
-            "saved_water_str": result["saved_water_str"],
-            "saved_m3": result["saved_m3"],
-            "savings_tenge": result["savings_tenge"],
-        }
-        add_history(user_id, record)
 
         await message.answer(
             final_message,

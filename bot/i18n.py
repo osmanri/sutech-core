@@ -11,6 +11,31 @@ i18n.py — Централизованный словарь всех строк 
 STRINGS: dict[str, dict[str, str]] = {
     # ── Русский ───────────────────────────────────────────────────────────────
     "ru": {
+        "compact_report": (
+            "🌿 <b>Su-Tech | Агро-отчет (FAO-56)</b>\n"
+            "📍 {crop} | {area_ha} га | {irrigation}\n"
+            "☀️ Т: {temp}°C | Ветер: {wind} м/с | Влага: {moisture} m³/m³\n"
+            "💧 <b>РЕКОМЕНДУЕМАЯ ВОДА: {volume_m3} м³</b>\n"
+            "💰 <b>ЭКОНОМИЯ: ~{savings} ₸</b> (энергия насоса)\n"
+            "🎯 Решение: {decision}"
+        ),
+        "decision_irrigate": "Нужен полив",
+        "decision_normal": "Норма",
+        "report_crop_wheat": "Пшеница",
+        "report_crop_cotton": "Хлопок",
+        "report_crop_corn": "Кукуруза",
+        "report_crop_rice": "Рис",
+        "report_crop_alfalfa": "Люцерна",
+        "report_crop_melon": "Бахча",
+        "report_crop_tomato": "Томаты",
+        "report_crop_potato": "Картофель",
+        "report_crop_other": "Другая культура",
+        "report_crop_sunflower": "Подсолнечник",
+        "report_irrig_drip": "Капельный полив",
+        "report_irrig_sprinkler": "Дождевание",
+        "report_irrig_pivot": "Круговой пивот",
+        "report_irrig_furrow": "Арычный полив",
+        "report_irrig_subsurface": "Подпочвенный полив",
         # Выбор языка
         "choose_lang": "🌐 Выберите язык / Тілді таңдаңыз:",
 
@@ -121,13 +146,11 @@ STRINGS: dict[str, dict[str, str]] = {
         "history_carousel_card": (
             "📊 <b>ИСТОРИЯ РАСЧЕТОВ (Замер {page} из {total})</b>\n\n"
             "📅 <b>Дата:</b> {date}\n"
-            "🌾 <b>Культура:</b> {crop} (Kc = {kc})\n"
-            "📐 <b>Площадь:</b> {area} {unit} ({area_m2:,} м²)\n"
-            "🏡 <b>Условия:</b> {field_type}\n"
-            "🧂 <b>Почва:</b> {salinity}\n"
-            "💧 <b>Метод полива:</b> {irrig}\n\n"
-            "🚿 <b>Суточный объем:</b> <b>{volume}</b>\n"
-            "💰 <b>Сэкономлено воды:</b> <b>{saved_volume}</b> (~<b>{savings_tenge} ₸</b>)"
+            "🌾 <b>Культура:</b> {crop_name}\n"
+            "📐 <b>Площадь:</b> {area_text}\n"
+            "💧 <b>Метод полива:</b> {irrigation_text}\n\n"
+            "🚿 <b>Суточный объем:</b> <b>{volume_text}</b>\n"
+            "💰 <b>Сэкономлено:</b> <b>{savings_text}</b>"
         ),
         "history_page_btn": "Стр. {page} из {total}",
         "history_btn_menu": "🔙 В главное меню",
@@ -210,6 +233,31 @@ STRINGS: dict[str, dict[str, str]] = {
 
     # ── Қазақша ───────────────────────────────────────────────────────────────
     "kz": {
+        "compact_report": (
+            "🌿 <b>Su-Tech | Агро-есеп (FAO-56)</b>\n"
+            "📍 {crop} | {area_ha} га | {irrigation}\n"
+            "☀️ Т: {temp}°C | Жел: {wind} м/с | Ылғал: {moisture} m³/m³\n"
+            "💧 <b>ҰСЫНЫЛАТЫН СУ: {volume_m3} м³</b>\n"
+            "💰 <b>ҮНЕМ: ~{savings} ₸</b> (насос қуаты)\n"
+            "🎯 Шешім: {decision}"
+        ),
+        "decision_irrigate": "Суару қажет",
+        "decision_normal": "Қалыпты",
+        "report_crop_wheat": "Бидай",
+        "report_crop_cotton": "Мақта",
+        "report_crop_corn": "Жүгері",
+        "report_crop_rice": "Күріш",
+        "report_crop_alfalfa": "Жоңышқа",
+        "report_crop_melon": "Бақша",
+        "report_crop_tomato": "Қызанақ",
+        "report_crop_potato": "Картоп",
+        "report_crop_other": "Басқа дақыл",
+        "report_crop_sunflower": "Күнбағыс",
+        "report_irrig_drip": "Тамшылатып суару",
+        "report_irrig_sprinkler": "Жаңбырлатып суару",
+        "report_irrig_pivot": "Айналмалы пивот",
+        "report_irrig_furrow": "Арықпен суару",
+        "report_irrig_subsurface": "Топырақішілік суару",
         # Выбор языка
         "choose_lang": "🌐 Выберите язык / Тілді таңдаңыз:",
 
@@ -319,15 +367,13 @@ STRINGS: dict[str, dict[str, str]] = {
             "Алғашқы есептеуді бастау үшін <b>«🌿 Su-Tech ашу»</b> түймесін басыңыз!"
         ),
         "history_carousel_card": (
-            "📊 <b>ЕСЕПТЕУЛЕР ТАРИХЫ ({page}-өлшем, барлығы {total})</b>\n\n"
+            "📊 <b>ЕСЕПТЕУЛЕР ТАРИХЫ (Өлшеу {page} / {total})</b>\n\n"
             "📅 <b>Күні:</b> {date}\n"
-            "🌾 <b>Дақыл:</b> {crop} (Kc = {kc})\n"
-            "📐 <b>Ауданы:</b> {area} {unit} ({area_m2:,} м²)\n"
-            "🏡 <b>Жағдайы:</b> {field_type}\n"
-            "🧂 <b>Топырақ:</b> {salinity}\n"
-            "💧 <b>Суару әдісі:</b> {irrig}\n\n"
-            "🚿 <b>Тәуліктік көлем:</b> <b>{volume}</b>\n"
-            "💰 <b>Үнемделген су:</b> <b>{saved_volume}</b> (~<b>{savings_tenge} ₸</b>)"
+            "🌾 <b>Дақыл:</b> {crop_name}\n"
+            "📐 <b>Ауданы:</b> {area_text}\n"
+            "💧 <b>Суару әдісі:</b> {irrigation_text}\n\n"
+            "🚿 <b>Тәуліктік көлемі:</b> <b>{volume_text}</b>\n"
+            "💰 <b>Үнемделді:</b> <b>{savings_text}</b>"
         ),
         "history_page_btn": "Бет {page} из {total}",
         "history_btn_menu": "🔙 Басты мәзірге",
