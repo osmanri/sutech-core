@@ -384,7 +384,10 @@ async def handle_webapp_data(message: Message, state: FSMContext) -> None:
         )
 
         # Сохраняем расчет в историю пользователя навсегда (SQLite)
-        from bot.db import save_calculation
+        try:
+            from db import save_calculation
+        except ImportError:
+            from bot.db import save_calculation
         created_at = datetime.now().strftime("%d.%m.%Y %H:%M")
         crop_text = f"{crop_name} (Kc = {result['kc']})"
         area_text = f"{area} {unit_name} ({area_m2:,} м²)".replace(",", " ")
