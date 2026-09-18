@@ -23,15 +23,36 @@ def get_lang_keyboard() -> InlineKeyboardMarkup:
     )
 
 
+def get_launch_keyboard(lang: str = "ru") -> InlineKeyboardMarkup:
+    """Native inline launcher for /app, help and empty-history responses."""
+    url_with_lang = f"{WEBAPP_URL}{'&' if '?' in WEBAPP_URL else '?'}lang={lang}"
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(
+                    text=t(lang, "btn_webapp"),
+                    web_app=WebAppInfo(url=url_with_lang),
+                )
+            ]
+        ]
+    )
+
+
 def get_report_inline_keyboard(lang: str = "ru") -> InlineKeyboardMarkup:
     """
     Возвращает инлайн-кнопки под итоговым агро-отчетом:
       [ 🔄 Новый расчет / Қайта есептеу ] (WebApp)
       [ 📜 О методике / Толық әдістеме ] (Callback popup с описанием FAO-56)
     """
-    url_with_lang = f"{WEBAPP_URL}?lang={lang}"
+    url_with_lang = f"{WEBAPP_URL}{'&' if '?' in WEBAPP_URL else '?'}lang={lang}"
     return InlineKeyboardMarkup(
         inline_keyboard=[
+            [
+                InlineKeyboardButton(
+                    text=t(lang, "btn_recalculate"),
+                    web_app=WebAppInfo(url=url_with_lang),
+                )
+            ],
             [
                 InlineKeyboardButton(
                     text=t(lang, "btn_history"),
@@ -77,4 +98,3 @@ def get_history_carousel_keyboard(lang: str, current_page: int, total_pages: int
             ],
         ]
     )
-

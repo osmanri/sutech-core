@@ -1,0 +1,13 @@
+# Secrets and local configuration
+.env
+*.env
+!.env.example
+!**/.env.example
+
+# Python runtime files
+__pycache__/
+*.py[cod]
+*.db
+
+# Local test dependencies
+.test-deps/

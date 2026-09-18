@@ -298,7 +298,7 @@ print("\n[СЮИТА 5] Верификация фронтенда и стати�
 
 html_file = os.path.join(BASE_DIR, "frontend", "index.html")
 js_file = os.path.join(BASE_DIR, "frontend", "js", "app.js")
-logo_file = os.path.join(BASE_DIR, "frontend", "img", "logo.jpg")
+logo_file = os.path.join(BASE_DIR, "frontend", "img", "logo-mark.png")
 
 reporter.check(os.path.exists(logo_file), f"Наличие файла официального логотипа: {logo_file}")
 
@@ -318,7 +318,7 @@ if header_match:
     h_text = header_match.group(0)
     reporter.check("FAO-56" not in h_text, "Отсутствие 'FAO-56' в теге <header>")
     reporter.check("tractor" not in h_text, "Отсутствие трактора в <header>")
-    reporter.check("img/logo.jpg" in h_text, "Наличие официального логотипа img/logo.jpg в <header>")
+    reporter.check("img/logo-mark.png" in h_text, "Наличие официального логотипа img/logo-mark.png в <header>")
     reporter.check("Su-Tech" in h_text, "Наличие 'Su-Tech' в <header>")
     reporter.check("Smart Irrigation" in h_text, "Наличие 'Smart Irrigation' в <header>")
 

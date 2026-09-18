@@ -1,10 +1,13 @@
 import sqlite3
 import logging
+import os
+from contextlib import closing
+from pathlib import Path
 from typing import List, Dict
 
 logger = logging.getLogger(__name__)
 
-DB_PATH = "history.db"
+DB_PATH = os.getenv("DB_PATH", str(Path(__file__).with_name("history.db")))
 
 def init_db():
     try:
@@ -21,6 +24,13 @@ def init_db():
                 volume_text TEXT,
                 savings_text TEXT,
                 lang TEXT
+            )
+        """)
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS users (
+                user_id INTEGER PRIMARY KEY,
+                lang TEXT NOT NULL DEFAULT 'ru',
+                updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
             )
         """)
         conn.commit()
@@ -70,3 +80,38 @@ def get_user_history(user_id: int) -> List[Dict]:
     except Exception as e:
         logger.error(f"Error fetching history from SQLite: {e}")
         return []
+
+
+def get_user_language(user_id: int) -> str | None:
+    """Return a persisted language, or None for a first-time user."""
+    try:
+        with closing(sqlite3.connect(DB_PATH)) as conn:
+            row = conn.execute(
+                "SELECT lang FROM users WHERE user_id = ?",
+                (user_id,),
+            ).fetchone()
+        return row[0] if row and row[0] in {"ru", "kz"} else None
+    except Exception as exc:
+        logger.error("Error fetching user language: %s", exc)
+        return None
+
+
+def set_user_language(user_id: int, lang: str) -> None:
+    """Persist the selected language across bot and Render restarts."""
+    if lang not in {"ru", "kz"}:
+        raise ValueError(f"Unsupported language: {lang}")
+    try:
+        with closing(sqlite3.connect(DB_PATH)) as conn:
+            conn.execute(
+                """
+                INSERT INTO users (user_id, lang, updated_at)
+                VALUES (?, ?, CURRENT_TIMESTAMP)
+                ON CONFLICT(user_id) DO UPDATE SET
+                    lang = excluded.lang,
+                    updated_at = CURRENT_TIMESTAMP
+                """,
+                (user_id, lang),
+            )
+            conn.commit()
+    except Exception as exc:
+        logger.error("Error saving user language: %s", exc)

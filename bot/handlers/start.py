@@ -1,3 +1,4 @@
+import html
 import logging
 
 from aiogram import F, Router
@@ -5,14 +6,16 @@ from aiogram.filters import Command, CommandStart
 from aiogram.types import CallbackQuery, Message
 
 try:
+    from bot_setup import configure_user_menu
     from i18n import t
-    from keyboards.inline import get_history_carousel_keyboard, get_lang_keyboard
+    from keyboards.inline import get_history_carousel_keyboard, get_lang_keyboard, get_launch_keyboard
     from keyboards.reply import get_main_reply_keyboard
     from user_state import get_lang, set_lang
     from db import get_user_history
 except ImportError:
+    from bot.bot_setup import configure_user_menu
     from bot.i18n import t
-    from bot.keyboards.inline import get_history_carousel_keyboard, get_lang_keyboard
+    from bot.keyboards.inline import get_history_carousel_keyboard, get_lang_keyboard, get_launch_keyboard
     from bot.keyboards.reply import get_main_reply_keyboard
     from bot.user_state import get_lang, set_lang
     from bot.db import get_user_history
@@ -45,10 +48,14 @@ async def lang_chosen(callback: CallbackQuery) -> None:
     """
     lang = callback.data.split(":")[1]  # "lang:kz" → "kz"
     user_id = callback.from_user.id
-    name = callback.from_user.first_name or ("Фермер" if lang == "ru" else "Фермер")
+    name = html.escape(callback.from_user.first_name or "Фермер")
 
     set_lang(user_id, lang)
     logger.info("Язык выбран | user_id=%s | lang=%s", user_id, lang)
+    try:
+        await configure_user_menu(callback.bot, user_id, lang)
+    except Exception as exc:
+        logger.warning("Не удалось обновить кнопку меню для user_id=%s: %s", user_id, exc)
 
     # Обновляем сообщение и Reply-клавиатуру без отправки отдельного спам-сообщения
     try:
@@ -197,13 +204,25 @@ async def handle_history_menu(callback: CallbackQuery) -> None:
 
 # ─── ⚙️ Выбор языка ──────────────────────────────────────────────────────────
 @start_router.message(F.text.in_({"⚙️ Язык", "⚙️ Тіл", "/lang", "/language"}))
-@start_router.message(Command("lang"))
+@start_router.message(Command("lang", "language"))
 async def change_lang_menu(message: Message) -> None:
     """Отправляет инлайн-кнопки для переключения языка."""
     lang = get_lang(message.from_user.id)
     await message.answer(
         text=t(lang, "choose_lang"),
         reply_markup=get_lang_keyboard(),
+    )
+
+
+# ─── 🌿 Открытие Mini App ───────────────────────────────────────────────────
+@start_router.message(Command("app"))
+async def open_app(message: Message) -> None:
+    """Show a native Web App button from the command menu."""
+    lang = get_lang(message.from_user.id)
+    await message.answer(
+        text=t(lang, "app_prompt"),
+        parse_mode="HTML",
+        reply_markup=get_launch_keyboard(lang),
     )
 
 
@@ -245,4 +264,15 @@ async def show_methodology(callback: CallbackQuery) -> None:
     await callback.message.answer(
         text=t(lang, "methodology_text"),
         parse_mode="HTML",
+    )
+
+
+# Keep this text-only fallback last so commands, WebApp data and callbacks keep
+# their dedicated handlers.
+@start_router.message(F.text)
+async def unknown_text(message: Message) -> None:
+    lang = get_lang(message.from_user.id)
+    await message.answer(
+        text=t(lang, "unknown_message"),
+        reply_markup=get_launch_keyboard(lang),
     )

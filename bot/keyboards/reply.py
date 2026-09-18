@@ -15,7 +15,7 @@ def get_main_reply_keyboard(lang: str = "ru") -> ReplyKeyboardMarkup:
       - Ряд 2: 📊 История / 📊 Тарих | ⚙️ Язык / ⚙️ Тіл
       - Ряд 3: 📜 О системе / 📜 Жүйе туралы | ❓ Помощь / ❓ Көмек
     """
-    url_with_lang = f"{WEBAPP_URL}?lang={lang}"
+    url_with_lang = f"{WEBAPP_URL}{'&' if '?' in WEBAPP_URL else '?'}lang={lang}"
 
     return ReplyKeyboardMarkup(
         keyboard=[
