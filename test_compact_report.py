@@ -4,7 +4,15 @@ import unittest
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
 
-from bot.handlers.webapp import calculate_water_demand, format_compact_report, handle_webapp_data
+import aiohttp
+
+from bot.handlers.webapp import (
+    DEFAULT_METEO,
+    calculate_water_demand,
+    fetch_meteo,
+    format_compact_report,
+    handle_webapp_data,
+)
 from bot.i18n import STRINGS, t
 
 
@@ -40,6 +48,15 @@ class CompactReportTests(unittest.TestCase):
 
 
 class WebAppReportTests(unittest.IsolatedAsyncioTestCase):
+    async def test_weather_provider_outage_keeps_analysis_available(self):
+        with patch(
+            "bot.handlers.webapp.aiohttp.ClientSession",
+            side_effect=aiohttp.ClientError("provider unavailable"),
+        ):
+            meteo = await fetch_meteo(44.852290, 65.488472)
+
+        self.assertEqual(meteo, DEFAULT_METEO)
+
     async def test_payload_units_language_and_history(self):
         for unit, area in (("hectare", .01), ("sotka", 1)):
             with self.subTest(unit=unit):

@@ -1,4 +1,5 @@
 from datetime import datetime
+import asyncio
 import json
 import logging
 import math
@@ -21,6 +22,12 @@ webapp_router = Router()
 logger = logging.getLogger(__name__)
 
 OPEN_METEO_URL = "https://api.open-meteo.com/v1/forecast"
+DEFAULT_METEO = {
+    "temperature": 25.0,
+    "soil_moisture": 0.20,
+    "wind_speed": 2.0,
+    "radiation": 500.0,
+}
 
 # ── Агрономические коэффициенты культур (Kc по FAO-56, строго 8 культур) ─────
 CROP_KC: dict[str, float] = {
@@ -70,16 +77,43 @@ async def fetch_meteo(lat: float, lon: float) -> dict:
             "shortwave_radiation"
         ),
     }
-    async with aiohttp.ClientSession() as session:
-        async with session.get(
-            OPEN_METEO_URL,
-            params=params,
-            timeout=aiohttp.ClientTimeout(total=10),
-        ) as resp:
-            resp.raise_for_status()
-            payload = await resp.json()
+    try:
+        async with aiohttp.ClientSession() as session:
+            async with session.get(
+                OPEN_METEO_URL,
+                params=params,
+                timeout=aiohttp.ClientTimeout(total=10),
+            ) as resp:
+                resp.raise_for_status()
+                payload = await resp.json()
+    except (
+        aiohttp.ClientError,
+        asyncio.TimeoutError,
+        OSError,
+        TypeError,
+        ValueError,
+        RuntimeError,
+    ) as exc:
+        # Telegram WebApps can run on networks that block or interrupt external
+        # weather requests. Keep the calculation available with conservative
+        # defaults instead of turning a recoverable API outage into err_internal.
+        logger.warning(
+            "Open-Meteo unavailable for %.6f,%.6f (%s); using defaults",
+            lat,
+            lon,
+            exc,
+        )
+        return DEFAULT_METEO.copy()
 
-    current = payload.get("current", {})
+    if not isinstance(payload, dict):
+        logger.warning("Open-Meteo returned an unexpected payload; using defaults")
+        return DEFAULT_METEO.copy()
+
+    current = payload.get("current")
+    if not isinstance(current, dict):
+        logger.warning("Open-Meteo response has no current weather block; using defaults")
+        return DEFAULT_METEO.copy()
+
     return {
         "temperature":   current.get("temperature_2m"),
         "soil_moisture": current.get("soil_moisture_3_to_9cm"),
