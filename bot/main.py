@@ -30,6 +30,12 @@ logging.getLogger("aiohttp").setLevel(logging.WARNING)
 logger = logging.getLogger(__name__)
 
 
+from aiohttp import web
+
+# ─── Health Check Server ──────────────────────────────────────────────────────
+async def health_check(request):
+    return web.Response(text="200 OK (Health Check)", status=200)
+
 # ─── Точка входа ──────────────────────────────────────────────────────────────
 async def main() -> None:
     logger.info("🚀 Запуск АгроБота...")
@@ -49,10 +55,25 @@ async def main() -> None:
 
     logger.info("✅ Бот запущен. Нажмите Ctrl+C для остановки.")
 
+    # Настройка легковесного aiohttp сервера для Health Check
+    app = web.Application()
+    app.router.add_get("/", health_check)
+    app.router.add_get("/health", health_check)
+    
+    runner = web.AppRunner(app)
+    await runner.setup()
+    
+    import os
+    port = int(os.environ.get("PORT", 8080))
+    site = web.TCPSite(runner, "0.0.0.0", port)
+    await site.start()
+    logger.info(f"🌐 Health-check сервер запущен на 0.0.0.0:{port}")
+
     try:
         await dp.start_polling(bot)
     finally:
         await bot.session.close()
+        await runner.cleanup()
         logger.info("🛑 Сессия закрыта. Бот остановлен.")
 
 
