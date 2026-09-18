@@ -8,16 +8,22 @@ i18n.py — Централизованный словарь всех строк 
 Добавление нового языка: добавьте ключ в каждую секцию STRINGS.
 """
 
+try:
+    from premium_emoji import pemoji
+except ImportError:
+    from bot.premium_emoji import pemoji
+
+
 STRINGS: dict[str, dict[str, str]] = {
     # ── Русский ───────────────────────────────────────────────────────────────
     "ru": {
         "compact_report": (
-            "🌿 <b>Su-Tech | Агро-отчет (FAO-56)</b>\n"
-            "📍 {crop} | {area_ha} га | {irrigation}\n"
+            f"{pemoji('stats')} <b>Su-Tech | Агро-отчет (FAO-56)</b>\n"
+            f"{pemoji('location')} {{crop}} | {{area_ha}} га | {{irrigation}}\n"
             "☀️ Т: {temp}°C | Ветер: {wind} м/с | Влага: {moisture} m³/m³\n"
             "💧 <b>РЕКОМЕНДУЕМАЯ ВОДА: {volume_m3} м³</b>\n"
-            "💰 <b>ЭКОНОМИЯ: ~{savings} ₸</b> (энергия насоса)\n"
-            "🎯 Решение: {decision}"
+            f"{pemoji('chart_up')} <b>ЭКОНОМИЯ: ~{{savings}} ₸</b> (энергия насоса)\n"
+            f"{pemoji('info')} Решение: {{decision}}"
         ),
         "decision_irrigate": "Нужен полив",
         "decision_normal": "Норма",
@@ -41,7 +47,7 @@ STRINGS: dict[str, dict[str, str]] = {
 
         # Приветствие после выбора языка
         "welcome": (
-            "👋 Привет, <b>{name}</b>!\n\n"
+            f"{pemoji('idea')} Привет, <b>{{name}}</b>!\n\n"
             "🌱 <b>Su-Tech</b> — умная система управления поливом на базе модели FAO-56 Penman-Monteith.\n"
             "Анализирую климат и почву вашего участка, чтобы вы тратили "
             "воды ровно столько, сколько нужно.\n\n"
@@ -145,15 +151,15 @@ STRINGS: dict[str, dict[str, str]] = {
         "open_webapp_hint": "👇 Для нового расчета нажмите кнопку <b>«🌿 Открыть Su-Tech»</b> внизу",
 
         # История расчетов
-        "history_title": "📊 <b>ИСТОРИЯ ВАШИХ РАСЧЕТОВ (Su-Tech)</b>\n",
+        "history_title": f"{pemoji('stats')} <b>ИСТОРИЯ ВАШИХ РАСЧЕТОВ (Su-Tech)</b>\n",
         "history_empty": (
             "📊 <b>История расчетов пуста.</b>\n\n"
             "Вы еще не производили расчетов полива.\n"
             "Нажмите <b>«🌿 Открыть Su-Tech»</b>, чтобы рассчитать первую норму полива!"
         ),
         "history_carousel_card": (
-            "📊 <b>ИСТОРИЯ РАСЧЕТОВ (Замер {page} из {total})</b>\n\n"
-            "📅 <b>Дата:</b> {date}\n"
+            f"{pemoji('stats')} <b>ИСТОРИЯ РАСЧЕТОВ (Замер {{page}} из {{total}})</b>\n\n"
+            f"{pemoji('calendar')} <b>Дата:</b> {{date}}\n"
             "🌾 <b>Культура:</b> {crop_name}\n"
             "📐 <b>Площадь:</b> {area_text}\n"
             "💧 <b>Метод полива:</b> {irrigation_text}\n\n"
@@ -232,22 +238,22 @@ STRINGS: dict[str, dict[str, str]] = {
         ),
 
         # Ошибки
-        "err_no_coords":     "❌ Координаты не получены. Пожалуйста, разрешите GPS в приложении.",
-        "err_weather":       "⚠️ Не удалось получить данные о погоде от Open-Meteo. Попробуйте позже.",
-        "err_format":        "❌ Ошибка формата данных. Попробуйте ещё раз.",
+        "err_no_coords":     f"{pemoji('cross')} Координаты не получены. Пожалуйста, разрешите GPS в приложении.",
+        "err_weather":       f"{pemoji('warning')} Не удалось получить данные о погоде от Open-Meteo. Попробуйте позже.",
+        "err_format":        f"{pemoji('cross')} Ошибка формата данных. Попробуйте ещё раз.",
         "err_invalid_area":  "❌ Ошибка: Площадь участка должна быть больше 0 и менее 50 000 {unit}.",
-        "err_internal":      "❌ Внутренняя ошибка. Пожалуйста, попробуйте позже.",
+        "err_internal":      f"{pemoji('warning')} Внутренняя ошибка. Пожалуйста, попробуйте позже.",
     },
 
     # ── Қазақша ───────────────────────────────────────────────────────────────
     "kz": {
         "compact_report": (
-            "🌿 <b>Su-Tech | Агро-есеп (FAO-56)</b>\n"
-            "📍 {crop} | {area_ha} га | {irrigation}\n"
+            f"{pemoji('stats')} <b>Su-Tech | Агро-есеп (FAO-56)</b>\n"
+            f"{pemoji('location')} {{crop}} | {{area_ha}} га | {{irrigation}}\n"
             "☀️ Т: {temp}°C | Жел: {wind} м/с | Ылғал: {moisture} m³/m³\n"
             "💧 <b>ҰСЫНЫЛАТЫН СУ: {volume_m3} м³</b>\n"
-            "💰 <b>ҮНЕМ: ~{savings} ₸</b> (насос қуаты)\n"
-            "🎯 Шешім: {decision}"
+            f"{pemoji('chart_up')} <b>ҮНЕМ: ~{{savings}} ₸</b> (насос қуаты)\n"
+            f"{pemoji('info')} Шешім: {{decision}}"
         ),
         "decision_irrigate": "Суару қажет",
         "decision_normal": "Қалыпты",
@@ -271,7 +277,7 @@ STRINGS: dict[str, dict[str, str]] = {
 
         # Приветствие после выбора языка
         "welcome": (
-            "👋 Сәлем, <b>{name}</b>!\n\n"
+            f"{pemoji('idea')} Сәлем, <b>{{name}}</b>!\n\n"
             "🌱 <b>Su-Tech</b> — FAO-56 Penman-Monteith моделі негізінде суаруды басқарудың ақылды жүйесі.\n"
             "Сіздің учаскеңіздің климаты мен топырағын талдап, "
             "керек мөлшерде ғана су жұмсауға көмектесемін.\n\n"
@@ -377,15 +383,15 @@ STRINGS: dict[str, dict[str, str]] = {
 
         # История расчетов
         # История расчетов
-        "history_title": "📊 <b>СІЗДІҢ ЕСЕПТЕУЛЕР ТАРИХЫҢЫЗ (Su-Tech)</b>\n",
+        "history_title": f"{pemoji('stats')} <b>СІЗДІҢ ЕСЕПТЕУЛЕР ТАРИХЫҢЫЗ (Su-Tech)</b>\n",
         "history_empty": (
             "📊 <b>Есептеулер тарихы бос.</b>\n\n"
             "Сіз әлі суару есептеуін жүргізген жоқсыз.\n"
             "Алғашқы есептеуді бастау үшін <b>«🌿 Su-Tech ашу»</b> түймесін басыңыз!"
         ),
         "history_carousel_card": (
-            "📊 <b>ЕСЕПТЕУЛЕР ТАРИХЫ (Өлшеу {page} / {total})</b>\n\n"
-            "📅 <b>Күні:</b> {date}\n"
+            f"{pemoji('stats')} <b>ЕСЕПТЕУЛЕР ТАРИХЫ (Өлшеу {{page}} / {{total}})</b>\n\n"
+            f"{pemoji('calendar')} <b>Күні:</b> {{date}}\n"
             "🌾 <b>Дақыл:</b> {crop_name}\n"
             "📐 <b>Ауданы:</b> {area_text}\n"
             "💧 <b>Суару әдісі:</b> {irrigation_text}\n\n"
@@ -464,11 +470,11 @@ STRINGS: dict[str, dict[str, str]] = {
         ),
 
         # Ошибки
-        "err_no_coords":     "❌ Координаттар алынбады. Қолданбада GPS рұқсатын тексеріңіз.",
-        "err_weather":       "⚠️ Open-Meteo қызметінен ауа райы деректерін алу мүмкін болмады. Кейінірек қайталаңыз.",
-        "err_format":        "❌ Деректер форматында қате. Қайталап көріңіз.",
+        "err_no_coords":     f"{pemoji('cross')} Координаттар алынбады. Қолданбада GPS рұқсатын тексеріңіз.",
+        "err_weather":       f"{pemoji('warning')} Open-Meteo қызметінен ауа райы деректерін алу мүмкін болмады. Кейінірек қайталаңыз.",
+        "err_format":        f"{pemoji('cross')} Деректер форматында қате. Қайталап көріңіз.",
         "err_invalid_area":  "❌ Қате: Алқап ауданы 0-ден үлкен және 50 000 {unit}-ден кем болуы керек.",
-        "err_internal":      "❌ Ішкі қате. Кейінірек қайталап көріңіз.",
+        "err_internal":      f"{pemoji('warning')} Ішкі қате. Кейінірек қайталап көріңіз.",
     },
 }
 
