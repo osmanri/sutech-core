@@ -6,17 +6,19 @@ import math
 
 import aiohttp
 from aiogram import F, Router
-from aiogram.types import Message
+from aiogram.types import Message, CallbackQuery
 from aiogram.fsm.context import FSMContext
 
 try:
     from i18n import t
     from keyboards.inline import get_report_inline_keyboard
     from user_state import add_history, get_lang
+    from db import save_report_explanation, get_report_explanation
 except ImportError:
     from bot.i18n import t
     from bot.keyboards.inline import get_report_inline_keyboard
     from bot.user_state import get_lang
+    from bot.db import save_report_explanation, get_report_explanation
 
 webapp_router = Router()
 logger = logging.getLogger(__name__)
@@ -265,6 +267,28 @@ def format_compact_report(lang, crop, irrigation_type, area_m2, temperature, win
     )
 
 
+def format_report_explanation(lang, area_m2, moisture, result):
+    return t(
+        lang, "explanation_body",
+        decision=t(lang, "explanation_dry" if result["needs_irrigation"] else "explanation_wet"),
+        moisture=f"{moisture:.3f}", et0=result["et0_mm_day"], kc=result["kc"],
+        efficiency=round(result["efficiency"] * 100), area=f"{area_m2:g}",
+        volume=f"{result['total_liters'] / 1000:.4f}".rstrip('0').rstrip('.'),
+        field=t(lang, "explanation_greenhouse" if result["field_type"] == "greenhouse" else "explanation_open"),
+        salinity=t(lang, "explanation_saline" if result["is_saline"] == "yes" and result["needs_irrigation"] else "explanation_no_extra"),
+    )
+
+
+@webapp_router.callback_query(F.data.startswith("explain:"))
+async def explain_report(callback: CallbackQuery) -> None:
+    explanation = get_report_explanation(callback.data.split(":", 1)[1], callback.from_user.id)
+    if not explanation or not isinstance(callback.message, Message):
+        await callback.answer(t(get_lang(callback.from_user.id), "explanation_unavailable"), show_alert=True)
+        return
+    await callback.answer()
+    await callback.message.reply(explanation, parse_mode="HTML")
+
+
 @webapp_router.message(F.web_app_data)
 async def handle_webapp_data(message: Message, state: FSMContext) -> None:
     """
@@ -440,10 +464,13 @@ async def handle_webapp_data(message: Message, state: FSMContext) -> None:
             created_at=created_at
         )
 
+        report_id = save_report_explanation(
+            user_id, format_report_explanation(lang, area_m2, soil_moisture, result),
+        )
         await message.answer(
             final_message,
             parse_mode="HTML",
-            reply_markup=get_report_inline_keyboard(lang),
+            reply_markup=get_report_inline_keyboard(lang, report_id),
         )
 
     except json.JSONDecodeError:

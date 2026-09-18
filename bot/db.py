@@ -1,6 +1,7 @@
 import sqlite3
 import logging
 import os
+import uuid
 from contextlib import closing
 from pathlib import Path
 from typing import List, Dict
@@ -24,6 +25,13 @@ def init_db():
                 volume_text TEXT,
                 savings_text TEXT,
                 lang TEXT
+            )
+        """)
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS report_explanations (
+                id TEXT PRIMARY KEY,
+                user_id INTEGER NOT NULL,
+                explanation TEXT NOT NULL
             )
         """)
         cursor.execute("""
@@ -80,6 +88,32 @@ def get_user_history(user_id: int) -> List[Dict]:
     except Exception as e:
         logger.error(f"Error fetching history from SQLite: {e}")
         return []
+
+
+def save_report_explanation(user_id: int, explanation: str) -> str | None:
+    report_id = uuid.uuid4().hex
+    try:
+        with closing(sqlite3.connect(DB_PATH)) as conn:
+            conn.execute("INSERT INTO report_explanations VALUES (?, ?, ?)",
+                         (report_id, user_id, explanation))
+            conn.commit()
+        return report_id
+    except sqlite3.Error:
+        logger.exception("Could not save report explanation")
+        return None
+
+
+def get_report_explanation(report_id: str, user_id: int) -> str | None:
+    try:
+        with closing(sqlite3.connect(DB_PATH)) as conn:
+            row = conn.execute(
+                "SELECT explanation FROM report_explanations WHERE id = ? AND user_id = ?",
+                (report_id, user_id),
+            ).fetchone()
+        return row[0] if row else None
+    except sqlite3.Error:
+        logger.exception("Could not load report explanation")
+        return None
 
 
 def get_user_language(user_id: int) -> str | None:

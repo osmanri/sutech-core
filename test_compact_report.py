@@ -67,6 +67,7 @@ class WebAppReportTests(unittest.IsolatedAsyncioTestCase):
                 weather = {"temperature": 28, "soil_moisture": .18, "wind_speed": 3.5, "radiation": 550}
                 with patch("bot.handlers.webapp.fetch_meteo", AsyncMock(return_value=weather)) as fetch, \
                      patch("bot.handlers.webapp.get_lang", return_value="ru"), \
+                     patch("bot.handlers.webapp.save_report_explanation", return_value="test-report"), \
                      patch("bot.db.save_calculation") as save:
                     await handle_webapp_data(message, AsyncMock())
                 fetch.assert_awaited_once_with(0, 0)

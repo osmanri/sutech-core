@@ -38,15 +38,18 @@ def get_launch_keyboard(lang: str = "ru") -> InlineKeyboardMarkup:
     )
 
 
-def get_report_inline_keyboard(lang: str = "ru") -> InlineKeyboardMarkup:
+def get_report_inline_keyboard(lang: str = "ru", report_id: str | None = None) -> InlineKeyboardMarkup:
     """
     Возвращает инлайн-кнопки под итоговым агро-отчетом:
+      [ 💡 Почему так? / Неліктен осылай? ] (объяснение сохранённого расчёта)
       [ 🔄 Новый расчет / Қайта есептеу ] (WebApp)
-      [ 📜 О методике / Толық әдістеме ] (Callback popup с описанием FAO-56)
+      [ 📜 О методике / Толық әдістеме ] (описание FAO-56)
     """
     url_with_lang = f"{WEBAPP_URL}{'&' if '?' in WEBAPP_URL else '?'}lang={lang}"
     return InlineKeyboardMarkup(
         inline_keyboard=[
+            [InlineKeyboardButton(text=t(lang, "btn_explain"),
+                                  callback_data=f"explain:{report_id or 'unavailable'}")],
             [
                 InlineKeyboardButton(
                     text=t(lang, "btn_recalculate"),
