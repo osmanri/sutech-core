@@ -40,7 +40,7 @@ class HandlerTests(unittest.IsolatedAsyncioTestCase):
         for lang in ['ru','kz']:
             for unit,area in [('hectare',6.7),('sotka',670)]:
                 data=payload(latitude=44,longitude=65,area=area,area_unit=unit,
-                             lang=lang,yesterday_deficit=20,power_price=25,energy_kwh_m3=.2)
+                             lang=lang,moisture_condition='normal',power_price=25,energy_kwh_m3=.2)
                 message=SimpleNamespace(from_user=SimpleNamespace(id=10),
                     web_app_data=SimpleNamespace(data=json.dumps(data)),answer=AsyncMock())
                 weather=dict(et0=5,rain=0,date='2026-09-19',timezone='Asia/Almaty')
@@ -54,7 +54,7 @@ class HandlerTests(unittest.IsolatedAsyncioTestCase):
                 self.assertEqual(history.call_args.kwargs['area_text'],'6.7 га')
                 self.assertEqual(history.call_args.kwargs['lang'],lang)
                 snapshot.assert_called_once()
-                self.assertIn('20 + 5',snapshot.call_args.args[1])
+                self.assertIn('51.5625 + 5',snapshot.call_args.args[1])
                 message.answer.assert_awaited_once()
                 report=message.answer.call_args.args[0]
                 self.assertIn(t(lang,'balance_status_irrigate'),report)
@@ -73,7 +73,7 @@ class HandlerTests(unittest.IsolatedAsyncioTestCase):
         history.assert_not_called()
 
     async def test_malformed_and_nonfinite_input_does_not_fetch_weather(self):
-        for data in [[],payload(latitude='NaN',longitude=65),payload(latitude=44,longitude=65,yesterday_deficit='NaN')]:
+        for data in [[],payload(latitude='NaN',longitude=65),payload(latitude=44,longitude=65,moisture_condition='unknown')]:
             message=SimpleNamespace(from_user=SimpleNamespace(id=10),
                 web_app_data=SimpleNamespace(data=json.dumps(data)),answer=AsyncMock())
             with patch('bot.handlers.webapp.get_lang',return_value='ru'), \

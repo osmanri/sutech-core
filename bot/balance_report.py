@@ -12,13 +12,15 @@ def fmt(value):
 
 
 def economics(lang, field, result):
-    if result['status'] == 'deferred':
-        return t(lang, 'balance_econ_deferred')
     if result['cost'] is None:
         return t(lang, 'balance_econ_missing')
-    return t(lang, 'balance_econ_cost', volume=fmt(result['gross_m3']),
-             energy=fmt(field.energy_per_m3), price=fmt(field.power_price),
-             cost=f"{result['cost']:.2f}")
+    return t(
+        lang, 'balance_econ_comparison',
+        traditional=f"{result['traditional_cost']:.2f}",
+        ai=f"{result['cost']:.2f}",
+        savings=f"{result['savings']:.2f}",
+        kwh=f"{result['saved_kwh']:.2f}",
+    )
 
 
 def format_balance_report(lang, field, result, weather):
@@ -52,7 +54,9 @@ def format_balance_explanation(lang, field, result, weather):
         yesterday=fmt(field.yesterday), et0=fmt(result['et0']),
         rain=fmt(result['rain']), peff=fmt(result['peff']), etc=fmt(result['etc']),
         taw=fmt(result['taw']), raw=fmt(result['raw']), deficit=fmt(result['deficit']),
-        threshold=fmt(result['threshold']), efficiency=fmt(result['efficiency']),
+        threshold=fmt(result['threshold']), tech_threshold=fmt(result['tech_threshold']),
+        moisture=t(lang, f"balance_moisture_{field.moisture_condition}"),
+        efficiency=fmt(result['efficiency']),
         net=fmt(result['net_m3']), gross=fmt(result['gross_m3']),
         status=t(lang, f"balance_status_{result['status']}"),
     )

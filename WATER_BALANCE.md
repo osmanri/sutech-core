@@ -1,6 +1,6 @@
-# Su-Tech: daily water balance v1
+# Su-Tech: daily water balance v2
 
-The active WebApp handler requires `balance_version: 1`. Cached older WebApps
+The active WebApp handler requires `balance_version: 2`. Cached older WebApps
 receive a localized request to reopen the app; the old moisture-threshold
 algorithm is not used by the live route.
 
@@ -20,17 +20,21 @@ algorithm is not used by the live route.
   by the old frontend never overwrite global crop constants.
 - Effective rain is 0 below 5 mm, otherwise 75%. These and the irrigation
   thresholds are project policies, not universal FAO prescriptions.
-- Deficit = yesterday + ET0 × Kc − effective rain, clamped to [0, TAW]. Values
+- The farmer selects an observable soil condition. The server maps recently
+  irrigated/rain to 0, normal moisture to 0.5 × RAW and dry soil to RAW. The
+  client cannot submit a millimetre value.
+- Deficit = starting deficit + ET0 × Kc − effective rain, clamped to [0, TAW]. Values
   above TAW are flagged. Strict comparison `deficit > RAW` has priority over
-  `deficit >= method threshold`; equality with RAW is not classified critical.
+  `deficit >= min(method threshold, RAW)`; equality with RAW triggers irrigation
+  but is not classified critical.
 - Net volume = deficit × 10 × hectares when irrigation is indicated, otherwise
   0. Gross volume divides net by efficiency. No rounding before decisions.
-- Electricity cost = gross m³ × entered kWh/m³ × entered ₸/kWh. Missing inputs
-  produce an explicit “not calculated”. Deferring today means no expense for
-  today's irrigation, not proof of seasonal savings or avoided startup losses.
-- A recommendation never confirms irrigation. Yesterday's deficit is a required
-  user input including actual irrigation. Repeating the report does not add a
-  second day or reset depletion. Automated multi-field daily state is out of scope.
+- Electricity cost = gross m³ × entered kWh/m³ × entered ₸/kWh. The traditional
+  baseline is `ETc × 1.35 / 0.5 × 10 × hectares`; the report shows baseline cost,
+  AI cost and their signed difference in tenge and kWh. Missing pump inputs
+  produce an explicit “not calculated”.
+- A recommendation never confirms irrigation. Persistent multi-field state and
+  an owner-checked irrigation reset are implemented in `bot/field_state.py`.
 
 ## Weather and special cases
 
@@ -64,5 +68,5 @@ and `node frontend/test_field_map.cjs`.
 
 Deploy the backend and the nested frontend repository together. On the previous
 frontend version the new backend responds with “reopen the app” rather than
-silently assuming soil, age or yesterday's deficit. Test a newly generated
+silently assuming soil, age or moisture condition. Test a newly generated
 Telegram report and its explanation after deployment.

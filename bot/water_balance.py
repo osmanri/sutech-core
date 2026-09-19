@@ -46,6 +46,7 @@ class FieldInput:
     method: str
     day: int
     yesterday: float
+    moisture_condition: str
     stages: tuple
     kc: float
     zr: float
@@ -78,7 +79,7 @@ def crop_parameters(crop, day, stages):
 
 
 def parse_field(data):
-    if not isinstance(data, dict) or type(data.get('balance_version')) is not int or data.get('balance_version') != 1:
+    if not isinstance(data, dict) or type(data.get('balance_version')) is not int or data.get('balance_version') != 2:
         raise BalanceInputError('version')
     crop = data.get('crop')
     if not isinstance(crop, str) or crop not in {*CROPS, 'rice', 'other'}:
@@ -93,7 +94,6 @@ def parse_field(data):
     day = number(data.get('day_of_growth'), 'day', 0, 3650)
     if not day.is_integer():
         raise BalanceInputError('day')
-    yesterday = number(data.get('yesterday_deficit'), 'deficit', 0, 3000)
     stages = data.get('stage_days', CROPS.get(crop, (None,) * 5)[4])
     if crop in CROPS:
         if not isinstance(stages, (list, tuple)) or len(stages) != 4:
@@ -111,6 +111,15 @@ def parse_field(data):
         stages, stage = (), 'custom'
     else:
         kc, zr, p, stages, stage = 0., 0., 0., (), 'rice'
+    moisture_condition = data.get('moisture_condition')
+    moisture_factors = {'recent': 0., 'normal': .5, 'dry': 1.}
+    if moisture_condition not in moisture_factors:
+        raise BalanceInputError('moisture_condition')
+    # The farmer chooses an observable soil condition. Millimetres remain a
+    # server-side value derived from the current root zone and soil profile.
+    fc, pwp = SOILS[soil]
+    raw = p * 1000 * (fc - pwp) * zr
+    yesterday = raw * moisture_factors[moisture_condition]
     field_type = data.get('field_type', 'open')
     if field_type not in ('open', 'greenhouse') or data.get('is_saline', 'no') not in ('yes', 'no'):
         raise BalanceInputError('field')
@@ -123,7 +132,7 @@ def parse_field(data):
     if field_type == 'greenhouse' and greenhouse_et0 is None and crop != 'rice':
         raise BalanceInputError('greenhouse_et0')
     return FieldInput(crop, soil, area if unit == 'hectare' else area / 100, method,
-                      int(day), yesterday, stages, kc, zr, p, stage, field_type,
+                      int(day), yesterday, moisture_condition, stages, kc, zr, p, stage, field_type,
                       data.get('is_saline') == 'yes', power, energy, greenhouse_et0)
 
 
@@ -141,15 +150,31 @@ def calculate_balance(field, et0, rain):
     etc = et0 * field.kc
     unbounded = field.yesterday + etc - peff
     deficit = min(taw, max(0., unbounded))
-    threshold, efficiency = METHODS[field.method]
+    tech_threshold, efficiency = METHODS[field.method]
+    # A delivery-system limit must never postpone irrigation beyond the crop's
+    # stress limit. This matters most for shallow roots and furrow irrigation.
+    threshold = min(tech_threshold, raw)
     status = 'critical' if deficit > raw else 'irrigate' if deficit >= threshold else 'deferred'
     potential_net = deficit * 10 * field.area_ha
     net = potential_net if status != 'deferred' else 0.
     gross = net / efficiency
-    cost = None if field.power_price is None or field.energy_per_m3 is None else (
-        gross * field.energy_per_m3 * field.power_price)
+    # Baseline required by the product: 35% over-application through a
+    # traditional furrow system with 50% efficiency.
+    traditional_m3 = etc * 1.35 / .5 * 10 * field.area_ha
+    if field.power_price is None or field.energy_per_m3 is None:
+        cost = traditional_cost = savings = saved_kwh = None
+    else:
+        ai_kwh = gross * field.energy_per_m3
+        traditional_kwh = traditional_m3 * field.energy_per_m3
+        cost = ai_kwh * field.power_price
+        traditional_cost = traditional_kwh * field.power_price
+        savings = traditional_cost - cost
+        saved_kwh = traditional_kwh - ai_kwh
     return dict(status=status, taw=taw, raw=raw, deficit=deficit, unbounded=unbounded,
                 overflow=max(0., unbounded-taw), rain_excess=max(0., -unbounded),
                 et0=et0, rain=rain, peff=peff, etc=etc, kc=field.kc, zr=field.zr, p=field.p,
-                threshold=threshold, efficiency=efficiency, net_m3=net, gross_m3=gross,
-                cost=cost)
+                threshold=threshold, tech_threshold=tech_threshold,
+                efficiency=efficiency, net_m3=net, gross_m3=gross,
+                traditional_m3=traditional_m3, cost=cost,
+                traditional_cost=traditional_cost, savings=savings,
+                saved_kwh=saved_kwh)
