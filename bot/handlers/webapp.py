@@ -14,11 +14,17 @@ try:
     from keyboards.inline import get_report_inline_keyboard
     from user_state import add_history, get_lang
     from db import save_report_explanation, get_report_explanation
+    from water_balance import parse_field, calculate_balance, number, BalanceInputError
+    from balance_weather import fetch_daily_weather
+    from balance_report import format_balance_report, format_balance_explanation, economics, fmt
 except ImportError:
     from bot.i18n import t
     from bot.keyboards.inline import get_report_inline_keyboard
     from bot.user_state import get_lang
     from bot.db import save_report_explanation, get_report_explanation
+    from bot.water_balance import parse_field, calculate_balance, number, BalanceInputError
+    from bot.balance_weather import fetch_daily_weather
+    from bot.balance_report import format_balance_report, format_balance_explanation, economics, fmt
 
 webapp_router = Router()
 logger = logging.getLogger(__name__)
@@ -291,193 +297,57 @@ async def explain_report(callback: CallbackQuery) -> None:
 
 @webapp_router.message(F.web_app_data)
 async def handle_webapp_data(message: Message, state: FSMContext) -> None:
-    """
-    Принимает JSON-данные из Telegram Mini App через Telegram.WebApp.sendData().
-    Извлекает параметры: latitude, longitude, crop, area, area_unit, irrigation_type, field_type, is_saline.
-    Производит полный агрономический, климатический и гидрологический расчет по модели FAO-56.
-    """
+    """The active WebApp route uses only the versioned daily water balance."""
     await state.clear()
-
     user_id = message.from_user.id
     lang = get_lang(user_id)
-
     try:
-        raw = message.web_app_data.data
-        logger.debug("RAW web_app_data от user_id=%s: %s", user_id, raw)
-
-        data = json.loads(raw)
-        if data.get("lang") in ("ru", "kz"):
-            lang = data["lang"]
-
-        # Координаты
-        lat: float | None = data.get("latitude", data.get("lat"))
-        lon: float | None = data.get("longitude", data.get("lon"))
-
-        if lat is None or lon is None:
-            logger.warning(
-                "Координаты не найдены в payload. Ключи в data: %s | raw: %s",
-                list(data.keys()), raw,
-            )
-            await message.answer(t(lang, "err_no_coords"))
-            return
-
-        try:
-            lat, lon = float(lat), float(lon)
-        except (TypeError, ValueError):
-            await message.answer(t(lang, "err_no_coords"))
-            return
-        if not (math.isfinite(lat) and math.isfinite(lon) and -90 <= lat <= 90 and -180 <= lon <= 180):
-            await message.answer(t(lang, "err_no_coords"))
-            return
-
-        # Агрономические параметры
-        crop: str = str(data.get("crop", "cotton")).lower()
-        if crop not in CROP_KC:
-            crop = "other"
-
-        custom_kc = data.get("kc")
-        if custom_kc is not None:
-            try:
-                CROP_KC[crop] = float(custom_kc)
-            except (ValueError, TypeError):
-                pass
-
-        area_unit: str = str(data.get("area_unit", "hectare")).lower()
-        if area_unit not in ("hectare", "sotka"):
-            area_unit = "hectare"
-
-        # ВАЛИДАЦИЯ ПЛОЩАДИ: строго больше 0 и менее 50 000
-        try:
-            area_val = data.get("area")
-            if area_val is None:
-                await message.answer(t(lang, "err_invalid_area", unit=t(lang, f"unit_{area_unit}")))
-                return
-            area: float = float(area_val)
-        except (ValueError, TypeError):
-            await message.answer(t(lang, "err_invalid_area", unit=t(lang, f"unit_{area_unit}")))
-            return
-
-        if not (0 < area < 50000):
-            logger.warning("Валидация площади не пройдена: area=%.2f от user_id=%s", area, user_id)
-            await message.answer(t(lang, "err_invalid_area", unit=t(lang, f"unit_{area_unit}")))
-            return
-
-        irrigation_type: str = str(data.get("irrigation_type", "drip")).lower()
-        if irrigation_type not in IRRIGATION_EFFICIENCY:
-            irrigation_type = "drip"
-
-        field_type: str = str(data.get("field_type", "open") or "open").lower()
-        if field_type not in ("open", "greenhouse"):
-            field_type = "open"
-
-        is_saline: str = str(data.get("is_saline", "no") or "no").lower()
-        if is_saline not in ("no", "yes"):
-            is_saline = "no"
-
-        # Конвертация площади в м²
-        if area_unit == "hectare":
-            area_m2 = area * 10_000.0
+        data = json.loads(message.web_app_data.data)
+        if not isinstance(data, dict):
+            raise ValueError('payload')
+    except (ValueError, TypeError):
+        await message.answer(t(lang, 'err_format'))
+        return
+    if data.get('lang') in ('ru', 'kz'):
+        lang = data['lang']
+    try:
+        lat = number(data.get('latitude', data.get('lat')), 'latitude', -90, 90)
+        lon = number(data.get('longitude', data.get('lon')), 'longitude', -180, 180)
+    except BalanceInputError:
+        await message.answer(t(lang, 'err_no_coords'))
+        return
+    try:
+        field = parse_field(data)
+    except BalanceInputError as exc:
+        key = {'version': 'balance_old_app', 'season_ended': 'balance_season_ended'}.get(str(exc), 'balance_error')
+        await message.answer(t(lang, key))
+        return
+    try:
+        if field.crop == 'rice':
+            weather = {}  # No false numeric recommendation for flooded paddy.
+            result = calculate_balance(field, 0, 0)
         else:
-            area_m2 = area * 100.0
-
-        logger.info(
-            "Данные получены | user_id=%s | lang=%s | lat=%.6f | lon=%.6f | "
-            "crop=%s | area=%.2f %s (%.0f m²) | irrig=%s | field=%s | saline=%s",
-            user_id, lang, lat, lon, crop, area, area_unit, area_m2, irrigation_type, field_type, is_saline,
-        )
-
-        # Запрашиваем метеоданные у Open-Meteo
-        try:
-            meteo = await fetch_meteo(lat, lon)
-            raw_temp = meteo.get("temperature")
-            temperature = float(raw_temp) if raw_temp is not None else 25.0
-            raw_soil = meteo.get("soil_moisture")
-            soil_moisture = float(raw_soil) if raw_soil is not None else 0.20
-            raw_wind = meteo.get("wind_speed")
-            wind_speed = float(raw_wind) if raw_wind is not None else 2.0
-            raw_rad = meteo.get("radiation")
-            radiation = float(raw_rad) if raw_rad is not None else 500.0
-        except aiohttp.ClientError as exc:
-            logger.error("Ошибка запроса к Open-Meteo: %s", exc)
-            await message.answer(t(lang, "err_weather"))
-            return
-
-        logger.info(
-            "Метеоданные | temp=%.1f°C | soil=%.3f m³/m³ | wind=%.1f м/с | rad=%.1f Вт/м²",
-            temperature, soil_moisture, wind_speed, radiation,
-        )
-
-        # Полный расчет FAO-56 Penman-Monteith с учетом теплицы и солончака
-        result = calculate_water_demand(
-            temp=temperature,
-            moisture=soil_moisture,
-            wind=wind_speed,
-            radiation=radiation,
-            crop=crop,
-            area_m2=area_m2,
-            irrigation_type=irrigation_type,
-            field_type=field_type,
-            is_saline=is_saline,
-        )
-
-        logger.info(
-            "FAO-56 | ET0=%.2f | ETc=%.2f | V=%s | saved_water=%s | saved_money=%s ₸ | полив=%s",
-            result["et0_mm_day"],
-            result["etc_mm_day"],
-            result["volume_str"],
-            result["saved_water_str"],
-            result["savings_tenge"],
-            result["needs_irrigation"],
-        )
-
-        # Локализованные названия параметров
-        crop_name       = t(lang, f"crop_{crop}")
-        unit_name       = t(lang, f"unit_{area_unit}")
-        irrig_name      = t(lang, f"irrig_{irrigation_type}")
-        field_type_name = t(lang, f"field_type_{field_type}")
-        saline_name     = t(lang, f"saline_{is_saline}")
-        final_message = format_compact_report(
-            lang, crop, irrigation_type, area_m2,
-            temperature, wind_speed, soil_moisture, result,
-        )
-
-        # Сохраняем расчет в историю пользователя навсегда (SQLite)
-        try:
-            from db import save_calculation
-        except ImportError:
-            from bot.db import save_calculation
-        created_at = datetime.now().strftime("%d.%m.%Y %H:%M")
-        crop_text = f"{crop_name} (Kc = {result['kc']})"
-        area_text = f"{area} {unit_name} ({area_m2:,} м²)".replace(",", " ")
-        irrigation_text = f"{field_type_name} | {saline_name} | {irrig_name}"
-        volume_text = result["volume_str"]
-        savings_text = f"{result['saved_water_str']} (~{result['savings_tenge']:,} ₸)".replace(",", " ")
-
-        save_calculation(
-            user_id=user_id,
-            crop_name=crop_text,
-            area_text=area_text,
-            irrigation_text=irrigation_text,
-            volume_text=volume_text,
-            savings_text=savings_text,
-            lang=lang,
-            created_at=created_at
-        )
-
-        report_id = save_report_explanation(
-            user_id, format_report_explanation(lang, area_m2, soil_moisture, result),
-        )
-        await message.answer(
-            final_message,
-            parse_mode="HTML",
-            reply_markup=get_report_inline_keyboard(lang, report_id),
-        )
-
-    except json.JSONDecodeError:
-        logger.error("Не удалось распарсить JSON от WebApp: %s", message.web_app_data.data)
-        await message.answer(t(lang, "err_format"))
-    except Exception:
-        import traceback
-        traceback.print_exc()
-        logger.exception("Неожиданная ошибка в handle_webapp_data")
-        await message.answer(t(lang, "err_internal"))
+            weather = await fetch_daily_weather(lat, lon)
+            result = calculate_balance(field, weather['et0'], weather['rain'])
+    except (aiohttp.ClientError, asyncio.TimeoutError, OSError, ValueError, KeyError, TypeError, IndexError):
+        logger.exception('Daily Open-Meteo balance unavailable')
+        await message.answer(t(lang, 'err_weather'))
+        return
+    final_message = format_balance_report(lang, field, result, weather)
+    explanation = format_balance_explanation(lang, field, result, weather)
+    try:
+        from db import save_calculation
+    except ImportError:
+        from bot.db import save_calculation
+    save_calculation(
+        user_id=user_id, crop_name=t(lang, f'report_crop_{field.crop}'),
+        area_text=f'{fmt(field.area_ha)} га',
+        irrigation_text=t(lang, f'report_irrig_{field.method}'),
+        volume_text=(t(lang, 'balance_rice') if field.crop == 'rice' else
+                     f"{fmt(result['gross_m3'])} м³ · {t(lang, 'balance_status_' + result['status'])}"),
+        savings_text='—' if field.crop == 'rice' else economics(lang, field, result),
+        lang=lang, created_at=datetime.now().strftime('%d.%m.%Y %H:%M'),
+    )
+    report_id = save_report_explanation(user_id, explanation)
+    await message.answer(final_message, parse_mode='HTML',
+                         reply_markup=get_report_inline_keyboard(lang, report_id))

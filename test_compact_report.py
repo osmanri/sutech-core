@@ -57,7 +57,7 @@ class WebAppReportTests(unittest.IsolatedAsyncioTestCase):
 
         self.assertEqual(meteo, DEFAULT_METEO)
 
-    async def test_payload_units_language_and_history(self):
+    async def test_legacy_payload_requests_new_balance_inputs(self):
         for unit, area in (("hectare", .01), ("sotka", 1)):
             with self.subTest(unit=unit):
                 payload = {"latitude": 0, "longitude": 0, "area": area, "area_unit": unit,
@@ -70,14 +70,11 @@ class WebAppReportTests(unittest.IsolatedAsyncioTestCase):
                      patch("bot.handlers.webapp.save_report_explanation", return_value="test-report"), \
                      patch("bot.db.save_calculation") as save:
                     await handle_webapp_data(message, AsyncMock())
-                fetch.assert_awaited_once_with(0, 0)
-                save.assert_called_once()
+                fetch.assert_not_awaited()
+                save.assert_not_called()
                 message.answer.assert_awaited_once()
                 report = message.answer.call_args.args[0]
-                self.assertEqual(len(report.splitlines()), 6)
-                self.assertIn("Агро-есеп", report)
-                self.assertIn("0.01 га", report)
-                self.assertEqual(save.call_args.kwargs["lang"], "kz")
+                self.assertEqual(report, t('kz', 'balance_old_app'))
 
 
 if __name__ == "__main__":

@@ -41,6 +41,22 @@ def init_db():
                 updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
             )
         """)
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS fields (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL,
+                crop_type TEXT NOT NULL,
+                soil_type TEXT NOT NULL,
+                irrigation_method TEXT NOT NULL,
+                planting_date TEXT NOT NULL,
+                accumulated_deficit REAL NOT NULL DEFAULT 0.0
+                    CHECK (accumulated_deficit >= 0.0)
+            )
+        """)
+        cursor.execute("""
+            CREATE INDEX IF NOT EXISTS idx_fields_user_id
+            ON fields (user_id)
+        """)
         conn.commit()
         conn.close()
         logger.info("SQLite DB (history) initialized.")

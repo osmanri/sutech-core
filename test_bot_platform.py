@@ -45,8 +45,10 @@ class BotPlatformTests(unittest.IsolatedAsyncioTestCase):
     async def test_report_has_new_calculation_webapp_button(self):
         keyboard = get_report_inline_keyboard("ru")
 
-        self.assertIsNotNone(keyboard.inline_keyboard[0][0].web_app)
-        self.assertIn("lang=ru", keyboard.inline_keyboard[0][0].web_app.url)
+        buttons = [button for row in keyboard.inline_keyboard for button in row]
+        launcher = next(button for button in buttons if button.web_app)
+        self.assertIn("lang=ru", launcher.web_app.url)
+        self.assertTrue(any((button.callback_data or '').startswith('explain:') for button in buttons))
 
 
 class UserLanguagePersistenceTests(unittest.TestCase):

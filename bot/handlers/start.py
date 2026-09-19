@@ -258,7 +258,7 @@ async def show_methodology(callback: CallbackQuery) -> None:
     """Выводит детальное описание методики FAO-56 Penman-Monteith."""
     lang = get_lang(callback.from_user.id)
     await callback.answer(
-        text="FAO-56 Penman-Monteith: точные гидрологические формулы и агрофизика.",
+        text="Su-Tech · FAO-56 · TAW / RAW",
         show_alert=False,
     )
     await callback.message.answer(
