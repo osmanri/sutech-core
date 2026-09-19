@@ -7,8 +7,9 @@ except ImportError:
 
 
 def fmt(value):
-    # Keep small non-zero recommended quantities visible.
-    return f'{value:.6f}'.rstrip('0').rstrip('.')
+    # Round only for display so stress thresholds use the original precision.
+    rounded = round(value, 2)
+    return f'{0.0 if rounded == 0 else rounded:.2f}'.rstrip('0').rstrip('.')
 
 
 def economics(lang, field, result):

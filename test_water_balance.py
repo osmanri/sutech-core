@@ -1,7 +1,7 @@
 import unittest
 from dataclasses import replace
-from bot.water_balance import parse_field, calculate_balance, BalanceInputError, CROPS, METHODS, SOILS
-from bot.balance_report import format_balance_report, format_balance_explanation
+from bot.water_balance import parse_field, calculate_balance, calculate_economics, BalanceInputError, CROPS, METHODS, SOILS
+from bot.balance_report import format_balance_report, format_balance_explanation, fmt
 
 
 def payload(**kwargs):
@@ -23,7 +23,8 @@ class BalanceTests(unittest.TestCase):
         self.assertAlmostEqual(dry.yesterday, raw)
 
     def test_reference_balance_and_cost(self):
-        field = parse_field(payload(moisture_condition='normal', area='6,7', power_price=25, energy_kwh_m3=.2))
+        field = parse_field(payload(moisture_condition='normal', area='6,7', power_price=25,
+                                    pump_power_kw=22, pump_productivity_m3h=60))
         r = calculate_balance(field, 5, 8)
         self.assertAlmostEqual(r['taw'], 187.5)
         self.assertAlmostEqual(r['raw'], 103.125)
@@ -31,10 +32,10 @@ class BalanceTests(unittest.TestCase):
         self.assertAlmostEqual(field.yesterday, r['raw'] * .5)
         self.assertAlmostEqual(r['deficit'], field.yesterday + 5 * field.kc - 6)
         self.assertAlmostEqual(r['gross_m3'], r['deficit'] * 10 * 6.7 / .9)
-        self.assertAlmostEqual(r['cost'], r['gross_m3'] * .2 * 25)
-        self.assertAlmostEqual(r['traditional_m3'], r['etc'] * 1.35 / .5 * 10 * 6.7)
+        self.assertAlmostEqual(r['cost'], r['gross_m3'] / 60 * 22 * 25)
+        self.assertAlmostEqual(r['traditional_m3'], r['deficit'] * 10 * 6.7 * (1.35 / .5))
         self.assertAlmostEqual(r['savings'], r['traditional_cost'] - r['cost'])
-        self.assertAlmostEqual(r['saved_kwh'], (r['traditional_m3'] - r['gross_m3']) * .2)
+        self.assertAlmostEqual(r['saved_kwh'], (r['traditional_m3'] - r['gross_m3']) / 60 * 22)
 
     def test_all_method_thresholds_and_raw_priority(self):
         for method, (threshold, eta) in METHODS.items():
@@ -119,13 +120,72 @@ class BalanceTests(unittest.TestCase):
 
     def test_economics_report_compares_traditional_and_ai_costs(self):
         weather={'date':'2026-09-19','timezone':'Asia/Almaty'}
-        f=parse_field(payload(moisture_condition='recent', power_price=25, energy_kwh_m3=.2))
+        f=parse_field(payload(moisture_condition='recent', power_price=25,
+                             pump_power_kw=22, pump_productivity_m3h=60))
         r=calculate_balance(f,5,0)
         for lang, labels in [('ru', ('Традиционный', 'Экономия')), ('kz', ('Дәстүрлі', 'Үнем'))]:
             report=format_balance_report(lang,f,r,weather)
             self.assertIn(labels[0], report)
             self.assertIn(labels[1], report)
             self.assertIn('кВт', report)
+
+
+    def test_pumping_reference_example(self):
+        # 100 m³ net deficit. AI delivers 200 m³; baseline delivers 270 m³.
+        result = calculate_economics(200, 10, 1, 25, 22, 60)
+        self.assertEqual(result['traditional_m3'], 270)
+        self.assertAlmostEqual(result['ai_time_hours'], 10 / 3)
+        self.assertEqual(result['traditional_time_hours'], 4.5)
+        self.assertEqual(result['traditional_cost'], 2475)
+        self.assertEqual(round(result['cost'], 2), 1833.33)
+        self.assertEqual(round(result['savings'], 2), 641.67)
+        self.assertEqual(round(result['saved_kwh'], 2), 25.67)
+
+    def test_baseline_covers_existing_deficit_even_with_zero_daily_et(self):
+        for method in METHODS:
+            field = parse_field(payload(moisture_condition='dry', irrigation_type=method,
+                                        power_price=25, pump_power_kw=22, pump_productivity_m3h=60))
+            result = calculate_balance(field, 0, 0)
+            self.assertEqual(result['etc'], 0)
+            self.assertGreater(result['traditional_cost'], result['cost'])
+            self.assertGreater(result['savings'], 0)
+            self.assertAlmostEqual(result['traditional_m3'], result['deficit'] * 27)
+        # Rain replenishing all moisture means zero volume/cost for both systems.
+        result = calculate_balance(field, 0, 3000)
+        for key in ('gross_m3', 'traditional_m3', 'cost', 'traditional_cost', 'savings', 'saved_kwh'):
+            self.assertEqual(result[key], 0)
+
+    def test_pump_input_validation_and_optional_economics(self):
+        for key in ('pump_power_kw', 'pump_productivity_m3h'):
+            for invalid in (0, -1, True, 'NaN', 'inf', [], {}):
+                with self.subTest(key=key, invalid=invalid):
+                    with self.assertRaises(BalanceInputError):
+                        parse_field(payload(**{key: invalid}))
+        field = parse_field(payload(power_price='25,5', pump_power_kw='22,5', pump_productivity_m3h='60,5'))
+        self.assertEqual(field.pump_power_kw, 22.5)
+        self.assertEqual(field.pump_productivity_m3h, 60.5)
+        for missing in ('power_price', 'pump_power_kw', 'pump_productivity_m3h'):
+            values = dict(power_price=25, pump_power_kw=22, pump_productivity_m3h=60)
+            del values[missing]
+            self.assertIsNone(calculate_balance(parse_field(payload(**values)), 5, 0)['cost'])
+        # A free tariff still has a real energy saving and zero money saving.
+        free = calculate_economics(200, 10, 1, 0)
+        self.assertEqual(free['savings'], 0)
+        self.assertGreater(free['saved_kwh'], 0)
+
+    def test_display_rounds_to_two_places_without_rounding_calculation(self):
+        self.assertEqual(fmt(2453.986111), '2453.99')
+        self.assertEqual(fmt(-.00001), '0')
+        field = parse_field(payload(moisture_condition='normal', power_price=25,
+                                    pump_power_kw=22, pump_productivity_m3h=60))
+        result = calculate_balance(field, 5, 0)
+        self.assertAlmostEqual(result['raw'], 103.125)
+        self.assertNotEqual(result['raw'], round(result['raw'], 2))
+        weather = {'date': '2026-09-19', 'timezone': 'Asia/Almaty'}
+        for lang in ('ru', 'kz'):
+            for text in (format_balance_report(lang, field, result, weather),
+                         format_balance_explanation(lang, field, result, weather)):
+                self.assertNotRegex(text, r'\d+[.,]\d{3,}')
 
 
 if __name__ == '__main__': unittest.main()

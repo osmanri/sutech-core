@@ -55,7 +55,8 @@ class FieldInput:
     field_type: str
     saline: bool
     power_price: float | None
-    energy_per_m3: float | None
+    pump_power_kw: float | None
+    pump_productivity_m3h: float | None
     greenhouse_et0: float | None
 
 
@@ -127,13 +128,45 @@ def parse_field(data):
         value = data.get(key)
         return None if value is None or value == '' else number(value, key, minimum, maximum)
     power = optional('power_price', 0, 10000)
-    energy = optional('energy_kwh_m3', .000001, 100)
+    pump_power = optional('pump_power_kw', .000001, 100000)
+    pump_productivity = optional('pump_productivity_m3h', .000001, 1000000)
     greenhouse_et0 = optional('greenhouse_et0', 0, 50)
     if field_type == 'greenhouse' and greenhouse_et0 is None and crop != 'rice':
         raise BalanceInputError('greenhouse_et0')
     return FieldInput(crop, soil, area if unit == 'hectare' else area / 100, method,
                       int(day), yesterday, moisture_condition, stages, kc, zr, p, stage, field_type,
-                      data.get('is_saline') == 'yes', power, energy, greenhouse_et0)
+                      data.get('is_saline') == 'yes', power, pump_power,
+                      pump_productivity, greenhouse_et0)
+
+
+def calculate_economics(ai_gross_volume, current_deficit_mm, area_ha,
+                        power_price, pump_power_kw=22, pump_productivity_m3h=60):
+    """Compare pumping the same root-zone deficit with both systems.
+
+    Keep full precision here; report formatting rounds displayed values only.
+    Missing pump data leaves the water recommendation available without a cost.
+    """
+    ai_gross_volume = number(ai_gross_volume, 'ai_gross_volume', 0, math.inf)
+    current_deficit_mm = number(current_deficit_mm, 'current_deficit_mm', 0, 3000)
+    area_ha = number(area_ha, 'area_ha', .00000001, 50000)
+    trad_gross_volume = (current_deficit_mm * 10 * area_ha) * (1.35 / .5)
+    if any(v is None for v in (power_price, pump_power_kw, pump_productivity_m3h)):
+        return dict(traditional_m3=trad_gross_volume, ai_time_hours=None,
+                    traditional_time_hours=None, cost=None, traditional_cost=None,
+                    savings=None, saved_kwh=None)
+
+    tariff = number(power_price, 'power_price', 0, 10000)
+    pump_power = number(pump_power_kw, 'pump_power_kw', .000001, 100000)
+    pump_productivity = number(pump_productivity_m3h, 'pump_productivity_m3h', .000001, 1000000)
+    ai_time_hours = ai_gross_volume / pump_productivity
+    ai_cost = ai_time_hours * pump_power * tariff
+    trad_time_hours = trad_gross_volume / pump_productivity
+    trad_cost = trad_time_hours * pump_power * tariff
+    savings = trad_cost - ai_cost
+    saved_kwh = (trad_time_hours - ai_time_hours) * pump_power
+    return dict(traditional_m3=trad_gross_volume, ai_time_hours=ai_time_hours,
+                traditional_time_hours=trad_time_hours, cost=ai_cost,
+                traditional_cost=trad_cost, savings=savings, saved_kwh=saved_kwh)
 
 
 def calculate_balance(field, et0, rain):
@@ -158,23 +191,11 @@ def calculate_balance(field, et0, rain):
     potential_net = deficit * 10 * field.area_ha
     net = potential_net if status != 'deferred' else 0.
     gross = net / efficiency
-    # Baseline required by the product: 35% over-application through a
-    # traditional furrow system with 50% efficiency.
-    traditional_m3 = etc * 1.35 / .5 * 10 * field.area_ha
-    if field.power_price is None or field.energy_per_m3 is None:
-        cost = traditional_cost = savings = saved_kwh = None
-    else:
-        ai_kwh = gross * field.energy_per_m3
-        traditional_kwh = traditional_m3 * field.energy_per_m3
-        cost = ai_kwh * field.power_price
-        traditional_cost = traditional_kwh * field.power_price
-        savings = traditional_cost - cost
-        saved_kwh = traditional_kwh - ai_kwh
+    economy = calculate_economics(gross, deficit, field.area_ha, field.power_price,
+                                  field.pump_power_kw, field.pump_productivity_m3h)
     return dict(status=status, taw=taw, raw=raw, deficit=deficit, unbounded=unbounded,
                 overflow=max(0., unbounded-taw), rain_excess=max(0., -unbounded),
                 et0=et0, rain=rain, peff=peff, etc=etc, kc=field.kc, zr=field.zr, p=field.p,
                 threshold=threshold, tech_threshold=tech_threshold,
                 efficiency=efficiency, net_m3=net, gross_m3=gross,
-                traditional_m3=traditional_m3, cost=cost,
-                traditional_cost=traditional_cost, savings=savings,
-                saved_kwh=saved_kwh)
+                **economy)

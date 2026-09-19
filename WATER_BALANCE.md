@@ -29,10 +29,12 @@ algorithm is not used by the live route.
   but is not classified critical.
 - Net volume = deficit × 10 × hectares when irrigation is indicated, otherwise
   0. Gross volume divides net by efficiency. No rounding before decisions.
-- Electricity cost = gross m³ × entered kWh/m³ × entered ₸/kWh. The traditional
-  baseline is `ETc × 1.35 / 0.5 × 10 × hectares`; the report shows baseline cost,
-  AI cost and their signed difference in tenge and kWh. Missing pump inputs
-  produce an explicit “not calculated”.
+- Pump inputs are power in kW (form default 22) and productivity in m³/h
+  (default 60). Electricity cost = gross m³ / productivity × power × tariff.
+  Both systems cover the same current deficit; the traditional baseline is
+  `current deficit × 10 × hectares × (1.35 / 0.5)`. Reports show the two costs
+  and their difference in tenge and kWh, rounded to two decimal places only
+  at display time. Missing pump inputs produce an explicit “not calculated”.
 - A recommendation never confirms irrigation. Persistent multi-field state and
   an owner-checked irrigation reset are implemented in `bot/field_state.py`.
 

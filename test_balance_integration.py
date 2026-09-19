@@ -40,7 +40,8 @@ class HandlerTests(unittest.IsolatedAsyncioTestCase):
         for lang in ['ru','kz']:
             for unit,area in [('hectare',6.7),('sotka',670)]:
                 data=payload(latitude=44,longitude=65,area=area,area_unit=unit,
-                             lang=lang,moisture_condition='normal',power_price=25,energy_kwh_m3=.2)
+                             lang=lang,moisture_condition='normal',power_price=25,
+                             pump_power_kw=22,pump_productivity_m3h=60)
                 message=SimpleNamespace(from_user=SimpleNamespace(id=10),
                     web_app_data=SimpleNamespace(data=json.dumps(data)),answer=AsyncMock())
                 weather=dict(et0=5,rain=0,date='2026-09-19',timezone='Asia/Almaty')
@@ -54,11 +55,13 @@ class HandlerTests(unittest.IsolatedAsyncioTestCase):
                 self.assertEqual(history.call_args.kwargs['area_text'],'6.7 га')
                 self.assertEqual(history.call_args.kwargs['lang'],lang)
                 snapshot.assert_called_once()
-                self.assertIn('51.5625 + 5',snapshot.call_args.args[1])
+                self.assertIn('51.56 + 5',snapshot.call_args.args[1])
                 message.answer.assert_awaited_once()
                 report=message.answer.call_args.args[0]
                 self.assertIn(t(lang,'balance_status_irrigate'),report)
                 self.assertIn('Open-Meteo',report)
+                self.assertNotRegex(report, r'\d+[.,]\d{3,}')
+                self.assertNotRegex(history.call_args.kwargs['savings_text'], r'\d+[.,]\d{3,}')
                 keyboard=message.answer.call_args.kwargs['reply_markup']
                 self.assertEqual(keyboard.inline_keyboard[0][0].callback_data,'explain:'+'a'*32)
 
