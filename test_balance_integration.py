@@ -1,9 +1,11 @@
 import json
+import re
 import unittest
 from datetime import datetime, timedelta, timezone
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
 import aiohttp
+from itertools import product
 
 from bot.balance_weather import parse_daily_weather, fetch_daily_weather
 from bot.handlers.webapp import handle_webapp_data
@@ -76,13 +78,49 @@ class HandlerTests(unittest.IsolatedAsyncioTestCase):
         history.assert_not_called()
 
     async def test_malformed_and_nonfinite_input_does_not_fetch_weather(self):
-        for data in [[],payload(latitude='NaN',longitude=65),payload(latitude=44,longitude=65,moisture_condition='unknown')]:
+        for data in [[],payload(latitude='NaN',longitude=65),payload(latitude=44,longitude=65,moisture_condition='unknown'),
+                     payload(latitude=44, longitude=65, moisture_condition=[])]:
             message=SimpleNamespace(from_user=SimpleNamespace(id=10),
                 web_app_data=SimpleNamespace(data=json.dumps(data)),answer=AsyncMock())
             with patch('bot.handlers.webapp.get_lang',return_value='ru'), \
                  patch('bot.handlers.webapp.fetch_daily_weather',AsyncMock()) as fetch:
                 await handle_webapp_data(message,AsyncMock())
             fetch.assert_not_awaited(); message.answer.assert_awaited_once()
+
+    async def test_all_crop_methods_moisture_languages_units_money_reaches_telegram(self):
+        from test_calculation_audit import PROFILES, APPLICATION, MOISTURE, inputs, reference_balance
+        count = 0
+        for crop, method, moisture, lang, unit in product(PROFILES, APPLICATION, MOISTURE,
+                                                        ('ru', 'kz'), ('hectare', 'sotka')):
+            data = inputs(crop=crop, irrigation_type=method, moisture_condition=moisture,
+                          day_of_growth=0, latitude=44, longitude=65, lang=lang,
+                          area_unit=unit, area='6,7' if unit == 'hectare' else 670)
+            expected = reference_balance(data, 0, 0)
+            message = SimpleNamespace(from_user=SimpleNamespace(id=10),
+                web_app_data=SimpleNamespace(data=json.dumps(data)), answer=AsyncMock())
+            weather = dict(et0=0, rain=0, date='2026-09-19', timezone='Asia/Almaty')
+            with patch('bot.handlers.webapp.get_lang', return_value=lang), \
+                 patch('bot.handlers.webapp.fetch_daily_weather', AsyncMock(return_value=weather)), \
+                 patch('bot.handlers.webapp.save_report_explanation', return_value='a'*32) as snapshot, \
+                 patch('bot.db.save_calculation') as history:
+                await handle_webapp_data(message, AsyncMock())
+            report = message.answer.call_args.args[0]
+            self.assertIn(t(lang, 'balance_status_' + expected['status']), report)
+            shown_money = re.findall(r'(-?\d+\.\d{2}) ₸', report)
+            self.assertEqual(len(shown_money), 3)
+            for shown, key in zip(shown_money, ('traditional_cost', 'cost', 'savings')):
+                # A rational value exactly halfway between cents may land on
+                # either adjacent cent after binary floating-point arithmetic.
+                # Require correct currency precision and <= half-cent error;
+                # the independent core oracle checks unrounded math at 1e-10.
+                self.assertGreaterEqual(float(shown), 0)
+                self.assertLessEqual(abs(float(shown)-float(expected[key])), .005 + 1e-8)
+            self.assertIn(history.call_args.kwargs['savings_text'], report)
+            self.assertLess(len(snapshot.call_args.args[1]), 4096)
+            self.assertNotIn('{', snapshot.call_args.args[1])
+            message.answer.assert_awaited_once()
+            count += 1
+        print(f'AUDIT: {count} Telegram report/history/explanation cases (network mocked)')
 
     async def test_provider_request_uses_daily_fao_and_local_timezone(self):
         response=AsyncMock()

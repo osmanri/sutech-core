@@ -187,5 +187,34 @@ class BalanceTests(unittest.TestCase):
                          format_balance_explanation(lang, field, result, weather)):
                 self.assertNotRegex(text, r'\d+[.,]\d{3,}')
 
+    def test_explanation_shows_same_deficit_volumes_and_pump_inputs(self):
+        field = parse_field(payload(crop='other', custom_p=.5, custom_root_depth=.2,
+            custom_kc=1, soil_type='sand', moisture_condition='recent',
+            irrigation_type='furrow', power_price=25, pump_power_kw=22, pump_productivity_m3h=60))
+        field = replace(field, yesterday=10)
+        result = calculate_balance(field, 0, 0)
+        weather = {'date': '2026-09-19', 'timezone': 'Asia/Almaty'}
+        for lang in ('ru', 'kz'):
+            text = format_balance_explanation(lang, field, result, weather)
+            self.assertIn('200', text)
+            self.assertIn('270', text)
+            self.assertIn('22', text)
+            self.assertIn('60', text)
+            self.assertIn('25', text)
+            self.assertIn('3.33', text)
+            self.assertIn('4.5', text)
+            self.assertIn('641.67', text)
+            self.assertLess(len(text), 4096)
+
+    def test_deferred_report_distinguishes_postponement_from_actual_savings(self):
+        field = parse_field(payload(power_price=25, pump_power_kw=22, pump_productivity_m3h=60))
+        result = calculate_balance(field, 1, 0)
+        weather = {'date': '2026-09-19', 'timezone': 'Asia/Almaty'}
+        self.assertEqual(result['status'], 'deferred')
+        for lang, phrase in [('ru', 'перенос затрат'), ('kz', 'шығынды кейінге қалдыру')]:
+            text = format_balance_report(lang, field, result, weather)
+            self.assertIn(phrase, text)
+            self.assertIn('0.00', text)
+
 
 if __name__ == '__main__': unittest.main()

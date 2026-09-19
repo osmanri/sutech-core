@@ -15,13 +15,16 @@ def fmt(value):
 def economics(lang, field, result):
     if result['cost'] is None:
         return t(lang, 'balance_econ_missing')
-    return t(
+    text = t(
         lang, 'balance_econ_comparison',
         traditional=f"{result['traditional_cost']:.2f}",
         ai=f"{result['cost']:.2f}",
         savings=f"{result['savings']:.2f}",
         kwh=f"{result['saved_kwh']:.2f}",
     )
+    if result['status'] == 'deferred':
+        text += '\n' + t(lang, 'balance_econ_deferred')
+    return text
 
 
 def format_balance_report(lang, field, result, weather):
@@ -66,4 +69,12 @@ def format_balance_explanation(lang, field, result, weather):
         text += '\n' + t(lang, 'balance_custom')
     else:
         text += '\n' + t(lang, 'balance_calendar')
+    if result['cost'] is not None:
+        text += '\n\n' + t(lang, 'balance_pump_breakdown',
+            power=fmt(field.pump_power_kw), flow=fmt(field.pump_productivity_m3h),
+            tariff=fmt(field.power_price), ai_volume=fmt(result['gross_m3']),
+            traditional_volume=fmt(result['traditional_m3']),
+            ai_hours=fmt(result['ai_time_hours']),
+            traditional_hours=fmt(result['traditional_time_hours']),
+            deficit=fmt(result['deficit']), area=fmt(field.area_ha))
     return text + '\n\n' + economics(lang, field, result)

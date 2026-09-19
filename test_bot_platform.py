@@ -4,7 +4,7 @@ import tempfile
 import unittest
 from pathlib import Path
 from types import SimpleNamespace
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, patch
 
 from bot import db
 from bot.bot_setup import COMMANDS, configure_bot_profile, configure_user_menu
@@ -12,6 +12,17 @@ from bot.keyboards.inline import get_report_inline_keyboard
 
 
 class BotPlatformTests(unittest.IsolatedAsyncioTestCase):
+    async def test_health_identifies_calculation_revision_without_secrets(self):
+        import json
+        from bot.main import health_check
+        from bot.water_balance import CALCULATION_VERSION
+        with patch.dict('os.environ', {'RENDER_GIT_COMMIT': '0123456789abcdef'}):
+            response = await health_check(None)
+        data = json.loads(response.text)
+        self.assertEqual(data['calculation_version'], CALCULATION_VERSION)
+        self.assertEqual(data['revision'], '0123456789ab')
+        self.assertEqual(set(data), {'status', 'service', 'updates', 'calculation_version', 'revision'})
+
     async def test_profile_commands_and_native_menu_are_configured(self):
         bot = SimpleNamespace(
             set_my_commands=AsyncMock(return_value=True),

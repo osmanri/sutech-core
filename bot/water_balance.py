@@ -7,6 +7,8 @@ No recommendation is treated as evidence that irrigation actually occurred.
 import math
 from dataclasses import dataclass
 
+CALCULATION_VERSION = 'fao56.3'
+
 SOILS = {'sand': (.12, .05), 'loam': (.33, .18), 'clay': (.45, .30)}
 # p, minimum root depth, maximum root depth, Kc initial/mid/end, stage days
 CROPS = {
@@ -79,6 +81,13 @@ def crop_parameters(crop, day, stages):
     return kc, zr, p, stage
 
 
+def root_zone_capacity(soil, zr, p):
+    """Use identical arithmetic for the initial state and decision boundary."""
+    fc, pwp = SOILS[soil]
+    taw = 1000 * (fc - pwp) * zr
+    return taw, p * taw
+
+
 def parse_field(data):
     if not isinstance(data, dict) or type(data.get('balance_version')) is not int or data.get('balance_version') != 2:
         raise BalanceInputError('version')
@@ -114,12 +123,11 @@ def parse_field(data):
         kc, zr, p, stages, stage = 0., 0., 0., (), 'rice'
     moisture_condition = data.get('moisture_condition')
     moisture_factors = {'recent': 0., 'normal': .5, 'dry': 1.}
-    if moisture_condition not in moisture_factors:
+    if not isinstance(moisture_condition, str) or moisture_condition not in moisture_factors:
         raise BalanceInputError('moisture_condition')
     # The farmer chooses an observable soil condition. Millimetres remain a
     # server-side value derived from the current root zone and soil profile.
-    fc, pwp = SOILS[soil]
-    raw = p * 1000 * (fc - pwp) * zr
+    _, raw = root_zone_capacity(soil, zr, p)
     yesterday = raw * moisture_factors[moisture_condition]
     field_type = data.get('field_type', 'open')
     if field_type not in ('open', 'greenhouse') or data.get('is_saline', 'no') not in ('yes', 'no'):
@@ -176,12 +184,12 @@ def calculate_balance(field, et0, rain):
     rain = number(rain, 'rain', 0, 3000)
     if field.field_type == 'greenhouse':
         et0, rain = field.greenhouse_et0, 0.
-    fc, pwp = SOILS[field.soil]
-    taw = 1000 * (fc - pwp) * field.zr
-    raw = field.p * taw
+    taw, raw = root_zone_capacity(field.soil, field.zr, field.p)
     peff = 0. if rain < 5 else rain * .75
     etc = et0 * field.kc
-    unbounded = field.yesterday + etc - peff
+    # Preserve RAW equality when equal evaporation/rain cancel. Sequential
+    # additions can otherwise fabricate a one-ULP stress excursion.
+    unbounded = math.fsum((field.yesterday, etc, -peff))
     deficit = min(taw, max(0., unbounded))
     tech_threshold, efficiency = METHODS[field.method]
     # A delivery-system limit must never postpone irrigation beyond the crop's

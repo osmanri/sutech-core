@@ -27,6 +27,9 @@ algorithm is not used by the live route.
   above TAW are flagged. Strict comparison `deficit > RAW` has priority over
   `deficit >= min(method threshold, RAW)`; equality with RAW triggers irrigation
   but is not classified critical.
+- Initial depletion and the decision threshold share one TAW/RAW calculation.
+  `math.fsum` preserves the boundary when evaporation and effective rain cancel;
+  tiny real changes across RAW still change the decision without display rounding.
 - Net volume = deficit × 10 × hectares when irrigation is indicated, otherwise
   0. Gross volume divides net by efficiency. No rounding before decisions.
 - Pump inputs are power in kW (form default 22) and productivity in m³/h
@@ -35,6 +38,10 @@ algorithm is not used by the live route.
   `current deficit × 10 × hectares × (1.35 / 0.5)`. Reports show the two costs
   and their difference in tenge and kWh, rounded to two decimal places only
   at display time. Missing pump inputs produce an explicit “not calculated”.
+- The explanation shows both gross volumes, pump inputs and pumping hours.
+  Deferred irrigation is described as postponed spending rather than confirmed
+  whole-season savings. The 35% over-application and 50% efficiency baseline is
+  explicitly identified as a comparison assumption.
 - A recommendation never confirms irrigation. Persistent multi-field state and
   an owner-checked irrigation reset are implemented in `bot/field_state.py`.
 
@@ -67,6 +74,14 @@ An ephemeral hosting filesystem can still erase SQLite on redeploy.
 Run `python -m unittest test_water_balance test_balance_integration
 test_compact_report test_report_explanation test_bot_platform test_premium_emoji`
 and `node frontend/test_field_map.cjs`.
+
+Run `python -m unittest test_calculation_audit` for the independent rational
+oracle: crop/stage/soil/method/weather/unit combinations, all growth days,
+RAW equality and custom-crop/pump/area/tariff boundaries. See
+`CALCULATION_AUDIT.md` for scope and the reproduced old economic failure.
+
+The public `/health` response exposes `calculation_version` and the first
+12 characters of `RENDER_GIT_COMMIT` so a deployed revision can be verified.
 
 Deploy the backend and the nested frontend repository together. On the previous
 frontend version the new backend responds with “reopen the app” rather than

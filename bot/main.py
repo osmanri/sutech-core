@@ -15,12 +15,14 @@ try:
     from db import init_db
     from handlers.start import start_router
     from handlers.webapp import webapp_router
+    from water_balance import CALCULATION_VERSION
 except ImportError:
     from bot.bot_setup import configure_bot_profile
     from bot.config import BOT_TOKEN, USE_WEBHOOK, WEBHOOK_PATH, WEBHOOK_SECRET, WEBHOOK_URL
     from bot.db import init_db
     from bot.handlers.start import start_router
     from bot.handlers.webapp import webapp_router
+    from bot.water_balance import CALCULATION_VERSION
 
 
 if sys.platform == "win32":
@@ -48,6 +50,8 @@ async def health_check(request: web.Request) -> web.Response:
             "status": "ok",
             "service": "su-tech-bot",
             "updates": "webhook" if USE_WEBHOOK else "polling",
+            "calculation_version": CALCULATION_VERSION,
+            "revision": os.getenv("RENDER_GIT_COMMIT", "local")[:12],
         }
     )
 
