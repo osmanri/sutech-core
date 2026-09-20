@@ -19,6 +19,7 @@ def _ensure_columns(cursor, table: str, columns: dict[str, str]) -> None:
             cursor.execute(f"ALTER TABLE {table} ADD COLUMN {name} {definition}")
 
 def init_db():
+    conn = None
     try:
         conn = sqlite3.connect(DB_PATH)
         cursor = conn.cursor()
@@ -128,10 +129,16 @@ def init_db():
             )
         """)
         conn.commit()
-        conn.close()
         logger.info("SQLite DB (history) initialized.")
     except Exception as e:
-        logger.error(f"Error initializing SQLite DB: {e}")
+        logger.exception("Error initializing SQLite DB: %s", e)
+        # Starting with a missing or partially migrated database would make the
+        # health endpoint look healthy while field state silently disappears.
+        # Let the process fail so Render can report the deployment as broken.
+        raise
+    finally:
+        if conn is not None:
+            conn.close()
 
 def save_calculation(user_id: int, crop_name: str, area_text: str, irrigation_text: str, volume_text: str, savings_text: str, lang: str, created_at: str):
     try:

@@ -10,7 +10,7 @@ else:
     load_dotenv()
 
 BOT_TOKEN: str = os.getenv("BOT_TOKEN", "")
-WEBAPP_URL: str = os.getenv("WEBAPP_URL", "https://su-tech-mvp.vercel.app")
+WEBAPP_URL: str = os.getenv("WEBAPP_URL", "https://frontend-2-mauve.vercel.app")
 
 # Render exposes its public HTTPS address through RENDER_EXTERNAL_URL. Local
 # development stays on polling unless USE_WEBHOOK is explicitly enabled.
