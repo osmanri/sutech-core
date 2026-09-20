@@ -71,7 +71,10 @@ async def show_fields_callback(callback: CallbackQuery) -> None:
 
 
 def _callback_field_id(callback: CallbackQuery) -> int:
-    return int(callback.data.rsplit(":", 1)[1])
+    try:
+        return int(callback.data.rsplit(":", 1)[1])
+    except (ValueError, IndexError):
+        raise FieldNotFoundError("Invalid callback field id")
 
 
 @fields_router.callback_query(F.data.startswith("field:update:"))
@@ -86,7 +89,11 @@ async def update_field_today(callback: CallbackQuery) -> None:
     except FieldNotFoundError:
         await callback.answer(t(lang, "field_not_found"), show_alert=True)
         return
-    except (ValueError, FieldStateError, BalanceInputError, aiohttp.ClientError,
+    except BalanceInputError as exc:
+        key = "balance_season_ended" if str(exc) == "season_ended" else "balance_error"
+        await callback.answer(t(lang, key), show_alert=True)
+        return
+    except (ValueError, FieldStateError, aiohttp.ClientError,
             asyncio.TimeoutError, OSError, KeyError, TypeError):
         logger.exception("Could not update saved field")
         await callback.answer(t(lang, "field_update_error"), show_alert=True)

@@ -41,44 +41,38 @@ def get_launch_keyboard(lang: str = "ru") -> InlineKeyboardMarkup:
 def get_report_inline_keyboard(lang: str = "ru", report_id: str | None = None,
                                field_id: int | None = None) -> InlineKeyboardMarkup:
     """
-    Возвращает инлайн-кнопки под итоговым агро-отчетом:
-      [ 💡 Почему так? / Неліктен осылай? ] (объяснение сохранённого расчёта)
-      [ 🔄 Новый расчет / Қайта есептеу ] (WebApp)
-      [ 📜 О методике / Толық әдістеме ] (описание FAO-56)
+    Возвращает компактные инлайн-кнопки под итоговым агро-отчетом (3 ряда):
+      Ряд 1: [ 💡 Почему так? ] + [ 💧 Отметить полив ] (если поле сохранено)
+      Ряд 2: [ 🌱 Мои поля ] + [ 🔄 Новый расчет ]
+      Ряд 3: [ 📄 Экспорт CSV ] + [ 📊 История ]
     """
     url_with_lang = f"{WEBAPP_URL}{'&' if '?' in WEBAPP_URL else '?'}lang={lang}"
-    rows = [
-            [InlineKeyboardButton(text=t(lang, "btn_explain"),
-                                  callback_data=f"explain:{report_id or 'unavailable'}")],
-    ]
+    rows = []
+    
+    # Ряд 1: Главные действия по отчету
+    row1 = [InlineKeyboardButton(text=t(lang, "btn_explain"),
+                                 callback_data=f"explain:{report_id or 'unavailable'}")]
     if field_id is not None:
-        rows.append([
-            InlineKeyboardButton(text=t(lang, "btn_field_watered"),
-                                 callback_data=f"field:watered:{field_id}"),
-            InlineKeyboardButton(text=t(lang, "btn_fields"), callback_data="fields:list"),
-        ])
-        rows.append([
-            InlineKeyboardButton(text=t(lang, "btn_export_field"),
-                                 callback_data=f"field:export:{field_id}"),
-        ])
-    rows.extend([
-            [
-                InlineKeyboardButton(
-                    text=t(lang, "btn_recalculate"),
-                    web_app=WebAppInfo(url=url_with_lang),
-                )
-            ],
-            [
-                InlineKeyboardButton(
-                    text=t(lang, "btn_history"),
-                    callback_data="show_history_inline",
-                ),
-                InlineKeyboardButton(
-                    text=t(lang, "btn_methodology"),
-                    callback_data="methodology:info",
-                ),
-            ]
-        ])
+        row1.append(InlineKeyboardButton(text=t(lang, "btn_field_watered"),
+                                         callback_data=f"field:watered:{field_id}"))
+    rows.append(row1)
+
+    # Ряд 2: Поля и Новый расчет
+    row2 = []
+    if field_id is not None:
+        row2.append(InlineKeyboardButton(text=t(lang, "btn_fields"), callback_data="fields:list"))
+    row2.append(InlineKeyboardButton(text=t(lang, "btn_recalculate"),
+                                     web_app=WebAppInfo(url=url_with_lang)))
+    rows.append(row2)
+
+    # Ряд 3: Экспорт, История
+    row3 = []
+    if field_id is not None:
+        row3.append(InlineKeyboardButton(text=t(lang, "btn_export_field"),
+                                         callback_data=f"field:export:{field_id}"))
+    row3.append(InlineKeyboardButton(text=t(lang, "btn_history"),
+                                     callback_data="show_history_inline"))
+    rows.append(row3)
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
 

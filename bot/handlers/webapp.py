@@ -12,7 +12,7 @@ from aiogram.fsm.context import FSMContext
 try:
     from i18n import t
     from keyboards.inline import get_report_inline_keyboard
-    from user_state import add_history, get_lang
+    from user_state import add_history, get_lang, set_lang
     from db import save_report_explanation, get_report_explanation
     from water_balance import parse_field, calculate_balance, number, BalanceInputError
     from balance_weather import fetch_daily_weather
@@ -22,7 +22,7 @@ try:
 except ImportError:
     from bot.i18n import t
     from bot.keyboards.inline import get_report_inline_keyboard
-    from bot.user_state import get_lang
+    from bot.user_state import get_lang, set_lang
     from bot.db import save_report_explanation, get_report_explanation
     from bot.water_balance import parse_field, calculate_balance, number, BalanceInputError
     from bot.balance_weather import fetch_daily_weather
@@ -314,6 +314,10 @@ async def handle_webapp_data(message: Message, state: FSMContext) -> None:
         return
     if data.get('lang') in ('ru', 'kz'):
         lang = data['lang']
+        try:
+            set_lang(user_id, lang)
+        except Exception:
+            pass
     try:
         lat = number(data.get('latitude', data.get('lat')), 'latitude', -90, 90)
         lon = number(data.get('longitude', data.get('lon')), 'longitude', -180, 180)
@@ -327,12 +331,8 @@ async def handle_webapp_data(message: Message, state: FSMContext) -> None:
         await message.answer(t(lang, key))
         return
     try:
-        if field.crop == 'rice':
-            weather = {}  # No false numeric recommendation for flooded paddy.
-            result = calculate_balance(field, 0, 0)
-        else:
-            weather = await fetch_daily_weather(lat, lon)
-            result = calculate_balance(field, weather['et0'], weather['rain'])
+        weather = await fetch_daily_weather(lat, lon)
+        result = calculate_balance(field, weather['et0'], weather['rain'])
     except (aiohttp.ClientError, asyncio.TimeoutError, OSError, ValueError, KeyError, TypeError, IndexError):
         logger.exception('Daily Open-Meteo balance unavailable')
         await message.answer(t(lang, 'err_weather'))
@@ -356,9 +356,8 @@ async def handle_webapp_data(message: Message, state: FSMContext) -> None:
         user_id=user_id, crop_name=t(lang, f'report_crop_{field.crop}'),
         area_text=f'{fmt(field.area_ha)} га',
         irrigation_text=t(lang, f'report_irrig_{field.method}'),
-        volume_text=(t(lang, 'balance_rice') if field.crop == 'rice' else
-                     f"{fmt(result['gross_m3'])} м³ · {t(lang, 'balance_status_' + result['status'])}"),
-        savings_text='—' if field.crop == 'rice' else economics(lang, field, result),
+        volume_text=f"{fmt(result['gross_m3'])} м³ · {t(lang, 'balance_status_' + result['status'])}",
+        savings_text=economics(lang, field, result),
         lang=lang, created_at=datetime.now().strftime('%d.%m.%Y %H:%M'),
     )
     report_id = save_report_explanation(user_id, explanation)

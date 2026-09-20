@@ -29,7 +29,15 @@ def economics(lang, field, result):
 
 def format_balance_report(lang, field, result, weather):
     if result['status'] == 'rice':
-        return t(lang, 'balance_rice')
+        return t(lang, 'balance_rice',
+            water_layer=result.get('water_layer_cm', 12),
+            seepage=fmt(result.get('seepage', 6.0)),
+            etc=fmt(result.get('etc', 0.0)),
+            volume=fmt(result.get('gross_m3', 0.0)),
+            economics=economics(lang, field, result),
+            date=escape(weather.get('date', '')),
+            timezone=escape(weather.get('timezone', '')),
+        )
     text = t(lang, 'balance_report',
         status=t(lang, f"balance_status_{result['status']}"),
         raw=fmt(result['raw']), deficit=fmt(result['deficit']), threshold=fmt(result['threshold']),
@@ -49,7 +57,26 @@ def format_balance_report(lang, field, result, weather):
 
 def format_balance_explanation(lang, field, result, weather):
     if result['status'] == 'rice':
-        return t(lang, 'balance_rice')
+        text = t(lang, 'balance_rice_explanation',
+            area=fmt(field.area_ha),
+            soil=t(lang, f'balance_soil_{field.soil}'),
+            water_layer=result.get('water_layer_cm', 12),
+            etc=fmt(result.get('etc', 0.0)),
+            seepage=fmt(result.get('seepage', 6.0)),
+            peff=fmt(result.get('peff', 0.0)),
+            net_mm=fmt(result.get('net_mm', 0.0)),
+            net=fmt(result.get('net_m3', 0.0)),
+            gross=fmt(result.get('gross_m3', 0.0)),
+        )
+        if result.get('cost') is not None:
+            text += '\n\n' + t(lang, 'balance_pump_breakdown',
+                power=fmt(field.pump_power_kw), flow=fmt(field.pump_productivity_m3h),
+                tariff=fmt(field.power_price), ai_volume=fmt(result['gross_m3']),
+                traditional_volume=fmt(result['traditional_m3']),
+                ai_hours=fmt(result['ai_time_hours']),
+                traditional_hours=fmt(result['traditional_time_hours']),
+                deficit=fmt(result['deficit']), area=fmt(field.area_ha))
+        return text + '\n\n' + economics(lang, field, result)
     from_values = dict(
         crop=t(lang, f'report_crop_{field.crop}'), day=field.day,
         soil=t(lang, f'balance_soil_{field.soil}'), area=fmt(field.area_ha),

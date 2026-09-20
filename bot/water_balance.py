@@ -182,13 +182,26 @@ def calculate_economics(ai_gross_volume, current_deficit_mm, area_ha,
 
 
 def calculate_balance(field, et0, rain):
-    if field.crop == 'rice':
-        return {'status': 'rice'}  # Flooded paddy requires a separate balance.
     et0 = number(et0, 'et0', 0, 50)
     rain = number(rain, 'rain', 0, 3000)
     if field.field_type == 'greenhouse':
         et0 = field.greenhouse_et0 if field.greenhouse_et0 is not None else et0 * GREENHOUSE_ET0_FACTOR
         rain = 0.
+    if field.crop == 'rice':
+        seepage_map = {'clay': 3.0, 'loam': 6.0, 'sand': 12.0}
+        seepage = seepage_map.get(field.soil, 6.0)
+        etc = round(et0 * 1.25, 2)
+        peff = 0. if rain < 5 else rain * .85
+        net_mm = max(0.0, etc + seepage - peff)
+        efficiency = 0.50
+        net_m3 = net_mm * 10 * field.area_ha
+        gross_m3 = net_m3 / efficiency
+        economy = calculate_economics(gross_m3, net_mm, field.area_ha, field.power_price,
+                                      field.pump_power_kw, field.pump_productivity_m3h)
+        return dict(status='rice', is_rice=True, water_layer_cm=12, seepage=seepage,
+                    etc=etc, et0=et0, rain=rain, peff=peff, net_mm=net_mm,
+                    efficiency=efficiency, net_m3=net_m3, gross_m3=gross_m3,
+                    raw=0.0, deficit=net_mm, threshold=net_mm, **economy)
     taw, raw = root_zone_capacity(field.soil, field.zr, field.p)
     peff = 0. if rain < 5 else rain * .75
     etc = et0 * field.kc

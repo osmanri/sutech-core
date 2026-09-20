@@ -61,6 +61,12 @@ def get_connection():
         conn = psycopg2.connect(url, cursor_factory=DictCursor)
         return conn
     else:
+        parent = Path(DB_PATH).parent
+        if not parent.exists():
+            try:
+                parent.mkdir(parents=True, exist_ok=True)
+            except OSError:
+                pass
         conn = sqlite3.connect(DB_PATH, timeout=10.0)
         conn.row_factory = sqlite3.Row
         conn.execute("PRAGMA busy_timeout = 10000")
