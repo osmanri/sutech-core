@@ -22,6 +22,7 @@ COMMANDS = {
     "ru": [
         BotCommand(command="start", description="Главное меню"),
         BotCommand(command="app", description="Открыть расчет полива"),
+        BotCommand(command="fields", description="Сохранённые поля"),
         BotCommand(command="history", description="История расчетов"),
         BotCommand(command="language", description="Сменить язык"),
         BotCommand(command="help", description="Как пользоваться"),
@@ -30,6 +31,7 @@ COMMANDS = {
     "kz": [
         BotCommand(command="start", description="Басты мәзір"),
         BotCommand(command="app", description="Суару есебін ашу"),
+        BotCommand(command="fields", description="Сақталған алқаптар"),
         BotCommand(command="history", description="Есептеулер тарихы"),
         BotCommand(command="language", description="Тілді өзгерту"),
         BotCommand(command="help", description="Пайдалану нұсқаулығы"),

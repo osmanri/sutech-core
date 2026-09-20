@@ -38,7 +38,8 @@ def get_launch_keyboard(lang: str = "ru") -> InlineKeyboardMarkup:
     )
 
 
-def get_report_inline_keyboard(lang: str = "ru", report_id: str | None = None) -> InlineKeyboardMarkup:
+def get_report_inline_keyboard(lang: str = "ru", report_id: str | None = None,
+                               field_id: int | None = None) -> InlineKeyboardMarkup:
     """
     Возвращает инлайн-кнопки под итоговым агро-отчетом:
       [ 💡 Почему так? / Неліктен осылай? ] (объяснение сохранённого расчёта)
@@ -46,10 +47,21 @@ def get_report_inline_keyboard(lang: str = "ru", report_id: str | None = None) -
       [ 📜 О методике / Толық әдістеме ] (описание FAO-56)
     """
     url_with_lang = f"{WEBAPP_URL}{'&' if '?' in WEBAPP_URL else '?'}lang={lang}"
-    return InlineKeyboardMarkup(
-        inline_keyboard=[
+    rows = [
             [InlineKeyboardButton(text=t(lang, "btn_explain"),
                                   callback_data=f"explain:{report_id or 'unavailable'}")],
+    ]
+    if field_id is not None:
+        rows.append([
+            InlineKeyboardButton(text=t(lang, "btn_field_watered"),
+                                 callback_data=f"field:watered:{field_id}"),
+            InlineKeyboardButton(text=t(lang, "btn_fields"), callback_data="fields:list"),
+        ])
+        rows.append([
+            InlineKeyboardButton(text=t(lang, "btn_export_field"),
+                                 callback_data=f"field:export:{field_id}"),
+        ])
+    rows.extend([
             [
                 InlineKeyboardButton(
                     text=t(lang, "btn_recalculate"),
@@ -66,8 +78,35 @@ def get_report_inline_keyboard(lang: str = "ru", report_id: str | None = None) -
                     callback_data="methodology:info",
                 ),
             ]
-        ]
-    )
+        ])
+    return InlineKeyboardMarkup(inline_keyboard=rows)
+
+
+def get_fields_keyboard(lang: str, fields: list[dict]) -> InlineKeyboardMarkup:
+    """One compact row per saved field: refresh balance and record irrigation."""
+    rows = []
+    for field in fields[:20]:
+        crop_key = f"report_crop_{field['crop_type']}"
+        crop = t(lang, crop_key)
+        rows.append([
+            InlineKeyboardButton(
+                text=f"{crop} · {float(field.get('area_ha') or 0):g} га",
+                callback_data=f"field:update:{field['id']}",
+            ),
+            InlineKeyboardButton(
+                text="💧",
+                callback_data=f"field:watered:{field['id']}",
+            ),
+        ])
+    return InlineKeyboardMarkup(inline_keyboard=rows)
+
+
+def get_irrigation_confirmation_keyboard(lang: str, field_id: int) -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(inline_keyboard=[[
+        InlineKeyboardButton(text=t(lang, "btn_confirm_watered"),
+                             callback_data=f"field:confirm-watered:{field_id}"),
+        InlineKeyboardButton(text=t(lang, "btn_cancel"), callback_data="field:cancel-watered"),
+    ]])
 
 
 def get_history_carousel_keyboard(lang: str, current_page: int, total_pages: int) -> InlineKeyboardMarkup:

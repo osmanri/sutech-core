@@ -14,15 +14,19 @@ try:
     from config import BOT_TOKEN, USE_WEBHOOK, WEBHOOK_PATH, WEBHOOK_SECRET, WEBHOOK_URL
     from db import init_db
     from handlers.start import start_router
+    from handlers.fields import fields_router
     from handlers.webapp import webapp_router
     from water_balance import CALCULATION_VERSION
+    from daily_monitor import run_daily_monitor
 except ImportError:
     from bot.bot_setup import configure_bot_profile
     from bot.config import BOT_TOKEN, USE_WEBHOOK, WEBHOOK_PATH, WEBHOOK_SECRET, WEBHOOK_URL
     from bot.db import init_db
     from bot.handlers.start import start_router
+    from bot.handlers.fields import fields_router
     from bot.handlers.webapp import webapp_router
     from bot.water_balance import CALCULATION_VERSION
+    from bot.daily_monitor import run_daily_monitor
 
 
 if sys.platform == "win32":
@@ -58,6 +62,7 @@ async def health_check(request: web.Request) -> web.Response:
 
 def create_dispatcher() -> Dispatcher:
     dp = Dispatcher()
+    dp.include_router(fields_router)
     dp.include_router(start_router)
     dp.include_router(webapp_router)
     return dp
@@ -100,6 +105,7 @@ async def main() -> None:
 
     try:
         await configure_bot_profile(bot)
+        monitor_task = asyncio.create_task(run_daily_monitor(bot), name="daily-field-monitor")
 
         if USE_WEBHOOK:
             await bot.set_webhook(
@@ -127,6 +133,12 @@ async def main() -> None:
                 close_bot_session=False,
             )
     finally:
+        if 'monitor_task' in locals():
+            monitor_task.cancel()
+            try:
+                await monitor_task
+            except asyncio.CancelledError:
+                pass
         await runner.cleanup()
         logger.info("Su-Tech bot stopped")
 

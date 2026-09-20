@@ -49,6 +49,7 @@ class HandlerTests(unittest.IsolatedAsyncioTestCase):
                 weather=dict(et0=5,rain=0,date='2026-09-19',timezone='Asia/Almaty')
                 with patch('bot.handlers.webapp.get_lang',return_value='ru'), \
                      patch('bot.handlers.webapp.fetch_daily_weather',AsyncMock(return_value=weather)) as fetch, \
+                     patch('bot.handlers.webapp.persist_webapp_field',AsyncMock(return_value=7)), \
                      patch('bot.handlers.webapp.save_report_explanation',return_value='a'*32) as snapshot, \
                      patch('bot.db.save_calculation') as history:
                     await handle_webapp_data(message,AsyncMock())
@@ -66,6 +67,8 @@ class HandlerTests(unittest.IsolatedAsyncioTestCase):
                 self.assertNotRegex(history.call_args.kwargs['savings_text'], r'\d+[.,]\d{3,}')
                 keyboard=message.answer.call_args.kwargs['reply_markup']
                 self.assertEqual(keyboard.inline_keyboard[0][0].callback_data,'explain:'+'a'*32)
+                self.assertTrue(any(button.callback_data == 'field:watered:7'
+                                    for row in keyboard.inline_keyboard for button in row))
 
     async def test_api_failure_has_no_recommendation_or_saved_calculation(self):
         message=SimpleNamespace(from_user=SimpleNamespace(id=10),
@@ -101,6 +104,7 @@ class HandlerTests(unittest.IsolatedAsyncioTestCase):
             weather = dict(et0=0, rain=0, date='2026-09-19', timezone='Asia/Almaty')
             with patch('bot.handlers.webapp.get_lang', return_value=lang), \
                  patch('bot.handlers.webapp.fetch_daily_weather', AsyncMock(return_value=weather)), \
+                 patch('bot.handlers.webapp.persist_webapp_field', AsyncMock(return_value=7)), \
                  patch('bot.handlers.webapp.save_report_explanation', return_value='a'*32) as snapshot, \
                  patch('bot.db.save_calculation') as history:
                 await handle_webapp_data(message, AsyncMock())

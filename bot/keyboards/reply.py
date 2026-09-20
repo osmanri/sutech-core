@@ -28,11 +28,12 @@ def get_main_reply_keyboard(lang: str = "ru") -> ReplyKeyboardMarkup:
             ],
             # Ряд 2: История и Язык
             [
+                KeyboardButton(text=t(lang, "btn_fields")),
                 KeyboardButton(text=t(lang, "btn_history")),
-                KeyboardButton(text=t(lang, "btn_lang")),
             ],
             # Ряд 3: О системе и Помощь
             [
+                KeyboardButton(text=t(lang, "btn_lang")),
                 KeyboardButton(text=t(lang, "btn_about")),
                 KeyboardButton(text=t(lang, "btn_help")),
             ],

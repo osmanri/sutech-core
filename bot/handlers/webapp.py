@@ -17,6 +17,8 @@ try:
     from water_balance import parse_field, calculate_balance, number, BalanceInputError
     from balance_weather import fetch_daily_weather
     from balance_report import format_balance_report, format_balance_explanation, economics, fmt
+    from field_service import persist_webapp_field
+    from field_state import FieldStateError
 except ImportError:
     from bot.i18n import t
     from bot.keyboards.inline import get_report_inline_keyboard
@@ -25,6 +27,8 @@ except ImportError:
     from bot.water_balance import parse_field, calculate_balance, number, BalanceInputError
     from bot.balance_weather import fetch_daily_weather
     from bot.balance_report import format_balance_report, format_balance_explanation, economics, fmt
+    from bot.field_service import persist_webapp_field
+    from bot.field_state import FieldStateError
 
 webapp_router = Router()
 logger = logging.getLogger(__name__)
@@ -333,7 +337,16 @@ async def handle_webapp_data(message: Message, state: FSMContext) -> None:
         logger.exception('Daily Open-Meteo balance unavailable')
         await message.answer(t(lang, 'err_weather'))
         return
+    field_id = None
+    if field.crop != 'rice':
+        try:
+            field_id = await persist_webapp_field(user_id, data, field, lat, lon, result, weather)
+        except (FieldStateError, ValueError, KeyError, TypeError):
+            # A storage failure must not hide a valid, already-computed water recommendation.
+            logger.exception('Could not persist daily field state')
     final_message = format_balance_report(lang, field, result, weather)
+    if field_id is not None:
+        final_message += '\n' + t(lang, 'field_saved_note')
     explanation = format_balance_explanation(lang, field, result, weather)
     try:
         from db import save_calculation
@@ -350,4 +363,4 @@ async def handle_webapp_data(message: Message, state: FSMContext) -> None:
     )
     report_id = save_report_explanation(user_id, explanation)
     await message.answer(final_message, parse_mode='HTML',
-                         reply_markup=get_report_inline_keyboard(lang, report_id))
+                         reply_markup=get_report_inline_keyboard(lang, report_id, field_id))

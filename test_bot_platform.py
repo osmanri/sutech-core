@@ -41,7 +41,7 @@ class BotPlatformTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(bot.set_my_description.await_count, 2)
         self.assertEqual(
             [command.command for command in COMMANDS["ru"]],
-            ["start", "app", "history", "language", "help", "about"],
+            ["start", "app", "fields", "history", "language", "help", "about"],
         )
 
     async def test_language_selection_updates_personal_menu(self):
@@ -54,12 +54,14 @@ class BotPlatformTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn("lang=kz", call.kwargs["menu_button"].web_app.url)
 
     async def test_report_has_new_calculation_webapp_button(self):
-        keyboard = get_report_inline_keyboard("ru")
+        keyboard = get_report_inline_keyboard("ru", field_id=17)
 
         buttons = [button for row in keyboard.inline_keyboard for button in row]
         launcher = next(button for button in buttons if button.web_app)
         self.assertIn("lang=ru", launcher.web_app.url)
         self.assertTrue(any((button.callback_data or '').startswith('explain:') for button in buttons))
+        self.assertTrue(any(button.callback_data == 'field:watered:17' for button in buttons))
+        self.assertTrue(any(button.callback_data == 'field:export:17' for button in buttons))
 
 
 class UserLanguagePersistenceTests(unittest.TestCase):
