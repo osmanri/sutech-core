@@ -246,8 +246,8 @@ for lang in ("ru", "kz"):
     reporter.check(len(kb.keyboard) == 3, f"Reply клавиатура на {lang} имеет ровно 3 ряда")
     reporter.check(len(kb.keyboard[0]) == 1, f"Ряд 1 на {lang} содержит 1 кнопку WebApp на всю ширину")
     reporter.check(kb.keyboard[0][0].web_app is not None, f"Кнопка ряда 1 на {lang} является WebApp")
-    reporter.check(len(kb.keyboard[1]) == 2, f"Ряд 2 на {lang} содержит 2 кнопки (История | Язык)")
-    reporter.check(len(kb.keyboard[2]) == 2, f"Ряд 3 на {lang} содержит 2 кнопки (О системе | Помощь)")
+    reporter.check(len(kb.keyboard[1]) == 2, f"Ряд 2 на {lang} содержит 2 кнопки (Поля | История)")
+    reporter.check(len(kb.keyboard[2]) == 3, f"Ряд 3 на {lang} содержит 3 кнопки (Язык | О системе | Помощь)")
 
 # 2. Инлайн-карусель пагинации истории
 test_record = {
@@ -367,9 +367,9 @@ print(f"  -> Сюита 5 завершена: фронтенд полность�
 # ─────────────────────────────────────────────────────────────────────────────
 # ВЫВОД ИТОГОВОГО ОТЧЕТА
 # ─────────────────────────────────────────────────────────────────────────────
-reporter.report_summary()
-
-if reporter.failed_assertions > 0:
-    sys.exit(1)
-else:
-    sys.exit(0)
+if __name__ == "__main__":
+    reporter.report_summary()
+    if reporter.failed_assertions > 0:
+        sys.exit(1)
+    else:
+        sys.exit(0)

@@ -12,6 +12,10 @@ else:
 BOT_TOKEN: str = os.getenv("BOT_TOKEN", "")
 WEBAPP_URL: str = os.getenv("WEBAPP_URL", "https://frontend-2-mauve.vercel.app")
 
+DATABASE_URL: str = os.getenv("DATABASE_URL", "").strip()
+if DATABASE_URL.startswith("postgres://"):
+    DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql://", 1)
+
 # Render exposes its public HTTPS address through RENDER_EXTERNAL_URL. Local
 # development stays on polling unless USE_WEBHOOK is explicitly enabled.
 IS_RENDER: bool = bool(os.getenv("RENDER_SERVICE_ID")) or os.getenv("RENDER", "").lower() == "true"

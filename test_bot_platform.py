@@ -21,7 +21,7 @@ class BotPlatformTests(unittest.IsolatedAsyncioTestCase):
         data = json.loads(response.text)
         self.assertEqual(data['calculation_version'], CALCULATION_VERSION)
         self.assertEqual(data['revision'], '0123456789ab')
-        self.assertEqual(set(data), {'status', 'service', 'updates', 'calculation_version', 'revision'})
+        self.assertEqual(set(data), {'status', 'service', 'updates', 'calculation_version', 'revision', 'database'})
 
     async def test_profile_commands_and_native_menu_are_configured(self):
         bot = SimpleNamespace(

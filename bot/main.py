@@ -12,7 +12,7 @@ from aiogram.webhook.aiohttp_server import SimpleRequestHandler, setup_applicati
 try:
     from bot_setup import configure_bot_profile
     from config import BOT_TOKEN, USE_WEBHOOK, WEBHOOK_PATH, WEBHOOK_SECRET, WEBHOOK_URL
-    from db import init_db
+    from db import init_db, check_db_health
     from handlers.start import start_router
     from handlers.fields import fields_router
     from handlers.webapp import webapp_router
@@ -21,7 +21,7 @@ try:
 except ImportError:
     from bot.bot_setup import configure_bot_profile
     from bot.config import BOT_TOKEN, USE_WEBHOOK, WEBHOOK_PATH, WEBHOOK_SECRET, WEBHOOK_URL
-    from bot.db import init_db
+    from bot.db import init_db, check_db_health
     from bot.handlers.start import start_router
     from bot.handlers.fields import fields_router
     from bot.handlers.webapp import webapp_router
@@ -48,15 +48,20 @@ logger = logging.getLogger(__name__)
 
 
 async def health_check(request: web.Request) -> web.Response:
-    """Render and UptimeRobot readiness endpoint; contains no secrets."""
+    """Render and UptimeRobot readiness endpoint; verifies database connectivity."""
+    db_health = check_db_health()
+    is_healthy = db_health.get("status") in {"connected", "ok"}
+    status_code = 200 if is_healthy else 503
     return web.json_response(
         {
-            "status": "ok",
+            "status": "ok" if is_healthy else "degraded",
             "service": "su-tech-bot",
             "updates": "webhook" if USE_WEBHOOK else "polling",
+            "database": db_health,
             "calculation_version": CALCULATION_VERSION,
             "revision": os.getenv("RENDER_GIT_COMMIT", "local")[:12],
-        }
+        },
+        status=status_code,
     )
 
 

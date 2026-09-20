@@ -1,20 +1,31 @@
 """Persistent state for a farmer's fields.
 
-The functions in this module are synchronous and intentionally small.  In an
+The functions in this module are synchronous and intentionally small. In an
 async Telegram handler call them through ``asyncio.to_thread`` (see the module
-doc example in FIELD_STATE.md) so a slow disk cannot block other updates.
+doc example in FIELD_STATE.md) so a slow disk or network cannot block other updates.
 """
 
 from __future__ import annotations
 
 import math
 import re
-import sqlite3
 import hashlib
 import json
 from contextlib import closing
 from datetime import date, datetime
 from typing import Any
+
+import sys
+
+# Ensure 'field_state' and 'bot.field_state' refer to the exact same module in sys.modules
+if "field_state" in sys.modules and __name__ == "bot.field_state":
+    sys.modules["bot.field_state"] = sys.modules["field_state"]
+elif "bot.field_state" in sys.modules and __name__ == "field_state":
+    sys.modules["field_state"] = sys.modules["bot.field_state"]
+elif __name__ == "bot.field_state":
+    sys.modules["field_state"] = sys.modules[__name__]
+elif __name__ == "field_state":
+    sys.modules["bot.field_state"] = sys.modules[__name__]
 
 try:
     import db as database
@@ -37,11 +48,8 @@ class InvalidFieldDataError(ValueError, FieldStateError):
     """Raised when input cannot safely be stored or used in a calculation."""
 
 
-def _connect() -> sqlite3.Connection:
-    conn = sqlite3.connect(database.DB_PATH, timeout=10.0)
-    conn.row_factory = sqlite3.Row
-    conn.execute("PRAGMA busy_timeout = 10000")
-    return conn
+def _connect():
+    return database.get_connection()
 
 
 def _positive_int(value: Any, label: str) -> int:
@@ -113,33 +121,35 @@ def add_new_field(
     )
     try:
         with closing(_connect()) as conn:
-            cursor = conn.execute(
+            cursor = database.execute_query(
+                conn,
                 """
                 INSERT INTO fields
                     (user_id, crop_type, soil_type, irrigation_method, planting_date)
                 VALUES (?, ?, ?, ?, ?)
+                RETURNING id
                 """,
                 values,
             )
+            row = cursor.fetchone()
             conn.commit()
-            return int(cursor.lastrowid)
-    except sqlite3.Error as exc:
+            return int(row[0])
+    except database.DatabaseError as exc:
         raise FieldStateError("Could not create field") from exc
 
 
 def get_field(field_id: int, *, user_id: int | None = None) -> dict[str, Any]:
     """Return one field; optional user_id prevents cross-user access."""
     field_key = _positive_int(field_id, "field_id")
-    params: tuple[int, ...]
     sql = "SELECT * FROM fields WHERE id = ?"
-    params = (field_key,)
+    params: tuple[Any, ...] = (field_key,)
     if user_id is not None:
         sql += " AND user_id = ?"
         params += (_positive_int(user_id, "user_id"),)
     try:
         with closing(_connect()) as conn:
-            row = conn.execute(sql, params).fetchone()
-    except sqlite3.Error as exc:
+            row = database.execute_query(conn, sql, params).fetchone()
+    except database.DatabaseError as exc:
         raise FieldStateError("Could not load field") from exc
     if row is None:
         raise FieldNotFoundError(f"Field {field_key} was not found")
@@ -165,44 +175,44 @@ def update_daily_deficit(field_id: int, et_c: float, effective_rain: float) -> f
     rain = _non_negative_number(effective_rain, "effective_rain")
     try:
         with closing(_connect()) as conn:
-            conn.execute("BEGIN IMMEDIATE")
-            cursor = conn.execute(
+            database.begin_immediate(conn)
+            cursor = database.execute_query(
+                conn,
                 """
                 UPDATE fields
-                SET accumulated_deficit = MAX(0.0, accumulated_deficit + ? - ?)
+                SET accumulated_deficit = CASE
+                    WHEN (accumulated_deficit + ? - ?) < 0.0 THEN 0.0
+                    ELSE (accumulated_deficit + ? - ?)
+                END
                 WHERE id = ?
                 """,
-                (evaporation, rain, field_key),
+                (evaporation, rain, evaporation, rain, field_key),
             )
             if cursor.rowcount != 1:
                 conn.rollback()
                 raise FieldNotFoundError(f"Field {field_key} was not found")
-            value = conn.execute(
-                "SELECT accumulated_deficit FROM fields WHERE id = ?", (field_key,)
+            value = database.execute_query(
+                conn, "SELECT accumulated_deficit FROM fields WHERE id = ?", (field_key,)
             ).fetchone()[0]
             conn.commit()
             return float(value)
     except FieldNotFoundError:
         raise
-    except sqlite3.Error as exc:
+    except database.DatabaseError as exc:
         raise FieldStateError("Could not update daily deficit") from exc
 
 
 def reset_deficit(field_id: int, *, user_id: int | None = None) -> float:
-    """Set deficit to zero after confirmed irrigation.
-
-    Telegram callbacks should pass ``user_id=callback.from_user.id`` so one
-    farmer cannot reset another farmer's field using a forged callback value.
-    """
+    """Set deficit to zero after confirmed irrigation."""
     field_key = _positive_int(field_id, "field_id")
-    params: tuple[int, ...] = (field_key,)
+    params: tuple[Any, ...] = (field_key,)
     sql = "UPDATE fields SET accumulated_deficit = 0.0 WHERE id = ?"
     if user_id is not None:
         sql += " AND user_id = ?"
         params += (_positive_int(user_id, "user_id"),)
     try:
         with closing(_connect()) as conn:
-            cursor = conn.execute(sql, params)
+            cursor = database.execute_query(conn, sql, params)
             if cursor.rowcount != 1:
                 conn.rollback()
                 raise FieldNotFoundError(f"Field {field_key} was not found")
@@ -210,7 +220,7 @@ def reset_deficit(field_id: int, *, user_id: int | None = None) -> float:
             return 0.0
     except FieldNotFoundError:
         raise
-    except sqlite3.Error as exc:
+    except database.DatabaseError as exc:
         raise FieldStateError("Could not reset deficit") from exc
 
 
@@ -219,11 +229,11 @@ def list_user_fields(user_id: int) -> list[dict[str, Any]]:
     owner = _positive_int(user_id, "user_id")
     try:
         with closing(_connect()) as conn:
-            rows = conn.execute(
-                "SELECT * FROM fields WHERE user_id = ? ORDER BY id", (owner,)
+            rows = database.execute_query(
+                conn, "SELECT * FROM fields WHERE user_id = ? ORDER BY id", (owner,)
             ).fetchall()
         return [dict(row) for row in rows]
-    except sqlite3.Error as exc:
+    except database.DatabaseError as exc:
         raise FieldStateError("Could not list fields") from exc
 
 
@@ -231,14 +241,13 @@ def list_managed_fields() -> list[dict[str, Any]]:
     """Return fields that have enough location data for automatic weather updates."""
     try:
         with closing(_connect()) as conn:
-            conn.row_factory = sqlite3.Row
-            rows = conn.execute("""
+            rows = database.execute_query(conn, """
                 SELECT * FROM fields
                 WHERE field_key IS NOT NULL AND latitude IS NOT NULL AND longitude IS NOT NULL
                 ORDER BY id
             """).fetchall()
         return [dict(row) for row in rows]
-    except sqlite3.Error as exc:
+    except database.DatabaseError as exc:
         raise FieldStateError("Could not list managed fields") from exc
 
 
@@ -287,13 +296,14 @@ def upsert_managed_field(
     optional = [None if item is None else _non_negative_number(item, "field option") for item in optional]
     try:
         with closing(_connect()) as conn:
-            conn.execute("BEGIN IMMEDIATE")
-            existing = conn.execute(
+            database.begin_immediate(conn)
+            existing = database.execute_query(
+                conn,
                 "SELECT id FROM fields WHERE user_id = ? AND field_key = ?", (owner, key)
             ).fetchone()
             if existing:
                 field_id, created = int(existing[0]), False
-                conn.execute("""
+                database.execute_query(conn, """
                     UPDATE fields SET crop_type=?, soil_type=?, irrigation_method=?, planting_date=?,
                         name=?, latitude=?, longitude=?, area_ha=?, field_type=?, is_saline=?,
                         stage_days=?, custom_kc=?, custom_p=?, custom_root_depth=?, power_price=?,
@@ -305,21 +315,22 @@ def upsert_managed_field(
                       field_type, int(bool(is_saline)), stages_json, *optional, field_id, owner))
             else:
                 created = True
-                cursor = conn.execute("""
+                cursor = database.execute_query(conn, """
                     INSERT INTO fields (
                         user_id, field_key, crop_type, soil_type, irrigation_method, planting_date,
                         accumulated_deficit, name, latitude, longitude, area_ha, field_type,
                         is_saline, stage_days, custom_kc, custom_p, custom_root_depth, power_price,
                         pump_power_kw, pump_productivity_m3h, greenhouse_et0, updated_at
                     ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,CURRENT_TIMESTAMP)
+                    RETURNING id
                 """, (owner, key, values["crop"], values["soil"], values["irrigation"],
                       values["planting"], values["deficit"], str(name).strip()[:80],
                       values["latitude"], values["longitude"], values["area"], field_type,
                       int(bool(is_saline)), stages_json, *optional))
-                field_id = int(cursor.lastrowid)
+                field_id = int(cursor.fetchone()[0])
             conn.commit()
             return field_id, created
-    except sqlite3.Error as exc:
+    except database.DatabaseError as exc:
         raise FieldStateError("Could not save managed field") from exc
 
 
@@ -331,8 +342,8 @@ def get_daily_balance(field_id: int, balance_date: str) -> dict[str, Any] | None
         raise InvalidFieldDataError("balance_date must use YYYY-MM-DD") from exc
     try:
         with closing(_connect()) as conn:
-            conn.row_factory = sqlite3.Row
-            row = conn.execute(
+            row = database.execute_query(
+                conn,
                 "SELECT * FROM field_daily_balances WHERE field_id=? AND balance_date=?",
                 (field_key, balance_date),
             ).fetchone()
@@ -341,7 +352,7 @@ def get_daily_balance(field_id: int, balance_date: str) -> dict[str, Any] | None
         result = dict(row)
         result["result"] = json.loads(result.pop("result_json"))
         return result
-    except sqlite3.Error as exc:
+    except database.DatabaseError as exc:
         raise FieldStateError("Could not load daily balance") from exc
 
 
@@ -365,14 +376,15 @@ def save_daily_balance(field_id: int, *, user_id: int, balance_date: str,
     serialized = json.dumps(result, ensure_ascii=False, allow_nan=False, separators=(",", ":"))
     try:
         with closing(_connect()) as conn:
-            conn.row_factory = sqlite3.Row
-            conn.execute("BEGIN IMMEDIATE")
-            owner_row = conn.execute(
+            database.begin_immediate(conn)
+            owner_row = database.execute_query(
+                conn,
                 "SELECT id FROM fields WHERE id=? AND user_id=?", (field_key, owner)
             ).fetchone()
             if owner_row is None:
                 raise FieldNotFoundError(f"Field {field_key} was not found")
-            existing = conn.execute(
+            existing = database.execute_query(
+                conn,
                 "SELECT * FROM field_daily_balances WHERE field_id=? AND balance_date=?",
                 (field_key, balance_date),
             ).fetchone()
@@ -386,7 +398,7 @@ def save_daily_balance(field_id: int, *, user_id: int, balance_date: str,
                       numeric["net_m3"], numeric["gross_m3"],
                       str(result.get("calculation_version", "fao56")), serialized)
             if existing is None:
-                conn.execute("""
+                database.execute_query(conn, """
                     INSERT INTO field_daily_balances (
                         field_id,balance_date,timezone,et0,rain,effective_rain,etc,
                         deficit_before,deficit_after,status,net_m3,gross_m3,
@@ -394,13 +406,14 @@ def save_daily_balance(field_id: int, *, user_id: int, balance_date: str,
                     ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)
                 """, (field_key, balance_date, *params))
             else:
-                conn.execute("""
+                database.execute_query(conn, """
                     UPDATE field_daily_balances SET timezone=?,et0=?,rain=?,effective_rain=?,etc=?,
                         deficit_before=?,deficit_after=?,status=?,net_m3=?,gross_m3=?,
                         calculation_version=?,result_json=?,created_at=CURRENT_TIMESTAMP
                     WHERE field_id=? AND balance_date=?
                 """, (*params, field_key, balance_date))
-            conn.execute(
+            database.execute_query(
+                conn,
                 "UPDATE fields SET accumulated_deficit=?,updated_at=CURRENT_TIMESTAMP WHERE id=?",
                 (numeric["deficit"], field_key),
             )
@@ -409,7 +422,7 @@ def save_daily_balance(field_id: int, *, user_id: int, balance_date: str,
         return stored, True
     except FieldNotFoundError:
         raise
-    except sqlite3.Error as exc:
+    except database.DatabaseError as exc:
         raise FieldStateError("Could not save daily balance") from exc
 
 
@@ -418,13 +431,12 @@ def list_daily_balances(field_id: int, *, user_id: int, limit: int = 31) -> list
     safe_limit = min(_positive_int(limit, "limit"), 366)
     try:
         with closing(_connect()) as conn:
-            conn.row_factory = sqlite3.Row
-            rows = conn.execute("""
+            rows = database.execute_query(conn, """
                 SELECT * FROM field_daily_balances WHERE field_id=?
                 ORDER BY balance_date DESC LIMIT ?
             """, (field["id"], safe_limit)).fetchall()
         return [dict(row) for row in rows]
-    except sqlite3.Error as exc:
+    except database.DatabaseError as exc:
         raise FieldStateError("Could not list daily balances") from exc
 
 
@@ -434,13 +446,12 @@ def list_irrigation_events(field_id: int, *, user_id: int,
     safe_limit = min(_positive_int(limit, "limit"), 1000)
     try:
         with closing(_connect()) as conn:
-            conn.row_factory = sqlite3.Row
-            rows = conn.execute("""
+            rows = database.execute_query(conn, """
                 SELECT * FROM irrigation_events WHERE field_id=?
                 ORDER BY created_at DESC, id DESC LIMIT ?
             """, (field["id"], safe_limit)).fetchall()
         return [dict(row) for row in rows]
-    except sqlite3.Error as exc:
+    except database.DatabaseError as exc:
         raise FieldStateError("Could not list irrigation events") from exc
 
 
@@ -456,9 +467,9 @@ def record_irrigation(field_id: int, *, user_id: int, applied_m3: float | None =
         from bot.water_balance import METHODS
     try:
         with closing(_connect()) as conn:
-            conn.row_factory = sqlite3.Row
-            conn.execute("BEGIN IMMEDIATE")
-            row = conn.execute(
+            database.begin_immediate(conn)
+            row = database.execute_query(
+                conn,
                 "SELECT * FROM fields WHERE id=? AND user_id=?", (field_key, owner)
             ).fetchone()
             if row is None:
@@ -473,11 +484,12 @@ def record_irrigation(field_id: int, *, user_id: int, applied_m3: float | None =
                 efficiency = METHODS[row["irrigation_method"]][1]
                 effective_mm = volume * efficiency / (10 * area)
                 after = max(0.0, before - effective_mm)
-            conn.execute(
+            database.execute_query(
+                conn,
                 "UPDATE fields SET accumulated_deficit=?,updated_at=CURRENT_TIMESTAMP WHERE id=?",
                 (after, field_key),
             )
-            conn.execute("""
+            database.execute_query(conn, """
                 INSERT INTO irrigation_events
                     (field_id,user_id,applied_m3,deficit_before,deficit_after,source)
                 VALUES (?,?,?,?,?,?)
@@ -487,5 +499,5 @@ def record_irrigation(field_id: int, *, user_id: int, applied_m3: float | None =
                     "applied_m3": volume}
     except (FieldNotFoundError, InvalidFieldDataError):
         raise
-    except sqlite3.Error as exc:
+    except database.DatabaseError as exc:
         raise FieldStateError("Could not record irrigation") from exc

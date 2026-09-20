@@ -4,9 +4,20 @@ from __future__ import annotations
 
 import asyncio
 import json
+import sys
 from dataclasses import replace
 from datetime import date, timedelta
 from typing import Any
+
+# Ensure 'field_service' and 'bot.field_service' refer to the exact same module in sys.modules
+if "field_service" in sys.modules and __name__ == "bot.field_service":
+    sys.modules["bot.field_service"] = sys.modules["field_service"]
+elif "bot.field_service" in sys.modules and __name__ == "field_service":
+    sys.modules["field_service"] = sys.modules["bot.field_service"]
+elif __name__ == "bot.field_service":
+    sys.modules["field_service"] = sys.modules[__name__]
+elif __name__ == "field_service":
+    sys.modules["bot.field_service"] = sys.modules[__name__]
 
 try:
     from balance_weather import fetch_daily_weather
