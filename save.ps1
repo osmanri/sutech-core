@@ -1,10 +1,19 @@
 param(
-    [string]$msg = ""
+    [Parameter(ValueFromRemainingArguments = $true)]
+    [string[]]$msg
 )
 
-if ([string]::IsNullOrWhiteSpace($msg)) {
+$commitMessage = ""
+if ($msg -and $msg.Count -gt 0) {
+    $commitMessage = $msg -join " "
+}
+
+# Clean any surrounding escaped quotes
+$commitMessage = $commitMessage.Trim('"', "'", "\", " ")
+
+if ([string]::IsNullOrWhiteSpace($commitMessage)) {
     $dateStr = Get-Date -Format "yyyy-MM-dd HH:mm"
-    $msg = "chore: update $dateStr"
+    $commitMessage = "chore: update $dateStr"
 }
 
 Write-Host ""
@@ -12,9 +21,9 @@ Write-Host "[1/3] Проверка статуса..." -ForegroundColor Cyan
 git status -s
 
 Write-Host ""
-Write-Host "[2/3] Добавление файлов и коммит: `"$msg`"..." -ForegroundColor Cyan
+Write-Host "[2/3] Добавление файлов и коммит: `"$commitMessage`"..." -ForegroundColor Cyan
 git add .
-git commit -m "$msg"
+git commit -m "$commitMessage"
 
 Write-Host ""
 Write-Host "[3/3] Отправка на GitHub..." -ForegroundColor Cyan
