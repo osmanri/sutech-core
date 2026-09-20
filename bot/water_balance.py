@@ -7,7 +7,13 @@ No recommendation is treated as evidence that irrigation actually occurred.
 import math
 from dataclasses import dataclass
 
-CALCULATION_VERSION = 'fao56.3'
+CALCULATION_VERSION = 'fao56.4'
+
+# Default screening model for a film-covered greenhouse when no calibrated
+# indoor ET0 measurement is available. The farmer can still supply a measured
+# value; otherwise Open-Meteo FAO-56 reference ET0 is reduced by the assumed
+# 70% radiation transmission. Outdoor precipitation never reaches the crop.
+GREENHOUSE_ET0_FACTOR = .70
 
 SOILS = {'sand': (.12, .05), 'loam': (.33, .18), 'clay': (.45, .30)}
 # p, minimum root depth, maximum root depth, Kc initial/mid/end, stage days
@@ -139,8 +145,6 @@ def parse_field(data):
     pump_power = optional('pump_power_kw', .000001, 100000)
     pump_productivity = optional('pump_productivity_m3h', .000001, 1000000)
     greenhouse_et0 = optional('greenhouse_et0', 0, 50)
-    if field_type == 'greenhouse' and greenhouse_et0 is None and crop != 'rice':
-        raise BalanceInputError('greenhouse_et0')
     return FieldInput(crop, soil, area if unit == 'hectare' else area / 100, method,
                       int(day), yesterday, moisture_condition, stages, kc, zr, p, stage, field_type,
                       data.get('is_saline') == 'yes', power, pump_power,
@@ -183,7 +187,8 @@ def calculate_balance(field, et0, rain):
     et0 = number(et0, 'et0', 0, 50)
     rain = number(rain, 'rain', 0, 3000)
     if field.field_type == 'greenhouse':
-        et0, rain = field.greenhouse_et0, 0.
+        et0 = field.greenhouse_et0 if field.greenhouse_et0 is not None else et0 * GREENHOUSE_ET0_FACTOR
+        rain = 0.
     taw, raw = root_zone_capacity(field.soil, field.zr, field.p)
     peff = 0. if rain < 5 else rain * .75
     etc = et0 * field.kc
