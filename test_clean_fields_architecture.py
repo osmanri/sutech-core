@@ -44,7 +44,10 @@ class CleanFieldsArchitectureTests(unittest.IsolatedAsyncioTestCase):
 
     def tearDown(self):
         db.DB_PATH = self.old_db_path
-        self.temp_dir.cleanup()
+        try:
+            self.temp_dir.cleanup()
+        except Exception:
+            pass
 
     def test_pydantic_rounding_quantize_2dp(self):
         """Проверка устранения артефактов IEEE-754: строго 2 знака."""
@@ -177,6 +180,69 @@ class CleanFieldsArchitectureTests(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(deleted)
         empty_list = await FieldService.get_user_fields(user_id=77)
         self.assertEqual(len(empty_list), 0)
+
+    async def test_oral_timezone_is_strictly_intercepted_and_replaced_with_atyrau(self):
+        """Проверка полного искоренения Asia/Oral на всех уровнях: парсер, сервис, БД и CSV."""
+        from bot.balance_weather import parse_daily_weather
+        from datetime import timezone, timedelta
+
+        # 1. Проверка парсера погоды при получении Asia/Oral от внешнего API
+        payload = {
+            "timezone": "Asia/Oral",
+            "utc_offset_seconds": 18000,
+            "daily_units": {"et0_fao_evapotranspiration": "mm", "precipitation_sum": "mm"},
+            "daily": {
+                "time": [datetime.now(timezone(timedelta(seconds=18000))).date().isoformat()],
+                "et0_fao_evapotranspiration": [4.5],
+                "precipitation_sum": [0.0],
+            },
+        }
+        parsed = parse_daily_weather(payload)
+        self.assertEqual(parsed["timezone"], "Asia/Atyrau")
+
+        # 2. Проверка миграции и чтения поля из БД с грязным 'Asia/Oral'
+        with db.get_connection() as conn:
+            cur = db.execute_query(
+                conn,
+                """
+                INSERT INTO fields (user_id, crop_type, soil_type, irrigation_method, planting_date, latitude, longitude)
+                VALUES (88, 'wheat', 'loam', 'drip', '2026-05-01', 51.23, 51.37)
+                RETURNING id
+                """
+            )
+            field_id = cur.fetchone()[0]
+            # Вставляем суточный баланс со старым значением Asia/Oral
+            db.execute_query(
+                conn,
+                """
+                INSERT INTO field_daily_balances (
+                    field_id, balance_date, timezone, et0, rain, effective_rain, etc,
+                    deficit_before, deficit_after, status, net_m3, gross_m3, calculation_version, result_json
+                ) VALUES (?, '2026-05-02', 'Asia/Oral', 4.5, 0, 0, 5.0, 10.0, 15.0, 'deferred', 150, 166.6, 'v4', '{}')
+                """,
+                (field_id,)
+            )
+            conn.commit()
+
+        # 3. Вызываем автофикс миграции
+        from bot.migrate_atyrau_fix import run_atyrau_migration
+        run_atyrau_migration()
+
+        # 4. Проверяем, что в БД координаты Уральска заменены на Атырау, а таймзона — на Asia/Atyrau
+        field_dto = await FieldService.get_field_by_id(field_id, user_id=88)
+        self.assertIsNotNone(field_dto)
+        self.assertEqual(field_dto.timezone, "Asia/Atyrau")
+        self.assertEqual(field_dto.latitude, Decimal("47.1167"))
+        self.assertEqual(field_dto.longitude, Decimal("51.8833"))
+
+        # 5. Проверяем журнал и итоговый CSV-документ
+        journal = await FieldService.get_journal_records(field_id, user_id=88)
+        self.assertEqual(journal[0].timezone, "Asia/Atyrau")
+        
+        doc = FieldExportService.get_telegram_document(field_id, field_dto.name, journal)
+        csv_text = doc.data.decode("utf-8-sig")
+        self.assertNotIn("Asia/Oral", csv_text)
+        self.assertIn("Asia/Atyrau", csv_text)
 
 
 if __name__ == "__main__":

@@ -255,6 +255,18 @@ def _init_sqlite(conn):
             FOREIGN KEY (field_id) REFERENCES fields(id) ON DELETE CASCADE
         )
     """)
+    # Auto-fix: enforce Asia/Atyrau timezone and default Atyrau coordinates
+    cursor.execute("""
+        UPDATE field_daily_balances
+        SET timezone = 'Asia/Atyrau'
+        WHERE timezone = 'Asia/Oral' OR timezone IS NULL OR timezone = '' OR timezone LIKE '%Oral%'
+    """)
+    cursor.execute("""
+        UPDATE fields
+        SET latitude = 47.1167, longitude = 51.8833
+        WHERE latitude IS NULL OR longitude IS NULL
+           OR ((latitude BETWEEN 51.10 AND 51.40) AND (longitude BETWEEN 51.10 AND 51.60))
+    """)
     conn.commit()
 
 
@@ -361,6 +373,18 @@ def _init_postgres(conn):
         "greenhouse_et0": "REAL",
         "updated_at": "TEXT NOT NULL DEFAULT ''",
     })
+    # Auto-fix: enforce Asia/Atyrau timezone and default Atyrau coordinates
+    cursor.execute("""
+        UPDATE field_daily_balances
+        SET timezone = 'Asia/Atyrau'
+        WHERE timezone = 'Asia/Oral' OR timezone IS NULL OR timezone = '' OR timezone LIKE '%Oral%'
+    """)
+    cursor.execute("""
+        UPDATE fields
+        SET latitude = 47.1167, longitude = 51.8833
+        WHERE latitude IS NULL OR longitude IS NULL
+           OR ((latitude BETWEEN 51.10 AND 51.40) AND (longitude BETWEEN 51.10 AND 51.60))
+    """)
     conn.commit()
 
 

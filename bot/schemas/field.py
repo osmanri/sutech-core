@@ -12,10 +12,17 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 
 def quantize_2dp(value: Optional[float | Decimal | str | int]) -> Optional[Decimal]:
-    """Строгое округление чисел с плавающей точкой до 2 знаков (Decimal 0.01)."""
+    """Строгое округление поливных метрик и дефицита до 2 знаков (Decimal 0.01)."""
     if value is None or value == "":
         return None
     return Decimal(str(value)).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+
+
+def quantize_coord(value: Optional[float | Decimal | str | int]) -> Optional[Decimal]:
+    """Точное квантование географических координат поля до 4 знаков (Decimal 0.0001)."""
+    if value is None or value == "":
+        return None
+    return Decimal(str(value)).quantize(Decimal("0.0001"), rounding=ROUND_HALF_UP)
 
 
 class CropType(str, Enum):
@@ -64,10 +71,15 @@ class FieldBase(BaseModel):
     longitude: Decimal = Field(default=Decimal("51.8833"), ge=-180, le=180, description="Долгота")
     timezone: str = Field(default="Asia/Atyrau", description="Таймзона")
 
-    @field_validator("area_ha", "latitude", "longitude", mode="before")
+    @field_validator("area_ha", mode="before")
     @classmethod
-    def validate_decimals(cls, v):
+    def validate_area(cls, v):
         return quantize_2dp(v)
+
+    @field_validator("latitude", "longitude", mode="before")
+    @classmethod
+    def validate_coords(cls, v):
+        return quantize_coord(v)
 
 
 class FieldCreate(FieldBase):
@@ -85,10 +97,15 @@ class FieldUpdate(BaseModel):
     latitude: Optional[Decimal] = Field(None, ge=-90, le=90)
     longitude: Optional[Decimal] = Field(None, ge=-180, le=180)
 
-    @field_validator("area_ha", "latitude", "longitude", mode="before")
+    @field_validator("area_ha", mode="before")
     @classmethod
-    def validate_update_decimals(cls, v):
+    def validate_update_area(cls, v):
         return quantize_2dp(v)
+
+    @field_validator("latitude", "longitude", mode="before")
+    @classmethod
+    def validate_update_coords(cls, v):
+        return quantize_coord(v)
 
 
 class FieldResponse(FieldBase):

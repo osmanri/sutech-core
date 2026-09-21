@@ -90,7 +90,7 @@ class FieldService:
             soil_type=SoilType(record.get("soil_type") or "loam"),
             latitude=Decimal(str(round(float(record.get("latitude") or ATYRAU_DEFAULT_LAT), 4))),
             longitude=Decimal(str(round(float(record.get("longitude") or ATYRAU_DEFAULT_LON), 4))),
-            timezone=str(record.get("timezone") or ATYRAU_TIMEZONE),
+            timezone="Asia/Atyrau" if str(record.get("timezone") or "") in ("Asia/Oral", "", "None") or "Oral" in str(record.get("timezone") or "") else str(record.get("timezone")),
             planting_date=date.fromisoformat(record.get("planting_date") or date.today().isoformat()),
             accumulated_deficit_mm=Decimal(str(round(raw_deficit, 2))),
             current_status=status,
@@ -193,6 +193,11 @@ class FieldService:
     @classmethod
     async def get_journal_records(cls, field_id: int, user_id: int) -> List[UnifiedJournalRecord]:
         """Формирует нормализованный список записей аудита без пустых колонок."""
+        field = await cls.get_field_by_id(field_id, user_id)
+        field_tz = field.timezone if field and field.timezone else ATYRAU_TIMEZONE
+        if field_tz == "Asia/Oral" or "Oral" in field_tz:
+            field_tz = ATYRAU_TIMEZONE
+
         rows = await asyncio.to_thread(
             list_daily_balances, field_id, user_id=user_id, limit=366
         )
@@ -204,12 +209,16 @@ class FieldService:
 
         for row in rows:
             ts = datetime.fromisoformat(row["created_at"]) if "T" in str(row["created_at"]) else datetime.strptime(str(row["created_at"])[:19], "%Y-%m-%d %H:%M:%S")
+            row_tz = str(row.get("timezone") or field_tz)
+            if row_tz == "Asia/Oral" or "Oral" in row_tz:
+                row_tz = ATYRAU_TIMEZONE
+
             records.append(
                 UnifiedJournalRecord(
                     timestamp=ts,
                     record_type="balance",
                     date_str=str(row["balance_date"]),
-                    timezone=str(row.get("timezone") or ATYRAU_TIMEZONE),
+                    timezone=row_tz,
                     et0_mm=quantize_2dp(row["et0"]),
                     rain_mm=quantize_2dp(row["rain"]),
                     effective_rain_mm=quantize_2dp(row["effective_rain"]),
