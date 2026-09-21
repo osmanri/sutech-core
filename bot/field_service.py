@@ -116,16 +116,12 @@ async def calculate_saved_field(field_id: int, user_id: int):
     if lat is None or lon is None:
         lat, lon = 47.1167, 51.8833
     weather = await fetch_daily_weather(lat, lon)
-    if weather.get("timezone") == "Asia/Oral" or float(lon) < 56.0:
-        weather["timezone"] = "Asia/Atyrau"
     balance_date = date.fromisoformat(weather["date"])
     stored = await asyncio.to_thread(get_daily_balance, field_id, weather["date"])
     if stored is not None:
         field = await asyncio.to_thread(field_input_from_record, record, on_date=balance_date)
         field = replace(field, yesterday=float(stored["deficit_before"]))
-        stored_tz = str(stored.get("timezone") or "Asia/Atyrau")
-        if stored_tz == "Asia/Oral" or "Oral" in stored_tz:
-            stored_tz = "Asia/Atyrau"
+        stored_tz = str(stored.get("timezone") or weather["timezone"])
         return field, stored["result"], {
             "date": stored["balance_date"], "timezone": stored_tz,
             "et0": stored["et0"], "rain": stored["rain"],
@@ -138,6 +134,5 @@ async def calculate_saved_field(field_id: int, user_id: int):
         timezone=weather["timezone"], result=_result_snapshot(result),
         deficit_before=field.yesterday,
     )
-    if isinstance(saved, dict) and (saved.get("timezone") == "Asia/Oral" or "Oral" in str(saved.get("timezone"))):
-        saved["timezone"] = "Asia/Atyrau"
     return field, saved["result"], weather, created
+

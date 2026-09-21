@@ -52,7 +52,11 @@ from bot.schemas.field import (
     UnifiedJournalRecord,
     quantize_2dp,
 )
-from bot.services.geo_service import ATYRAU_DEFAULT_LAT, ATYRAU_DEFAULT_LON, ATYRAU_TIMEZONE
+from bot.services.geo_service import (
+    DEFAULT_FALLBACK_LAT,
+    DEFAULT_FALLBACK_LON,
+    resolve_timezone_by_coords,
+)
 
 
 class FieldService:
@@ -80,6 +84,14 @@ class FieldService:
         eff = eff_map.get(record.get("irrigation_method") or "drip", 0.75)
         rec_m3 = (raw_deficit * 10.0 * area / eff) if status != IrrigationStatus.NORMAL else 0.0
 
+        lat_raw = record.get("latitude")
+        lon_raw = record.get("longitude")
+        lat_f = float(lat_raw) if lat_raw is not None else DEFAULT_FALLBACK_LAT
+        lon_f = float(lon_raw) if lon_raw is not None else DEFAULT_FALLBACK_LON
+
+        stored_tz = str(record.get("timezone") or "").strip()
+        field_tz = stored_tz if stored_tz and stored_tz != "None" else resolve_timezone_by_coords(lat_f, lon_f)
+
         return FieldResponse(
             id=int(record["id"]),
             user_id=int(record["user_id"]),
@@ -88,9 +100,9 @@ class FieldService:
             area_ha=Decimal(str(round(area, 2))),
             irrigation_method=IrrigationMethod(record.get("irrigation_method") or "drip"),
             soil_type=SoilType(record.get("soil_type") or "loam"),
-            latitude=Decimal(str(round(float(record.get("latitude") or ATYRAU_DEFAULT_LAT), 4))),
-            longitude=Decimal(str(round(float(record.get("longitude") or ATYRAU_DEFAULT_LON), 4))),
-            timezone="Asia/Atyrau" if str(record.get("timezone") or "") in ("Asia/Oral", "", "None") or "Oral" in str(record.get("timezone") or "") else str(record.get("timezone")),
+            latitude=Decimal(str(round(lat_f, 4))),
+            longitude=Decimal(str(round(lon_f, 4))),
+            timezone=field_tz,
             planting_date=date.fromisoformat(record.get("planting_date") or date.today().isoformat()),
             accumulated_deficit_mm=Decimal(str(round(raw_deficit, 2))),
             current_status=status,
@@ -115,9 +127,9 @@ class FieldService:
 
     @classmethod
     async def create_field(cls, user_id: int, form: FieldCreate) -> int:
-        """Создает новое поле с привязкой к координатам Атырау."""
-        lat = float(form.latitude) if form.latitude else ATYRAU_DEFAULT_LAT
-        lon = float(form.longitude) if form.longitude else ATYRAU_DEFAULT_LON
+        """Создает новое поле со строгой привязкой к переданным GPS-координатам."""
+        lat = float(form.latitude) if form.latitude else DEFAULT_FALLBACK_LAT
+        lon = float(form.longitude) if form.longitude else DEFAULT_FALLBACK_LON
         area = float(form.area_ha)
         
         identity = make_field_key(lat, lon, area, form.crop_type.value)
@@ -194,9 +206,7 @@ class FieldService:
     async def get_journal_records(cls, field_id: int, user_id: int) -> List[UnifiedJournalRecord]:
         """Формирует нормализованный список записей аудита без пустых колонок."""
         field = await cls.get_field_by_id(field_id, user_id)
-        field_tz = field.timezone if field and field.timezone else ATYRAU_TIMEZONE
-        if field_tz == "Asia/Oral" or "Oral" in field_tz:
-            field_tz = ATYRAU_TIMEZONE
+        field_tz = field.timezone if field and field.timezone else "UTC"
 
         rows = await asyncio.to_thread(
             list_daily_balances, field_id, user_id=user_id, limit=366
@@ -210,8 +220,6 @@ class FieldService:
         for row in rows:
             ts = datetime.fromisoformat(row["created_at"]) if "T" in str(row["created_at"]) else datetime.strptime(str(row["created_at"])[:19], "%Y-%m-%d %H:%M:%S")
             row_tz = str(row.get("timezone") or field_tz)
-            if row_tz == "Asia/Oral" or "Oral" in row_tz:
-                row_tz = ATYRAU_TIMEZONE
 
             records.append(
                 UnifiedJournalRecord(
@@ -245,7 +253,7 @@ class FieldService:
                     timestamp=ts,
                     record_type="irrigation",
                     date_str=ts.strftime("%Y-%m-%d"),
-                    timezone=ATYRAU_TIMEZONE,
+                    timezone=field_tz,
                     et0_mm=None,
                     rain_mm=None,
                     effective_rain_mm=None,

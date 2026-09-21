@@ -265,7 +265,6 @@ def _init_sqlite(conn):
         UPDATE fields
         SET latitude = 47.1167, longitude = 51.8833
         WHERE latitude IS NULL OR longitude IS NULL
-           OR ((latitude BETWEEN 51.10 AND 51.40) AND (longitude BETWEEN 51.10 AND 51.60))
     """)
     conn.commit()
 
@@ -383,7 +382,6 @@ def _init_postgres(conn):
         UPDATE fields
         SET latitude = 47.1167, longitude = 51.8833
         WHERE latitude IS NULL OR longitude IS NULL
-           OR ((latitude BETWEEN 51.10 AND 51.40) AND (longitude BETWEEN 51.10 AND 51.60))
     """)
     conn.commit()
 

@@ -35,7 +35,12 @@ from bot.schemas.field import (
 )
 from bot.services.export_service import FieldExportService
 from bot.services.field_manager import FieldService
-from bot.services.geo_service import ATYRAU_DEFAULT_LAT, ATYRAU_DEFAULT_LON, ATYRAU_TIMEZONE
+from bot.services.geo_service import (
+    DEFAULT_FALLBACK_LAT,
+    DEFAULT_FALLBACK_LON,
+    get_field_location_name,
+    resolve_timezone_by_coords,
+)
 from bot.states.field_states import FieldCallback, FieldForm
 
 logger = logging.getLogger(__name__)
@@ -43,7 +48,7 @@ fields_router = Router(name="fields_router")
 
 
 # ─── Вспомогательные функции форматирования ──────────────────────────────────
-def _render_field_card(field: FieldResponse) -> str:
+def _render_field_card(field: FieldResponse, locality_name: Optional[str] = None) -> str:
     """Генерирует аккуратную карточку агрономического состояния поля."""
     status_text = {
         IrrigationStatus.NORMAL: "🟢 В норме (полив не требуется)",
@@ -52,13 +57,18 @@ def _render_field_card(field: FieldResponse) -> str:
         IrrigationStatus.RICE: "💧 Режим затопления рисового чека",
     }.get(field.current_status, "🟢 В норме")
 
+    if locality_name:
+        loc_str = f"{locality_name} ({field.latitude:.4f}° N, {field.longitude:.4f}° E)"
+    else:
+        loc_str = f"{field.latitude:.4f}° N, {field.longitude:.4f}° E"
+
     return (
         f"🌱 <b>Карточка поля: {field.name}</b>\n"
         f"───────────────────────────\n"
         f"🌾 <b>Культура:</b> {field.crop_type.value.capitalize()}\n"
         f"📐 <b>Площадь:</b> {field.area_ha:.2f} га\n"
         f"💧 <b>Метод полива:</b> {field.irrigation_method.value}\n"
-        f"📍 <b>Локация:</b> {field.latitude:.4f}° N, {field.longitude:.4f}° E\n"
+        f"📍 <b>Локация:</b> {loc_str}\n"
         f"🕒 <b>Таймзона:</b> {field.timezone}\n"
         f"───────────────────────────\n"
         f"📊 <b>Водный баланс (FAO-56 Penman-Monteith):</b>\n"
@@ -82,15 +92,14 @@ async def show_fields_menu(message: Message, state: FSMContext) -> None:
     if not fields:
         await message.answer(
             "🌱 <b>У вас пока нет сохраненных полей.</b>\n\n"
-            "Вы можете добавить свое первое поле прямо сейчас с привязкой к Атырау (Asia/Atyrau):",
+            "Вы можете добавить свое первое поле прямо сейчас по GPS координатам:",
             parse_mode="HTML",
             reply_markup=get_fields_list_keyboard([]),
         )
         return
 
     await message.answer(
-        "🌱 <b>Ваши поля (Мониторинг FAO-56):</b>\n"
-        f"📍 <i>Базовый регион: Атырау (47.1167° N, 51.8833° E)</i>\n\n"
+        "🌱 <b>Ваши поля (Мониторинг FAO-56):</b>\n\n"
         "Выберите поле для просмотра подробной карточки или добавьте новое:",
         parse_mode="HTML",
         reply_markup=get_fields_list_keyboard(fields),
@@ -127,7 +136,8 @@ async def callback_view_field(callback: CallbackQuery, callback_data: FieldCallb
         await callback.answer("Поле не найдено", show_alert=True)
         return
 
-    card_text = _render_field_card(field)
+    locality = await get_field_location_name(float(field.latitude), float(field.longitude))
+    card_text = _render_field_card(field, locality_name=locality)
     if isinstance(callback.message, Message):
         await callback.message.edit_text(
             text=card_text,
@@ -160,7 +170,8 @@ async def callback_update_field(callback: CallbackQuery, state: FSMContext) -> N
         await callback.answer("Ошибка связи с метеосервисом", show_alert=True)
         return
 
-    card_text = _render_field_card(updated_field)
+    locality = await get_field_location_name(float(updated_field.latitude), float(updated_field.longitude))
+    card_text = _render_field_card(updated_field, locality_name=locality)
     if isinstance(callback.message, Message):
         await callback.message.edit_text(
             text=card_text,
@@ -254,10 +265,21 @@ async def callback_export_csv(callback: CallbackQuery, state: FSMContext) -> Non
         await callback.answer("История поливов и расчетов пуста", show_alert=True)
         return
 
-    document = FieldExportService.get_telegram_document(field.id, field.name, records)
+    locality = await get_field_location_name(float(field.latitude), float(field.longitude))
+    document = FieldExportService.get_telegram_document(
+        field.id,
+        field.name,
+        records,
+        latitude=float(field.latitude),
+        longitude=float(field.longitude),
+        timezone_str=field.timezone,
+        locality=locality,
+    )
     caption = (
         f"📄 <b>Агрономический журнал поля: {field.name}</b>\n"
-        f"• Регион: Атырау (Asia/Atyrau, UTC+5)\n"
+        f"• Координаты (GPS): {field.latitude:.4f}° N, {field.longitude:.4f}° E\n"
+        f"• Локация: {locality}\n"
+        f"• Таймзона: {field.timezone}\n"
         f"• Округление: строго 2 знака (.round(2))\n"
         f"• Кодировка: UTF-8-BOM (для корректного открытия в Excel)"
     )
@@ -359,15 +381,19 @@ async def process_form_area(message: Message, state: FSMContext) -> None:
     # Строгий сброс FSM: исключает залипание состояния
     await state.clear()
 
+    lat_def = DEFAULT_FALLBACK_LAT
+    lon_def = DEFAULT_FALLBACK_LON
+    tz_def = resolve_timezone_by_coords(lat_def, lon_def)
+
     field_create = FieldCreate(
         name=data.get("name") or "Новое поле",
         crop_type=CropType(data.get("crop") or "tomato"),
         area_ha=area_num,
         irrigation_method=IrrigationMethod.DRIP,
         soil_type=SoilType.LOAM,
-        latitude=Decimal(str(ATYRAU_DEFAULT_LAT)),
-        longitude=Decimal(str(ATYRAU_DEFAULT_LON)),
-        timezone=ATYRAU_TIMEZONE,
+        latitude=Decimal(str(lat_def)),
+        longitude=Decimal(str(lon_def)),
+        timezone=tz_def,
     )
 
     try:
@@ -383,8 +409,8 @@ async def process_form_area(message: Message, state: FSMContext) -> None:
         f"• Культура: <b>{field_create.crop_type.value.capitalize()}</b>\n"
         f"• Площадь: <b>{field_create.area_ha:.2f} га</b>\n"
         f"• Метод полива: <b>{field_create.irrigation_method.value}</b>\n"
-        f"• Координаты: <b>Атырау ({ATYRAU_DEFAULT_LAT}° N, {ATYRAU_DEFAULT_LON}° E)</b>\n"
-        f"• Таймзона: <b>{ATYRAU_TIMEZONE} (UTC+5)</b>\n\n"
+        f"• GPS координаты: <b>{field_create.latitude:.4f}° N, {field_create.longitude:.4f}° E</b>\n"
+        f"• Таймзона: <b>{field_create.timezone}</b>\n\n"
         f"Мониторинг водного баланса активирован.",
         parse_mode="HTML",
         reply_markup=get_fields_list_keyboard(fields),
