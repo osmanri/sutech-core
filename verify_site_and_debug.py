@@ -85,9 +85,9 @@ check("CSS uses clean natural agronomic palette", "--accent" in css_content or "
 # ===========================================================================
 header(2, "Real User Journeys & State Fallbacks (Simulation)")
 
-# Check that JS pre-selects a default location so coordinates are NEVER null on load
-check("JS auto-initializes Kyzylorda on load", "selectRegion('kyzylorda', true)" in js_content)
-check("JS submitFinalCalculation auto-rescues null coordinates", "selectRegion('kyzylorda', true)" in js_content)
+# Check that JS requires explicit city/region selection and has city prompt
+check("HTML contains mandatory city selection prompt", "selectRegionPrompt" in html_content)
+check("JS submitFinalCalculation validates city/location before submission", "select-highlight" in js_content)
 
 # Run frontend node tests
 node_test = os.system(f"node \"{os.path.join(CWD, 'frontend', 'test_field_map.cjs')}\" > nul 2>&1")
@@ -218,7 +218,7 @@ try:
         check("Vercel production returns HTTP 200 OK", resp.status == 200)
         live_html = resp.read().decode("utf-8")
         check("Live Vercel HTML contains region selector", "regionSelect" in live_html)
-        check("Live Vercel HTML preselects Kyzylorda", 'value="kyzylorda"' in live_html)
+        check("Live Vercel HTML contains city selection prompt", 'selectRegionPrompt' in live_html or 'value=""' in live_html)
 
     req_css = urllib.request.Request(
         "https://frontend-2-mauve.vercel.app/css/app.css",

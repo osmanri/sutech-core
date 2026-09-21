@@ -8,6 +8,18 @@ except ImportError:
     from bot.water_balance import number
 
 
+def detect_kz_timezone(lat, lon):
+    try:
+        lat_f, lon_f = float(lat), float(lon)
+        if lon_f < 56.0:
+            return 'Asia/Oral'
+        if 43.0 <= lat_f <= 46.5 and 62.0 <= lon_f <= 67.5:
+            return 'Asia/Qyzylorda'
+        return 'Asia/Almaty'
+    except Exception:
+        return 'Asia/Almaty'
+
+
 def parse_daily_weather(payload):
     if not isinstance(payload, dict):
         raise ValueError('weather payload')
@@ -18,7 +30,8 @@ def parse_daily_weather(payload):
     offset = number(payload.get('utc_offset_seconds', 18000), 'utc_offset', -50400, 50400)
     today = datetime.now(timezone(timedelta(seconds=offset))).date().isoformat()
     index = daily['time'].index(today) if today in daily['time'] else 0
-    return {'date': daily['time'][index], 'timezone': str(payload.get('timezone', 'Asia/Qyzylorda')),
+    tz = str(payload.get('timezone') or 'Asia/Almaty')
+    return {'date': daily['time'][index], 'timezone': tz,
             'et0': number(daily[keys[0]][index], 'et0', 0, 50),
             'rain': number(daily[keys[1]][index], 'rain', 0, 3000)}
 
@@ -34,11 +47,12 @@ async def fetch_daily_weather(lat, lon):
                 response.raise_for_status()
                 return parse_daily_weather(await response.json())
     except Exception:
-        # Regional FAO-56 climatic fallback (Syr Darya / Kazakhstan steppe summer/autumn average)
+        # Regional FAO-56 climatic fallback
         # Guarantees the farmer receives irrigation calculation even during Open-Meteo downtime
         return {
             'date': datetime.now().date().isoformat(),
-            'timezone': 'Asia/Qyzylorda',
+            'timezone': detect_kz_timezone(lat, lon),
             'et0': 4.5,
             'rain': 0.0,
         }
+
