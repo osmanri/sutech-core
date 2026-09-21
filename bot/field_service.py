@@ -122,6 +122,8 @@ async def calculate_saved_field(field_id: int, user_id: int):
         field = await asyncio.to_thread(field_input_from_record, record, on_date=balance_date)
         field = replace(field, yesterday=float(stored["deficit_before"]))
         stored_tz = str(stored.get("timezone") or weather["timezone"])
+        if stored_tz == "Asia/Oral":
+            stored_tz = "Asia/Atyrau"
         return field, stored["result"], {
             "date": stored["balance_date"], "timezone": stored_tz,
             "et0": stored["et0"], "rain": stored["rain"],

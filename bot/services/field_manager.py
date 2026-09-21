@@ -90,6 +90,8 @@ class FieldService:
         lon_f = float(lon_raw) if lon_raw is not None else DEFAULT_FALLBACK_LON
 
         stored_tz = str(record.get("timezone") or "").strip()
+        if stored_tz == "Asia/Oral":
+            stored_tz = "Asia/Atyrau"
         field_tz = stored_tz if stored_tz and stored_tz != "None" else resolve_timezone_by_coords(lat_f, lon_f)
 
         return FieldResponse(
@@ -220,6 +222,8 @@ class FieldService:
         for row in rows:
             ts = datetime.fromisoformat(row["created_at"]) if "T" in str(row["created_at"]) else datetime.strptime(str(row["created_at"])[:19], "%Y-%m-%d %H:%M:%S")
             row_tz = str(row.get("timezone") or field_tz)
+            if row_tz == "Asia/Oral":
+                row_tz = "Asia/Atyrau"
 
             records.append(
                 UnifiedJournalRecord(
