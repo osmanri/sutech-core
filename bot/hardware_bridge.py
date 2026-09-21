@@ -31,7 +31,9 @@ class VirtualArduinoBridge:
             return "PONG"
         elif cmd == "STATUS":
             state = "1" if self.pump_active else "0"
-            return f"OK:STATUS:PUMP={state}:TIME_LEFT=0.00"
+            return f"OK:STATUS:PUMP={state}:TIME_LEFT=0.00:MOISTURE=65"
+        elif cmd == "MOISTURE":
+            return "OK:MOISTURE=65"
         elif cmd.startswith("WATER:"):
             try:
                 sec = float(cmd.split(":", 1)[1])
@@ -133,6 +135,15 @@ class HardwareBridge:
     def ping(self) -> bool:
         resp = self.send_raw_command("PING")
         return resp == "PONG"
+
+    def get_moisture(self) -> int:
+        resp = self.send_raw_command("MOISTURE")
+        if resp.startswith("OK:MOISTURE="):
+            try:
+                return int(resp.split("=")[1])
+            except (ValueError, IndexError):
+                pass
+        return 65
 
 
 _bridge_instance: HardwareBridge | None = None

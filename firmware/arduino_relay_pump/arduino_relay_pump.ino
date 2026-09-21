@@ -17,7 +17,9 @@
  */
 
 #define RELAY_PIN 8
+#define BUZZER_PIN 9
 #define LED_INDICATOR 13
+#define SOIL_MOISTURE_PIN A0
 
 // Some relay boards trigger on HIGH, others on LOW.
 // Standard KY-019 triggers on HIGH. Adjust if your module is active-low.
@@ -30,6 +32,15 @@ bool pumpActive = false;
 unsigned long pumpStartTime = 0;
 unsigned long pumpDurationMs = 0;
 
+int readMoisturePercent() {
+  int raw = analogRead(SOIL_MOISTURE_PIN);
+  // Map typical sensor range (0 - 800) to percentage (0 - 100%)
+  int pct = map(raw, 0, 750, 0, 100);
+  if (pct < 0) pct = 0;
+  if (pct > 100) pct = 100;
+  return pct;
+}
+
 void setup() {
   // Ensure relay is safely turned off BEFORE setting pin as output
   digitalWrite(RELAY_PIN, RELAY_INACTIVE);
@@ -38,6 +49,8 @@ void setup() {
 
   pinMode(LED_INDICATOR, OUTPUT);
   digitalWrite(LED_INDICATOR, LOW);
+  pinMode(BUZZER_PIN, OUTPUT);
+  pinMode(SOIL_MOISTURE_PIN, INPUT);
 
   Serial.begin(9600);
   while (!Serial) {
@@ -79,11 +92,19 @@ void handleCommand(String cmd) {
         timeLeft = (pumpDurationMs - elapsed) / 1000.0f;
       }
     }
+    int moisture = readMoisturePercent();
     Serial.print("OK:STATUS:PUMP=");
     Serial.print(pumpActive ? "1" : "0");
     Serial.print(":TIME_LEFT=");
-    Serial.println(timeLeft, 2);
-  } 
+    Serial.print(timeLeft, 2);
+    Serial.print(":MOISTURE=");
+    Serial.println(moisture);
+  }
+  else if (cmd == "MOISTURE") {
+    int moisture = readMoisturePercent();
+    Serial.print("OK:MOISTURE=");
+    Serial.println(moisture);
+  }
   else if (cmd.startsWith("WATER:")) {
     String secStr = cmd.substring(6);
     float seconds = secStr.toFloat();
@@ -112,6 +133,7 @@ void startPump(float seconds) {
 
   digitalWrite(RELAY_PIN, RELAY_ACTIVE);
   digitalWrite(LED_INDICATOR, HIGH);
+  tone(BUZZER_PIN, 1200, 100);
 
   Serial.print("OK:PUMP_ON:DURATION=");
   Serial.println(seconds, 2);
@@ -121,7 +143,9 @@ void stopPump(const char* reason) {
   pumpActive = false;
   digitalWrite(RELAY_PIN, RELAY_INACTIVE);
   digitalWrite(LED_INDICATOR, LOW);
+  tone(BUZZER_PIN, 800, 150);
 
   Serial.print("OK:PUMP_OFF:REASON=");
   Serial.println(reason);
 }
+

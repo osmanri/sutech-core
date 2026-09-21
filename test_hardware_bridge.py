@@ -79,6 +79,13 @@ class HardwareBridgeTests(unittest.TestCase):
         sec = calculate_pump_runtime_seconds(volume_liters=50.0, pump_productivity_m3h=60.0)
         self.assertAlmostEqual(sec, 3.0, places=2)
 
+    def test_11_virtual_moisture(self):
+        resp = self.virtual.send_command("MOISTURE")
+        self.assertEqual(resp, "OK:MOISTURE=65")
+        moisture = self.bridge.get_moisture()
+        self.assertEqual(moisture, 65)
+
 
 if __name__ == "__main__":
     unittest.main()
+
