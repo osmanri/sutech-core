@@ -314,7 +314,7 @@ async def callback_add_field_start(callback: CallbackQuery, state: FSMContext) -
     await state.set_state(FieldForm.name)
     text = (
         "📝 <b>Шаг 1 из 3: Введите название поля</b>\n\n"
-        "Например: <i>Участок возле реки Урал</i> или <i>Поле №2</i>:"
+        "Например: <i>Участок возле реки Ишим</i> или <i>Поле №2</i>:"
     )
     if isinstance(callback.message, Message):
         await callback.message.edit_text(
