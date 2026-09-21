@@ -30,6 +30,8 @@ def parse_daily_weather(payload):
         raise ValueError('stale weather')
     index = daily['time'].index(today)
     tz = str(payload.get('timezone') or 'UTC')
+    if tz == 'Asia/Oral':
+        tz = 'Asia/Atyrau'
     return {
         'date': daily['time'][index],
         'timezone': tz,

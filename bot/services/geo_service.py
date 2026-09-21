@@ -104,6 +104,8 @@ def resolve_timezone_by_coords(lat: float, lon: float) -> str:
         tf = TimezoneFinder()
         tz = tf.timezone_at(lat=float(lat), lng=float(lon))
         if tz:
+            if tz == "Asia/Oral":
+                return "Asia/Atyrau"
             return tz
     except Exception as exc:
         logger.debug("TimezoneFinder resolution error for %s, %s: %s", lat, lon, exc)
