@@ -1,7 +1,10 @@
-param(
+﻿param(
     [Parameter(ValueFromRemainingArguments = $true)]
     [string[]]$msg
 )
+
+[Console]::OutputEncoding = [System.Text.Encoding]::UTF8
+$OutputEncoding = [System.Text.Encoding]::UTF8
 
 $commitMessage = ""
 if ($msg -and $msg.Count -gt 0) {
