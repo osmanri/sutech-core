@@ -25,6 +25,7 @@ try:
     )
     from user_state import get_lang
     from water_balance import BalanceInputError
+    from hardware_bridge import get_hardware_bridge
 except ImportError:
     from bot.balance_report import economics, fmt, format_balance_explanation, format_balance_report
     from bot.db import save_calculation, save_report_explanation
@@ -39,6 +40,10 @@ except ImportError:
     )
     from bot.user_state import get_lang
     from bot.water_balance import BalanceInputError
+    try:
+        from bot.hardware_bridge import get_hardware_bridge
+    except ImportError:
+        get_hardware_bridge = None
 
 
 fields_router = Router()
@@ -147,12 +152,22 @@ async def cancel_watered(callback: CallbackQuery) -> None:
 async def confirm_watered(callback: CallbackQuery) -> None:
     lang = get_lang(callback.from_user.id)
     try:
+        field_id = _callback_field_id(callback)
         event = await asyncio.to_thread(
-            record_irrigation, _callback_field_id(callback), user_id=callback.from_user.id
+            record_irrigation, field_id, user_id=callback.from_user.id
         )
     except (ValueError, FieldNotFoundError, FieldStateError):
         await callback.answer(t(lang, "field_not_found"), show_alert=True)
         return
+
+    # Trigger physical or virtual hardware bridge for bench testbed demonstration
+    if get_hardware_bridge is not None:
+        try:
+            bridge = get_hardware_bridge()
+            bridge.trigger_irrigation(5.0)
+        except Exception as bridge_exc:
+            logger.warning("Hardware bridge invocation failed: %s", bridge_exc)
+
     await callback.answer(t(lang, "field_watered", deficit=fmt(event["deficit_after"])),
                           show_alert=True)
     if isinstance(callback.message, Message):
