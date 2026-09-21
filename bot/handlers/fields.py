@@ -1,221 +1,391 @@
-"""Telegram controls for persistent field balances and irrigation events."""
+"""
+Модуль Telegram-хэндлеров управления полями (aiogram 3.x).
+Реализует Clean Architecture:
+- Тонкие хэндлеры (только прием событий и валидация).
+- Бизнес-логика вынесена в FieldService и FieldExportService.
+- Изолированный FSM (FieldForm) со строгой очисткой состояния (ликвидация нейролупов).
+- Гарантированное округление всех чисел до 2 знаков и дефолт Атырау (Asia/Atyrau).
+"""
+from __future__ import annotations
 
-import asyncio
-import csv
-import io
 import logging
-from datetime import datetime
+from decimal import Decimal
+from typing import Optional
 
-import aiohttp
 from aiogram import F, Router
-from aiogram.filters import Command
-from aiogram.types import BufferedInputFile, CallbackQuery, Message
+from aiogram.filters import Command, StateFilter
+from aiogram.fsm.context import FSMContext
+from aiogram.types import CallbackQuery, Message
 
-try:
-    from balance_report import economics, fmt, format_balance_explanation, format_balance_report
-    from db import save_calculation, save_report_explanation
-    from field_service import calculate_saved_field
-    from field_state import (FieldNotFoundError, FieldStateError, list_daily_balances,
-                             list_irrigation_events, list_user_fields, record_irrigation)
-    from i18n import t
-    from keyboards.inline import (
-        get_fields_keyboard,
-        get_irrigation_confirmation_keyboard,
-        get_report_inline_keyboard,
-    )
-    from user_state import get_lang
-    from water_balance import BalanceInputError
-    from hardware_bridge import get_hardware_bridge
-except ImportError:
-    from bot.balance_report import economics, fmt, format_balance_explanation, format_balance_report
-    from bot.db import save_calculation, save_report_explanation
-    from bot.field_service import calculate_saved_field
-    from bot.field_state import (FieldNotFoundError, FieldStateError, list_daily_balances,
-                                 list_irrigation_events, list_user_fields, record_irrigation)
-    from bot.i18n import t
-    from bot.keyboards.inline import (
-        get_fields_keyboard,
-        get_irrigation_confirmation_keyboard,
-        get_report_inline_keyboard,
-    )
-    from bot.user_state import get_lang
-    from bot.water_balance import BalanceInputError
-    try:
-        from bot.hardware_bridge import get_hardware_bridge
-    except ImportError:
-        get_hardware_bridge = None
+from bot.keyboards.fields_kb import (
+    get_cancel_keyboard,
+    get_crop_selection_keyboard,
+    get_field_card_keyboard,
+    get_fields_list_keyboard,
+    get_irrigation_selection_keyboard,
+    get_water_confirmation_keyboard,
+)
+from bot.schemas.field import (
+    CropType,
+    FieldCreate,
+    FieldResponse,
+    IrrigationMethod,
+    IrrigationStatus,
+    SoilType,
+)
+from bot.services.export_service import FieldExportService
+from bot.services.field_manager import FieldService
+from bot.services.geo_service import ATYRAU_DEFAULT_LAT, ATYRAU_DEFAULT_LON, ATYRAU_TIMEZONE
+from bot.states.field_states import FieldCallback, FieldForm
 
-
-fields_router = Router()
 logger = logging.getLogger(__name__)
+fields_router = Router(name="fields_router")
 
 
-async def _send_fields(target: Message, user_id: int, lang: str) -> None:
-    fields = [field for field in await asyncio.to_thread(list_user_fields, user_id)
-              if field.get("field_key") and field.get("latitude") is not None
-              and field.get("longitude") is not None and field.get("area_ha")]
-    if not fields:
-        await target.answer(t(lang, "fields_empty"))
-        return
-    await target.answer(t(lang, "fields_title"), parse_mode="HTML",
-                        reply_markup=get_fields_keyboard(lang, fields))
+# ─── Вспомогательные функции форматирования ──────────────────────────────────
+def _render_field_card(field: FieldResponse) -> str:
+    """Генерирует аккуратную карточку агрономического состояния поля."""
+    status_text = {
+        IrrigationStatus.NORMAL: "🟢 В норме (полив не требуется)",
+        IrrigationStatus.IRRIGATE: "🟡 Требуется полив!",
+        IrrigationStatus.CRITICAL: "🔴 КРИТИЧЕСКИЙ ДЕФИЦИТ (Стресс)",
+        IrrigationStatus.RICE: "💧 Режим затопления рисового чека",
+    }.get(field.current_status, "🟢 В норме")
+
+    return (
+        f"🌱 <b>Карточка поля: {field.name}</b>\n"
+        f"───────────────────────────\n"
+        f"🌾 <b>Культура:</b> {field.crop_type.value.capitalize()}\n"
+        f"📐 <b>Площадь:</b> {field.area_ha:.2f} га\n"
+        f"💧 <b>Метод полива:</b> {field.irrigation_method.value}\n"
+        f"📍 <b>Локация:</b> {field.latitude:.4f}° N, {field.longitude:.4f}° E\n"
+        f"🕒 <b>Таймзона:</b> {field.timezone}\n"
+        f"───────────────────────────\n"
+        f"📊 <b>Водный баланс (FAO-56 Penman-Monteith):</b>\n"
+        f"• Накопленный дефицит: <b>{field.accumulated_deficit_mm:.2f} мм</b>\n"
+        f"• Статус полива: <b>{status_text}</b>\n"
+        f"• Рекомендуемый объем: <b>{field.recommended_volume_m3:.2f} м³</b>\n"
+    )
 
 
+# ─── 1. Точка входа в меню «Мои поля» (Сброс FSM) ─────────────────────────────
 @fields_router.message(Command("fields"))
 @fields_router.message(F.text.in_({"🌱 Мои поля", "🌱 Менің алқаптарым"}))
-async def show_fields(message: Message) -> None:
-    await _send_fields(message, message.from_user.id, get_lang(message.from_user.id))
+async def show_fields_menu(message: Message, state: FSMContext) -> None:
+    """
+    Главное меню полей.
+    Всегда сбрасывает активный FSM-контекст для исключения зацикливания состояний.
+    """
+    await state.clear()
+    fields = await FieldService.get_user_fields(message.from_user.id)
+
+    if not fields:
+        await message.answer(
+            "🌱 <b>У вас пока нет сохраненных полей.</b>\n\n"
+            "Вы можете добавить свое первое поле прямо сейчас с привязкой к Атырау (Asia/Atyrau):",
+            parse_mode="HTML",
+            reply_markup=get_fields_list_keyboard([]),
+        )
+        return
+
+    await message.answer(
+        "🌱 <b>Ваши поля (Мониторинг FAO-56):</b>\n"
+        f"📍 <i>Базовый регион: Атырау (47.1167° N, 51.8833° E)</i>\n\n"
+        "Выберите поле для просмотра подробной карточки или добавьте новое:",
+        parse_mode="HTML",
+        reply_markup=get_fields_list_keyboard(fields),
+    )
 
 
+# ─── 2. Навигация по списку полей (Callback) ──────────────────────────────────
+@fields_router.callback_query(FieldCallback.filter(F.action == "list"))
 @fields_router.callback_query(F.data == "fields:list")
-async def show_fields_callback(callback: CallbackQuery) -> None:
-    lang = get_lang(callback.from_user.id)
-    await callback.answer()
+async def callback_show_list(callback: CallbackQuery, state: FSMContext) -> None:
+    """Возврат к списку полей."""
+    await state.clear()
+    fields = await FieldService.get_user_fields(callback.from_user.id)
+    text = (
+        "🌱 <b>Ваши поля:</b>\n"
+        "Выберите участок для просмотра детальной агрономической сводки:"
+    )
     if isinstance(callback.message, Message):
-        await _send_fields(callback.message, callback.from_user.id, lang)
+        await callback.message.edit_text(
+            text=text,
+            parse_mode="HTML",
+            reply_markup=get_fields_list_keyboard(fields),
+        )
+    await callback.answer()
 
 
-def _callback_field_id(callback: CallbackQuery) -> int:
-    try:
-        return int(callback.data.rsplit(":", 1)[1])
-    except (ValueError, IndexError):
-        raise FieldNotFoundError("Invalid callback field id")
+# ─── 3. Карточка поля (Просмотр) ──────────────────────────────────────────────
+@fields_router.callback_query(FieldCallback.filter(F.action == "view"))
+async def callback_view_field(callback: CallbackQuery, callback_data: FieldCallback, state: FSMContext) -> None:
+    """Отображение карточки конкретного поля."""
+    await state.clear()
+    field = await FieldService.get_field_by_id(callback_data.field_id, callback.from_user.id)
+    if not field:
+        await callback.answer("Поле не найдено", show_alert=True)
+        return
+
+    card_text = _render_field_card(field)
+    if isinstance(callback.message, Message):
+        await callback.message.edit_text(
+            text=card_text,
+            parse_mode="HTML",
+            reply_markup=get_field_card_keyboard(field.id),
+        )
+    await callback.answer()
 
 
+# ─── 4. Обновление статуса и пересчет FAO-56 ─────────────────────────────────
+@fields_router.callback_query(FieldCallback.filter(F.action == "update"))
 @fields_router.callback_query(F.data.startswith("field:update:"))
-async def update_field_today(callback: CallbackQuery) -> None:
-    lang = get_lang(callback.from_user.id)
-    if not isinstance(callback.message, Message):
-        await callback.answer(t(lang, "field_update_error"), show_alert=True)
-        return
+async def callback_update_field(callback: CallbackQuery, state: FSMContext) -> None:
+    """Принудительный пересчет водного баланса поля по суточной метеомодели."""
+    await state.clear()
     try:
-        field_id = _callback_field_id(callback)
-        field, result, weather, created = await calculate_saved_field(field_id, callback.from_user.id)
-    except FieldNotFoundError:
-        await callback.answer(t(lang, "field_not_found"), show_alert=True)
-        return
-    except BalanceInputError as exc:
-        key = "balance_season_ended" if str(exc) == "season_ended" else "balance_error"
-        await callback.answer(t(lang, key), show_alert=True)
-        return
-    except (ValueError, FieldStateError, aiohttp.ClientError,
-            asyncio.TimeoutError, OSError, KeyError, TypeError):
-        logger.exception("Could not update saved field")
-        await callback.answer(t(lang, "field_update_error"), show_alert=True)
+        if ":" in str(callback.data):
+            field_id = int(str(callback.data).rsplit(":", 1)[1])
+        else:
+            field_id = 0
+    except (ValueError, IndexError):
+        await callback.answer("Неверный ID поля", show_alert=True)
         return
 
-    explanation = format_balance_explanation(lang, field, result, weather)
-    report_id = save_report_explanation(callback.from_user.id, explanation)
-    save_calculation(
-        user_id=callback.from_user.id,
-        crop_name=t(lang, f"report_crop_{field.crop}"),
-        area_text=f"{fmt(field.area_ha)} га",
-        irrigation_text=t(lang, f"report_irrig_{field.method}"),
-        volume_text=f"{fmt(result['gross_m3'])} м³ · {t(lang, 'balance_status_' + result['status'])}",
-        savings_text=economics(lang, field, result), lang=lang,
-        created_at=datetime.now().strftime("%d.%m.%Y %H:%M"),
-    )
-    await callback.answer(t(lang, "field_updated" if created else "field_already_updated"))
-    await callback.message.answer(
-        format_balance_report(lang, field, result, weather), parse_mode="HTML",
-        reply_markup=get_report_inline_keyboard(lang, report_id, field_id),
-    )
+    await callback.answer("Запрос свежих данных Open-Meteo...")
+    try:
+        updated_field, _ = await FieldService.update_balance_today(field_id, callback.from_user.id)
+    except Exception as exc:
+        logger.exception("Ошибка обновления поля %s: %s", field_id, exc)
+        await callback.answer("Ошибка связи с метеосервисом", show_alert=True)
+        return
+
+    card_text = _render_field_card(updated_field)
+    if isinstance(callback.message, Message):
+        await callback.message.edit_text(
+            text=card_text,
+            parse_mode="HTML",
+            reply_markup=get_field_card_keyboard(updated_field.id),
+        )
+    await callback.answer("Данные успешно обновлены ✅")
 
 
+# ─── 5. Полив: запрос подтверждения и фиксация факта ──────────────────────────
+@fields_router.callback_query(FieldCallback.filter(F.action == "water"))
 @fields_router.callback_query(F.data.startswith("field:watered:"))
-async def ask_watered_confirmation(callback: CallbackQuery) -> None:
-    lang = get_lang(callback.from_user.id)
+async def callback_ask_water(callback: CallbackQuery, state: FSMContext) -> None:
+    """Запрос подтверждения полива."""
+    await state.clear()
     try:
-        field_id = _callback_field_id(callback)
-    except ValueError:
-        await callback.answer(t(lang, "field_not_found"), show_alert=True)
+        field_id = int(str(callback.data).rsplit(":", 1)[1])
+    except (ValueError, IndexError):
+        await callback.answer("Неверный ID поля", show_alert=True)
         return
-    await callback.answer()
+
+    field = await FieldService.get_field_by_id(field_id, callback.from_user.id)
+    if not field:
+        await callback.answer("Поле не найдено", show_alert=True)
+        return
+
+    text = (
+        f"💧 <b>Подтверждение полива</b>\n\n"
+        f"Поле: <b>{field.name}</b>\n"
+        f"Текущий дефицит: <b>{field.accumulated_deficit_mm:.2f} мм</b>\n"
+        f"Рекомендуемый объем: <b>{field.recommended_volume_m3:.2f} м³</b>\n\n"
+        f"Отметить, что полив выполнен в полном объеме?"
+    )
     if isinstance(callback.message, Message):
-        await callback.message.answer(
-            t(lang, "field_watered_confirm"),
-            reply_markup=get_irrigation_confirmation_keyboard(lang, field_id),
+        await callback.message.edit_text(
+            text=text,
+            parse_mode="HTML",
+            reply_markup=get_water_confirmation_keyboard(field.id),
         )
+    await callback.answer()
 
 
-@fields_router.callback_query(F.data == "field:cancel-watered")
-async def cancel_watered(callback: CallbackQuery) -> None:
-    await callback.answer(t(get_lang(callback.from_user.id), "btn_cancel"))
-    if isinstance(callback.message, Message):
-        try:
-            await callback.message.delete()
-        except Exception:
-            pass
-
-
+@fields_router.callback_query(FieldCallback.filter(F.action == "confirm_water"))
 @fields_router.callback_query(F.data.startswith("field:confirm-watered:"))
-async def confirm_watered(callback: CallbackQuery) -> None:
-    lang = get_lang(callback.from_user.id)
+async def callback_confirm_water(callback: CallbackQuery, state: FSMContext) -> None:
+    """Фиксация полива и обнуление дефицита."""
+    await state.clear()
     try:
-        field_id = _callback_field_id(callback)
-        event = await asyncio.to_thread(
-            record_irrigation, field_id, user_id=callback.from_user.id
-        )
-    except (ValueError, FieldNotFoundError, FieldStateError):
-        await callback.answer(t(lang, "field_not_found"), show_alert=True)
+        field_id = int(str(callback.data).rsplit(":", 1)[1])
+    except (ValueError, IndexError):
+        await callback.answer("Неверный ID поля", show_alert=True)
         return
 
-    # Trigger physical or virtual hardware bridge for bench testbed demonstration
-    if get_hardware_bridge is not None:
-        try:
-            bridge = get_hardware_bridge()
-            bridge.trigger_irrigation(5.0)
-        except Exception as bridge_exc:
-            logger.warning("Hardware bridge invocation failed: %s", bridge_exc)
+    try:
+        updated_field = await FieldService.record_irrigation_fact(field_id, callback.from_user.id)
+    except Exception as exc:
+        logger.exception("Не удалось зафиксировать полив для поля %s: %s", field_id, exc)
+        await callback.answer("Ошибка при сохранении полива", show_alert=True)
+        return
 
-    await callback.answer(t(lang, "field_watered", deficit=fmt(event["deficit_after"])),
-                          show_alert=True)
+    card_text = _render_field_card(updated_field)
     if isinstance(callback.message, Message):
-        try:
-            await callback.message.delete()
-        except Exception:
-            pass
+        await callback.message.edit_text(
+            text=card_text,
+            parse_mode="HTML",
+            reply_markup=get_field_card_keyboard(updated_field.id),
+        )
+    await callback.answer("Полив успешно зафиксирован! Дефицит обнулен ✅", show_alert=True)
 
 
+# ─── 6. Чистый экспорт журнала в CSV ─────────────────────────────────────────
+@fields_router.callback_query(FieldCallback.filter(F.action == "export"))
 @fields_router.callback_query(F.data.startswith("field:export:"))
-async def export_field_journal(callback: CallbackQuery) -> None:
-    lang = get_lang(callback.from_user.id)
+async def callback_export_csv(callback: CallbackQuery, state: FSMContext) -> None:
+    """Генерация и отправка чистого CSV-журнала с округлением до 2 знаков."""
+    await state.clear()
     try:
-        field_id = _callback_field_id(callback)
-        rows = await asyncio.to_thread(
-            list_daily_balances, field_id, user_id=callback.from_user.id, limit=366
-        )
-        irrigation_events = await asyncio.to_thread(
-            list_irrigation_events, field_id, user_id=callback.from_user.id, limit=366
-        )
-    except (ValueError, FieldNotFoundError, FieldStateError):
-        await callback.answer(t(lang, "field_not_found"), show_alert=True)
+        field_id = int(str(callback.data).rsplit(":", 1)[1])
+    except (ValueError, IndexError):
+        await callback.answer("Неверный ID поля", show_alert=True)
         return
-    if not rows:
-        await callback.answer(t(lang, "field_export_empty"), show_alert=True)
+
+    field = await FieldService.get_field_by_id(field_id, callback.from_user.id)
+    if not field:
+        await callback.answer("Поле не найдено", show_alert=True)
         return
-    stream = io.StringIO(newline="")
-    columns = ["record_type", "timestamp", "date", "timezone", "et0_mm", "rain_mm", "effective_rain_mm", "etc_mm",
-               "deficit_before_mm", "deficit_after_mm", "status", "net_m3", "gross_m3",
-               "applied_m3", "source", "calculation_version"]
-    writer = csv.writer(stream)
-    writer.writerow(columns)
-    for row in reversed(rows):
-        writer.writerow([
-            "balance", row["created_at"], row["balance_date"], row["timezone"], row["et0"], row["rain"],
-            row["effective_rain"], row["etc"], row["deficit_before"],
-            row["deficit_after"], row["status"], row["net_m3"], row["gross_m3"],
-            "", "", row["calculation_version"],
-        ])
-    for event in reversed(irrigation_events):
-        writer.writerow([
-            "irrigation", event["created_at"], "", "", "", "", "", "",
-            event["deficit_before"], event["deficit_after"], "", "", "",
-            "" if event["applied_m3"] is None else event["applied_m3"],
-            event["source"], "",
-        ])
-    document = BufferedInputFile(stream.getvalue().encode("utf-8-sig"),
-                                 filename=f"su-tech-field-{field_id}.csv")
-    await callback.answer()
+
+    await callback.answer("Генерация отчета...")
+    records = await FieldService.get_journal_records(field.id, callback.from_user.id)
+    if not records:
+        await callback.answer("История поливов и расчетов пуста", show_alert=True)
+        return
+
+    document = FieldExportService.get_telegram_document(field.id, field.name, records)
+    caption = (
+        f"📄 <b>Агрономический журнал поля: {field.name}</b>\n"
+        f"• Регион: Атырау (Asia/Atyrau, UTC+5)\n"
+        f"• Округление: строго 2 знака (.round(2))\n"
+        f"• Кодировка: UTF-8-BOM (для корректного открытия в Excel)"
+    )
     if isinstance(callback.message, Message):
-        await callback.message.answer_document(document, caption=t(lang, "field_export_caption"))
+        await callback.message.answer_document(document, caption=caption, parse_mode="HTML")
+
+
+# ─── 7. Удаление поля ────────────────────────────────────────────────────────
+@fields_router.callback_query(FieldCallback.filter(F.action == "delete"))
+async def callback_delete_field(callback: CallbackQuery, callback_data: FieldCallback, state: FSMContext) -> None:
+    """Удаление поля."""
+    await state.clear()
+    success = await FieldService.delete_field(callback_data.field_id, callback.from_user.id)
+    if success:
+        await callback.answer("Поле удалено ✅", show_alert=True)
+    else:
+        await callback.answer("Поле не найдено", show_alert=True)
+
+    fields = await FieldService.get_user_fields(callback.from_user.id)
+    if isinstance(callback.message, Message):
+        await callback.message.edit_text(
+            text="🌱 <b>Ваши поля:</b>",
+            parse_mode="HTML",
+            reply_markup=get_fields_list_keyboard(fields),
+        )
+
+
+# ─── 8. FSM: Пошаговое добавление нового поля (Без нейролупов) ────────────────
+@fields_router.callback_query(FieldCallback.filter(F.action == "add"))
+async def callback_add_field_start(callback: CallbackQuery, state: FSMContext) -> None:
+    """Шаг 1: Ввод названия поля."""
+    await state.set_state(FieldForm.name)
+    text = (
+        "📝 <b>Шаг 1 из 3: Введите название поля</b>\n\n"
+        "Например: <i>Участок возле реки Урал</i> или <i>Поле №2</i>:"
+    )
+    if isinstance(callback.message, Message):
+        await callback.message.edit_text(
+            text=text,
+            parse_mode="HTML",
+            reply_markup=get_cancel_keyboard(),
+        )
+    await callback.answer()
+
+
+@fields_router.message(StateFilter(FieldForm.name), F.text)
+async def process_form_name(message: Message, state: FSMContext) -> None:
+    """Обработка названия и переход к шагу 2."""
+    name = (message.text or "").strip()
+    if len(name) < 2 or len(name) > 60:
+        await message.answer("⚠️ Название должно быть от 2 до 60 символов. Попробуйте еще раз:")
+        return
+
+    await state.update_data(name=name)
+    await state.set_state(FieldForm.crop)
+    await message.answer(
+        f"✅ Название: <b>{name}</b>\n\n"
+        "🌾 <b>Шаг 2 из 3: Выберите сельскохозяйственную культуру</b>:",
+        parse_mode="HTML",
+        reply_markup=get_crop_selection_keyboard(),
+    )
+
+
+@fields_router.callback_query(StateFilter(FieldForm.crop), F.data.startswith("f_crop:"))
+async def process_form_crop(callback: CallbackQuery, state: FSMContext) -> None:
+    """Обработка культуры и переход к шагу 3."""
+    crop_val = callback.data.split(":", 1)[1]
+    await state.update_data(crop=crop_val)
+    await state.set_state(FieldForm.area)
+
+    text = (
+        f"🌾 Культура выбрана: <b>{crop_val.capitalize()}</b>\n\n"
+        "📐 <b>Шаг 3 из 3: Введите площадь поля в гектарах (га)</b>\n"
+        "Например: <code>12.5</code> или <code>25</code>:"
+    )
+    if isinstance(callback.message, Message):
+        await callback.message.edit_text(
+            text=text,
+            parse_mode="HTML",
+            reply_markup=get_cancel_keyboard(),
+        )
+    await callback.answer()
+
+
+@fields_router.message(StateFilter(FieldForm.area), F.text)
+async def process_form_area(message: Message, state: FSMContext) -> None:
+    """Валидация площади, сохранение поля и завершение FSM."""
+    raw = (message.text or "").replace(",", ".").strip()
+    try:
+        area_num = Decimal(raw)
+        if area_num <= 0 or area_num > 50000:
+            raise ValueError
+        area_num = area_num.quantize(Decimal("0.01"))
+    except Exception:
+        await message.answer("⚠️ Введите корректную площадь числом от 0.01 до 50 000 га:")
+        return
+
+    data = await state.get_data()
+    # Строгий сброс FSM: исключает залипание состояния
+    await state.clear()
+
+    field_create = FieldCreate(
+        name=data.get("name") or "Новое поле",
+        crop_type=CropType(data.get("crop") or "tomato"),
+        area_ha=area_num,
+        irrigation_method=IrrigationMethod.DRIP,
+        soil_type=SoilType.LOAM,
+        latitude=Decimal(str(ATYRAU_DEFAULT_LAT)),
+        longitude=Decimal(str(ATYRAU_DEFAULT_LON)),
+        timezone=ATYRAU_TIMEZONE,
+    )
+
+    try:
+        field_id = await FieldService.create_field(message.from_user.id, field_create)
+    except Exception as exc:
+        logger.exception("Ошибка создания поля: %s", exc)
+        await message.answer("❌ Произошла ошибка при сохранении поля. Попробуйте позже.")
+        return
+
+    fields = await FieldService.get_user_fields(message.from_user.id)
+    await message.answer(
+        f"🎉 <b>Поле «{field_create.name}» успешно создано!</b>\n\n"
+        f"• Культура: <b>{field_create.crop_type.value.capitalize()}</b>\n"
+        f"• Площадь: <b>{field_create.area_ha:.2f} га</b>\n"
+        f"• Метод полива: <b>{field_create.irrigation_method.value}</b>\n"
+        f"• Координаты: <b>Атырау ({ATYRAU_DEFAULT_LAT}° N, {ATYRAU_DEFAULT_LON}° E)</b>\n"
+        f"• Таймзона: <b>{ATYRAU_TIMEZONE} (UTC+5)</b>\n\n"
+        f"Мониторинг водного баланса активирован.",
+        parse_mode="HTML",
+        reply_markup=get_fields_list_keyboard(fields),
+    )

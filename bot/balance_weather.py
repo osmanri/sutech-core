@@ -11,13 +11,14 @@ except ImportError:
 def detect_kz_timezone(lat, lon):
     try:
         lat_f, lon_f = float(lat), float(lon)
+        # Western Kazakhstan / Atyrau region (~47.1167 N, 51.8833 E)
         if lon_f < 56.0:
-            return 'Asia/Oral'
+            return 'Asia/Atyrau'
         if 43.0 <= lat_f <= 46.5 and 62.0 <= lon_f <= 67.5:
             return 'Asia/Qyzylorda'
         return 'Asia/Almaty'
     except Exception:
-        return 'Asia/Almaty'
+        return 'Asia/Atyrau'
 
 
 def parse_daily_weather(payload):
@@ -29,8 +30,10 @@ def parse_daily_weather(payload):
         raise ValueError('weather units')
     offset = number(payload.get('utc_offset_seconds', 18000), 'utc_offset', -50400, 50400)
     today = datetime.now(timezone(timedelta(seconds=offset))).date().isoformat()
-    index = daily['time'].index(today) if today in daily['time'] else 0
-    tz = str(payload.get('timezone') or 'Asia/Almaty')
+    if today not in daily.get('time', []):
+        raise ValueError('stale weather')
+    index = daily['time'].index(today)
+    tz = str(payload.get('timezone') or 'Asia/Atyrau')
     return {'date': daily['time'][index], 'timezone': tz,
             'et0': number(daily[keys[0]][index], 'et0', 0, 50),
             'rain': number(daily[keys[1]][index], 'rain', 0, 3000)}
@@ -40,7 +43,7 @@ async def fetch_daily_weather(lat, lon):
     try:
         async with aiohttp.ClientSession() as session:
             async with session.get('https://api.open-meteo.com/v1/forecast', params={
-                'latitude': lat, 'longitude': lon, 'timezone': 'auto', 'forecast_days': 2,
+                'latitude': lat, 'longitude': lon, 'timezone': 'auto', 'forecast_days': 1,
                 'daily': 'et0_fao_evapotranspiration,precipitation_sum',
                 'precipitation_unit': 'mm',
             }, timeout=aiohttp.ClientTimeout(total=8)) as response:
