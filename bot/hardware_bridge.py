@@ -24,6 +24,10 @@ class VirtualArduinoBridge:
         self.is_connected = True
         self.pump_active = False
         self.last_duration = 0.0
+        self.water_level = 85
+        self.soil_moisture = 65
+        self.temperature = 23.5
+        self.humidity = 48.0
 
     def send_command(self, cmd: str) -> str:
         cmd = cmd.strip()
@@ -31,10 +35,37 @@ class VirtualArduinoBridge:
             return "PONG"
         elif cmd == "STATUS":
             state = "1" if self.pump_active else "0"
-            return f"OK:STATUS:PUMP={state}:TIME_LEFT=0.00:MOISTURE=65"
+            return (
+                f"OK:STATUS:PUMP={state}:TIME_LEFT=0.00:"
+                f"WATER_LVL={self.water_level}:SOIL={self.soil_moisture}:"
+                f"TEMP={self.temperature:.1f}:HUM={self.humidity:.1f}"
+            )
+        elif cmd == "TELEMETRY":
+            state = "1" if self.pump_active else "0"
+            return (
+                f"OK:TELEMETRY:PUMP={state}:WATER={self.water_level}:"
+                f"SOIL={self.soil_moisture}:TEMP={self.temperature:.1f}:HUM={self.humidity:.1f}"
+            )
         elif cmd == "MOISTURE":
-            return "OK:MOISTURE=65"
+            return f"OK:MOISTURE={self.soil_moisture}"
+        elif cmd == "WATER_LEVEL":
+            return f"OK:WATER_LEVEL={self.water_level}"
+        elif cmd == "BEEP":
+            return "OK:BEEP"
         elif cmd.startswith("WATER:"):
+            try:
+                sec = float(cmd.split(":", 1)[1])
+            except (ValueError, IndexError):
+                return "ERR:INVALID_DURATION"
+            if sec <= 0:
+                return "ERR:INVALID_DURATION"
+            if self.water_level < 8:
+                return f"ERR:WATER_EMPTY:LEVEL={self.water_level}"
+            effective_sec = min(sec, MAX_PUMP_RUNTIME_SECONDS)
+            self.pump_active = True
+            self.last_duration = effective_sec
+            return f"OK:PUMP_ON:DURATION={effective_sec:.2f}"
+        elif cmd.startswith("WATER_FORCE:"):
             try:
                 sec = float(cmd.split(":", 1)[1])
             except (ValueError, IndexError):
@@ -72,7 +103,11 @@ class HardwareBridge:
         try:
             import serial
             self._serial = serial.Serial(port, self.baudrate, timeout=2.0)
-            time.sleep(1.5)  # Wait for Arduino bootloader reset
+            time.sleep(1.8)  # Wait for Arduino bootloader reset
+            try:
+                self._serial.reset_input_buffer()
+            except Exception:
+                pass
             self._is_virtual = False
             logger.info("Connected to physical Arduino on port %s", port)
             return True
@@ -99,7 +134,7 @@ class HardwareBridge:
             self._is_virtual = True
             return self._virtual.send_command(command)
 
-    def trigger_irrigation(self, duration_seconds: float) -> dict[str, Any]:
+    def trigger_irrigation(self, duration_seconds: float, force: bool = False) -> dict[str, Any]:
         """Activate the pump for duration_seconds (safe-capped at 30.0s)."""
         duration = float(duration_seconds)
         if duration <= 0:
@@ -111,7 +146,8 @@ class HardwareBridge:
             }
 
         effective_duration = min(duration, MAX_PUMP_RUNTIME_SECONDS)
-        cmd = f"WATER:{effective_duration:.2f}"
+        prefix = "WATER_FORCE" if force else "WATER"
+        cmd = f"{prefix}:{effective_duration:.2f}"
         resp = self.send_raw_command(cmd)
         success = resp.startswith("OK:PUMP_ON")
 
@@ -136,14 +172,71 @@ class HardwareBridge:
         resp = self.send_raw_command("PING")
         return resp == "PONG"
 
+    def beep(self) -> bool:
+        resp = self.send_raw_command("BEEP")
+        return resp == "OK:BEEP"
+
     def get_moisture(self) -> int:
         resp = self.send_raw_command("MOISTURE")
         if resp.startswith("OK:MOISTURE="):
             try:
-                return int(resp.split("=")[1])
+                val_part = resp.split("OK:MOISTURE=")[1].split(":")[0]
+                return int(val_part)
             except (ValueError, IndexError):
                 pass
         return 65
+
+    def get_water_level(self) -> int:
+        resp = self.send_raw_command("WATER_LEVEL")
+        if "OK:WATER_LEVEL=" in resp:
+            try:
+                val_part = resp.split("OK:WATER_LEVEL=")[1].split(":")[0]
+                return int(val_part)
+            except (ValueError, IndexError):
+                pass
+        return 80
+
+    def get_telemetry(self) -> dict[str, Any]:
+        """Fetch real-time comprehensive telemetry from all hardware sensors."""
+        resp = self.send_raw_command("TELEMETRY")
+        telemetry: dict[str, Any] = {
+            "pump_active": False,
+            "water_level": 80,
+            "soil_moisture": 65,
+            "temperature": 23.5,
+            "humidity": 48.0,
+            "has_water": True,
+            "raw": resp,
+        }
+        if resp.startswith("OK:TELEMETRY:"):
+            parts = resp.split("OK:TELEMETRY:")[1].split(":")
+            for p in parts:
+                if "=" in p:
+                    k, v = p.split("=", 1)
+                    if k == "PUMP":
+                        telemetry["pump_active"] = (v == "1")
+                    elif k == "WATER":
+                        try:
+                            telemetry["water_level"] = int(v)
+                            telemetry["has_water"] = int(v) >= 8
+                        except ValueError:
+                            pass
+                    elif k == "SOIL":
+                        try:
+                            telemetry["soil_moisture"] = int(v)
+                        except ValueError:
+                            pass
+                    elif k == "TEMP":
+                        try:
+                            telemetry["temperature"] = float(v)
+                        except ValueError:
+                            pass
+                    elif k == "HUM":
+                        try:
+                            telemetry["humidity"] = float(v)
+                        except ValueError:
+                            pass
+        return telemetry
 
 
 _bridge_instance: HardwareBridge | None = None
@@ -153,7 +246,10 @@ def get_hardware_bridge() -> HardwareBridge:
     """Get or initialize the global hardware bridge singleton."""
     global _bridge_instance
     if _bridge_instance is None:
-        _bridge_instance = HardwareBridge(force_virtual=True)
+        import os
+        port = os.getenv("ARDUINO_PORT", "COM7")
+        force_virtual = os.getenv("FORCE_VIRTUAL_ARDUINO", "0") == "1"
+        _bridge_instance = HardwareBridge(port=port, force_virtual=force_virtual)
     return _bridge_instance
 
 

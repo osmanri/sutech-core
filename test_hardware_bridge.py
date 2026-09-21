@@ -85,6 +85,35 @@ class HardwareBridgeTests(unittest.TestCase):
         moisture = self.bridge.get_moisture()
         self.assertEqual(moisture, 65)
 
+    def test_12_virtual_water_level(self):
+        level = self.bridge.get_water_level()
+        self.assertEqual(level, 85)
+
+    def test_13_virtual_telemetry(self):
+        telemetry = self.bridge.get_telemetry()
+        self.assertFalse(telemetry["pump_active"])
+        self.assertEqual(telemetry["water_level"], 85)
+        self.assertEqual(telemetry["soil_moisture"], 65)
+        self.assertEqual(telemetry["temperature"], 23.5)
+        self.assertEqual(telemetry["humidity"], 48.0)
+        self.assertTrue(telemetry["has_water"])
+
+    def test_14_water_safety_empty_reservoir_blocks_pump(self):
+        # When reservoir water level is critically low (< 8%), normal irrigation must be blocked
+        self.virtual.water_level = 3
+        resp = self.virtual.send_command("WATER:5.0")
+        self.assertEqual(resp, "ERR:WATER_EMPTY:LEVEL=3")
+        self.assertFalse(self.virtual.pump_active)
+
+        # Force mode can still be used for diagnostic override
+        resp_force = self.virtual.send_command("WATER_FORCE:2.0")
+        self.assertEqual(resp_force, "OK:PUMP_ON:DURATION=2.00")
+        self.assertTrue(self.virtual.pump_active)
+        self.virtual.stop_pump = self.virtual.send_command("STOP")
+
+    def test_15_beep_signal(self):
+        self.assertTrue(self.bridge.beep())
+
 
 if __name__ == "__main__":
     unittest.main()
