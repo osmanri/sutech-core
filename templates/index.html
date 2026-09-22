@@ -1,0 +1,834 @@
+<!DOCTYPE html>
+<html lang="ru" class="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <title>Su-Tech • Умный полив (Telegram Mini App)</title>
+  
+  <!-- Telegram & Apple System Typography -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500;600&display=swap" rel="stylesheet">
+  
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['-apple-system', 'BlinkMacSystemFont', '"Inter"', 'Roboto', 'Helvetica', 'Arial', 'sans-serif'],
+            mono: ['"JetBrains Mono"', 'monospace'],
+          },
+          colors: {
+            tg: {
+              bg: '#0E1621',         // Native Telegram Dark Background
+              card: '#17212B',       // Telegram Message / Card Slate
+              cardBorder: 'rgba(255, 255, 255, 0.07)',
+              cardHover: '#1E2C3A',
+              secondary: '#202B36',  // Sub-card background
+              blue: '#2481CC',       // Native Telegram Blue
+              blueHover: '#2A8FD9',
+              blueActive: '#1E70B3',
+              green: '#10B981',      // Muted status green
+              greenBg: 'rgba(16, 185, 129, 0.12)',
+              amber: '#F59E0B',      // Alert amber
+              amberBg: 'rgba(245, 158, 11, 0.12)',
+              red: '#EF4444',
+              redBg: 'rgba(239, 68, 68, 0.14)',
+              text: '#F5F5F5',       // Primary Header/Text
+              muted: '#7E8B9B',      // Secondary label text
+              subtle: '#52606D',     // Subtle borders / gridlines
+            }
+          }
+        }
+      }
+    }
+  </script>
+
+  <!-- Lucide Icons CDN -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+
+  <!-- Chart.js CDN -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+  <style>
+    /* Strict Telegram Mini App Minimalist Styles */
+    :root {
+      color-scheme: dark;
+    }
+    
+    body {
+      background-color: #0E1621;
+      color: #F5F5F5;
+      font-family: -apple-system, BlinkMacSystemFont, "Inter", Roboto, Helvetica, Arial, sans-serif;
+      -webkit-font-smoothing: antialiased;
+      -webkit-tap-highlight-color: transparent;
+      user-select: none;
+    }
+
+    .tg-card {
+      background-color: #17212B;
+      border: 1px solid rgba(255, 255, 255, 0.07);
+      border-radius: 14px;
+      transition: all 0.2s ease-in-out;
+    }
+
+    .tg-btn-primary {
+      background-color: #2481CC;
+      color: #FFFFFF;
+      transition: all 0.18s ease-in-out;
+    }
+    .tg-btn-primary:hover:not(:disabled) {
+      background-color: #2A8FD9;
+    }
+    .tg-btn-primary:active:not(:disabled) {
+      transform: scale(0.98);
+      background-color: #1E70B3;
+    }
+
+    .tg-btn-secondary {
+      background-color: #202B36;
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      color: #CBD5E1;
+      transition: all 0.18s ease-in-out;
+    }
+    .tg-btn-secondary:hover:not(:disabled) {
+      background-color: #283747;
+      color: #FFFFFF;
+      border-color: rgba(255, 255, 255, 0.15);
+    }
+    .tg-btn-secondary:active:not(:disabled) {
+      transform: scale(0.97);
+    }
+
+    /* Smooth Progress Bar */
+    .tg-progress-track {
+      background-color: #202B36;
+      border-radius: 9999px;
+      overflow: hidden;
+    }
+    .tg-progress-fill {
+      transition: width 0.4s cubic-bezier(0.4, 0, 0.2, 1), background-color 0.3s ease;
+      border-radius: 9999px;
+    }
+
+    /* Scrollbar */
+    ::-webkit-scrollbar {
+      width: 4px;
+      height: 4px;
+    }
+    ::-webkit-scrollbar-track {
+      background: #0E1621;
+    }
+    ::-webkit-scrollbar-thumb {
+      background: #202B36;
+      border-radius: 4px;
+    }
+  </style>
+</head>
+<body class="min-h-screen flex flex-col justify-between selection:bg-[#2481CC] selection:text-white">
+
+  <!-- ===================================================================== -->
+  <!-- TELEGRAM MINI APP WRAPPER                                             -->
+  <!-- ===================================================================== -->
+  <div class="w-full max-w-md sm:max-w-4xl mx-auto px-3.5 sm:px-6 py-3.5 sm:py-5 flex-1 flex flex-col space-y-3.5">
+
+    <!-- HEADER: Brand, Location, Connectivity -->
+    <header class="tg-card px-4 py-3 flex items-center justify-between">
+      <div class="flex items-center space-x-2.5">
+        <div class="w-8 h-8 rounded-lg bg-[#2481CC]/15 border border-[#2481CC]/30 flex items-center justify-center text-[#2481CC]">
+          <i data-lucide="sprout" class="w-4 h-4"></i>
+        </div>
+        <div>
+          <div class="flex items-center space-x-1.5">
+            <h1 class="text-sm font-bold tracking-tight text-white">Su-Tech</h1>
+            <span class="text-[10px] text-tg-muted px-1.5 py-0.2 rounded bg-tg-secondary border border-white/5 font-mono">v3.0</span>
+          </div>
+          <p class="text-[11px] text-tg-muted flex items-center gap-1 font-medium">
+            <span>Атырау (47.12° N, 51.88° E)</span>
+          </p>
+        </div>
+      </div>
+
+      <!-- Right Action Badges -->
+      <div class="flex items-center space-x-2">
+        <!-- Live Status Pill -->
+        <div id="connection-badge" class="flex items-center space-x-1.5 px-2.5 py-1 rounded-full bg-tg-secondary border border-white/5 text-[11px] font-mono">
+          <span class="relative flex h-2 w-2">
+            <span id="pingPulse" class="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+            <span id="pingDot" class="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+          </span>
+          <span id="connectionBadge" class="text-slate-300 font-medium">Онлайн</span>
+          <span class="text-tg-subtle">•</span>
+          <span id="active-port-badge" class="text-emerald-400">Симуляция</span>
+        </div>
+
+        <!-- Mode Toggle Button (Compact) -->
+        <button id="btn-toggle-sim" onclick="toggleSimulationMode()" title="Переключить симуляцию / COM порт" class="p-1.5 rounded-lg bg-tg-secondary hover:bg-tg-cardBorder border border-white/5 text-tg-muted hover:text-white transition">
+          <i data-lucide="cpu" class="w-3.5 h-3.5"></i>
+        </button>
+
+        <!-- Sound Test Button -->
+        <button id="btn-beep" onclick="triggerBeep()" title="Тест зуммера" class="p-1.5 rounded-lg bg-tg-secondary hover:bg-tg-cardBorder border border-white/5 text-tg-muted hover:text-white transition">
+          <i data-lucide="volume-2" class="w-3.5 h-3.5"></i>
+        </button>
+      </div>
+    </header>
+
+    <!-- LOW WATER LEVEL BANNER (Subtle Telegram Style Alert) -->
+    <div id="water-alert" class="hidden tg-card p-3 border border-amber-500/30 bg-tg-amberBg text-amber-200 flex items-center justify-between text-xs">
+      <div class="flex items-center space-x-2">
+        <i data-lucide="alert-triangle" class="w-4 h-4 text-amber-400 shrink-0"></i>
+        <span><strong>Внимание:</strong> Уровень воды в баке &lt; 15%. Помпа временно заблокирована от сухого хода.</span>
+      </div>
+      <span class="text-[10px] font-mono text-amber-300/80 uppercase shrink-0 ml-2">Защита OK</span>
+    </div>
+
+    <!-- ===================================================================== -->
+    <!-- 4 COMPACT TELEMETRY METRIC CARDS                                      -->
+    <!-- ===================================================================== -->
+    <div class="grid grid-cols-2 sm:grid-cols-4 gap-2.5 sm:gap-3">
+      
+      <!-- CARD 1: Влажность почвы -->
+      <div class="tg-card p-3.5 flex flex-col justify-between">
+        <div class="flex items-center justify-between text-xs text-tg-muted">
+          <span class="flex items-center gap-1 font-medium">
+            <i data-lucide="leaf" class="w-3.5 h-3.5 text-emerald-400"></i> Почва
+          </span>
+          <span id="soilStatusBadge" class="text-[11px] font-medium text-emerald-400 px-1.5 py-0.5 rounded bg-emerald-500/10">Оптимально</span>
+        </div>
+        <div class="my-2">
+          <div class="flex items-baseline space-x-1">
+            <span id="soil-val" class="text-2xl sm:text-3xl font-bold tracking-tight text-white font-mono">58.4</span>
+            <span id="soilMoistureValue" class="hidden">58.4</span>
+            <span class="text-sm font-semibold text-tg-muted font-mono">%</span>
+          </div>
+          <!-- Thin progress bar -->
+          <div class="tg-progress-track h-1.5 mt-2">
+            <div id="soil-bar" class="tg-progress-fill h-full bg-emerald-500" style="width: 58.4%;"></div>
+            <div id="soilMoistureBar" class="hidden"></div>
+          </div>
+        </div>
+        <div class="text-[10px] text-tg-muted flex justify-between font-mono pt-1 border-t border-white/5">
+          <span>Слой 0-30 см</span>
+          <span>A1</span>
+        </div>
+      </div>
+
+      <!-- CARD 2: Бак с водой -->
+      <div class="tg-card p-3.5 flex flex-col justify-between">
+        <div class="flex items-center justify-between text-xs text-tg-muted">
+          <span class="flex items-center gap-1 font-medium">
+            <i data-lucide="droplet" class="w-3.5 h-3.5 text-[#2481CC]"></i> Бак
+          </span>
+          <span id="tankPctBadge" class="text-[11px] font-mono text-[#2481CC] px-1.5 py-0.5 rounded bg-[#2481CC]/10">80.0%</span>
+        </div>
+        <div class="my-2">
+          <div class="flex items-baseline space-x-1">
+            <span id="water-val" class="text-2xl sm:text-3xl font-bold tracking-tight text-white font-mono">800</span>
+            <span id="tankMlValue" class="hidden">800.0</span>
+            <span class="text-sm font-semibold text-tg-muted font-mono">мл</span>
+          </div>
+          <!-- Thin progress bar -->
+          <div class="tg-progress-track h-1.5 mt-2">
+            <div id="water-bar" class="tg-progress-fill h-full bg-[#2481CC]" style="width: 80%;"></div>
+            <div id="tankLevelBar" class="hidden"></div>
+          </div>
+        </div>
+        <div class="text-[10px] text-tg-muted flex justify-between font-mono pt-1 border-t border-white/5">
+          <span>Резервуар 1л</span>
+          <span>A0</span>
+        </div>
+      </div>
+
+      <!-- CARD 3: Микроклимат -->
+      <div class="tg-card p-3.5 flex flex-col justify-between">
+        <div class="flex items-center justify-between text-xs text-tg-muted">
+          <span class="flex items-center gap-1 font-medium">
+            <i data-lucide="sun-medium" class="w-3.5 h-3.5 text-amber-400"></i> Климат
+          </span>
+          <span class="text-[11px] font-mono text-tg-muted">DHT11</span>
+        </div>
+        <div class="my-2">
+          <div class="flex items-baseline space-x-2">
+            <div class="flex items-baseline space-x-0.5">
+              <span id="temp-val" class="text-xl sm:text-2xl font-bold tracking-tight text-white font-mono">26.2</span>
+              <span id="tempValue" class="hidden">26.2</span>
+              <span class="text-xs font-semibold text-tg-muted font-mono">°C</span>
+            </div>
+            <span class="text-tg-subtle">•</span>
+            <div class="flex items-baseline space-x-0.5">
+              <span id="hum-val" class="text-xl sm:text-2xl font-bold tracking-tight text-white font-mono">39</span>
+              <span id="humValue" class="hidden">38.5</span>
+              <span class="text-xs font-semibold text-tg-muted font-mono">%</span>
+            </div>
+          </div>
+          <div class="tg-progress-track h-1.5 mt-2">
+            <div class="tg-progress-fill h-full bg-amber-500/80" style="width: 65%;"></div>
+          </div>
+        </div>
+        <div class="text-[10px] text-tg-muted flex justify-between font-mono pt-1 border-t border-white/5">
+          <span id="vpdStatus">VPD: 1.8 kPa</span>
+          <span>D7</span>
+        </div>
+      </div>
+
+      <!-- CARD 4: Дефицит FAO-56 -->
+      <div class="tg-card p-3.5 flex flex-col justify-between">
+        <div class="flex items-center justify-between text-xs text-tg-muted">
+          <span class="flex items-center gap-1 font-medium">
+            <i data-lucide="calculator" class="w-3.5 h-3.5 text-indigo-400"></i> FAO-56
+          </span>
+          <span id="faoStatusBadge" class="text-[11px] font-medium text-emerald-400 px-1.5 py-0.5 rounded bg-emerald-500/10">Норма</span>
+        </div>
+        <div class="my-2">
+          <div class="flex items-baseline space-x-1">
+            <span id="fao-val" class="text-2xl sm:text-3xl font-bold tracking-tight text-white font-mono">4.8</span>
+            <span id="faoEt0Value" class="hidden">4.8</span>
+            <span class="text-sm font-semibold text-tg-muted font-mono">мм/д</span>
+          </div>
+          <div class="tg-progress-track h-1.5 mt-2">
+            <div class="tg-progress-fill h-full bg-indigo-500" style="width: 42%;"></div>
+          </div>
+        </div>
+        <div class="text-[10px] text-tg-muted flex justify-between font-mono pt-1 border-t border-white/5">
+          <span>Дефицит: <strong id="deficit-val" class="text-slate-300">18.2 мм</strong></span>
+          <span id="faoDeficitValue" class="hidden">18.2 мм</span>
+          <span>Kc=1.15</span>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- ===================================================================== -->
+    <!-- TELEGRAM CONTROL BLOCK                                                -->
+    <!-- ===================================================================== -->
+    <div class="tg-card p-3.5 sm:p-4 space-y-3">
+      
+      <!-- Primary Irrigation Button -->
+      <div class="relative overflow-hidden rounded-xl">
+        <button id="btn-irrigate" onclick="startIrrigation(5.0)" class="tg-btn-primary w-full py-3 sm:py-3.5 px-4 rounded-xl font-semibold text-sm sm:text-base flex items-center justify-center space-x-2 tracking-wide cursor-pointer relative z-10">
+          <i data-lucide="droplet" class="w-4 h-4 fill-current"></i>
+          <span id="irrigateBtnText">💧 Полить (5 сек)</span>
+        </button>
+        <button id="btnIrrigate" class="hidden"></button>
+
+        <!-- Dynamic Countdown Fill Overlay -->
+        <div id="irrigationProgressOverlay" class="absolute inset-0 bg-[#17212B] flex items-center justify-between px-4 z-20 hidden transition-all">
+          <div class="flex items-center space-x-2 text-emerald-400 text-xs font-semibold">
+            <i data-lucide="loader-2" class="w-4 h-4 animate-spin"></i>
+            <span>Полив активен (Реле D8 = ON)</span>
+          </div>
+          <div class="text-xs font-mono font-bold text-white">
+            <span id="countdown-timer">5.0</span> сек
+            <span id="countdownTimer" class="hidden">5.0</span>
+          </div>
+          <!-- Smooth progress bar background -->
+          <div id="irrigationProgressBar" class="absolute bottom-0 left-0 h-1 bg-emerald-500 transition-all duration-100" style="width: 100%;"></div>
+        </div>
+      </div>
+
+      <!-- Secondary Telegram Buttons Row -->
+      <div class="grid grid-cols-3 gap-2">
+        <!-- Recalculate -->
+        <button id="btn-recalc" onclick="recalculateFAO56()" class="tg-btn-secondary py-2.5 px-2 rounded-xl text-xs font-medium flex items-center justify-center space-x-1.5">
+          <i id="recalcIcon" data-lucide="refresh-cw" class="w-3.5 h-3.5 text-tg-muted"></i>
+          <span>Расчет</span>
+        </button>
+        <button id="btnRecalc" class="hidden"></button>
+
+        <!-- CSV Export -->
+        <a id="btn-export" href="/api/export-csv" class="tg-btn-secondary py-2.5 px-2 rounded-xl text-xs font-medium flex items-center justify-center space-x-1.5 text-center">
+          <i data-lucide="file-spreadsheet" class="w-3.5 h-3.5 text-tg-muted"></i>
+          <span>CSV</span>
+        </a>
+
+        <!-- Stop Pump -->
+        <button id="btn-stop" onclick="emergencyStop()" class="tg-btn-secondary py-2.5 px-2 rounded-xl text-xs font-medium text-rose-300/90 hover:text-rose-200 border-rose-500/20 bg-rose-950/20 hover:bg-rose-950/40 flex items-center justify-center space-x-1.5">
+          <i data-lucide="octagon-alert" class="w-3.5 h-3.5 text-rose-400"></i>
+          <span>Стоп</span>
+        </button>
+        <button id="btnStop" class="hidden"></button>
+      </div>
+
+    </div>
+
+    <!-- ===================================================================== -->
+    <!-- SLENDER REAL-TIME CHARTS                                              -->
+    <!-- ===================================================================== -->
+    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+      
+      <!-- Chart 1: Soil Moisture 24h Trend -->
+      <div class="tg-card p-3.5 sm:p-4 flex flex-col justify-between">
+        <div class="flex items-center justify-between pb-2 border-b border-white/5 text-xs">
+          <span class="font-semibold text-white flex items-center gap-1.5">
+            <i data-lucide="activity" class="w-3.5 h-3.5 text-[#2481CC]"></i> Влажность почвы (24 ч)
+          </span>
+          <span class="text-[10px] text-tg-muted font-mono">WP:30% • FC:70%</span>
+        </div>
+        <div class="relative w-full h-[150px] sm:h-[180px] mt-2">
+          <canvas id="chart-canvas"></canvas>
+          <canvas id="soilHistoryChart" class="hidden"></canvas>
+        </div>
+      </div>
+
+      <!-- Chart 2 / Jury Summary: Water Saving -->
+      <div class="tg-card p-3.5 sm:p-4 flex flex-col justify-between">
+        <div class="flex items-center justify-between pb-2 border-b border-white/5 text-xs">
+          <span class="font-semibold text-white flex items-center gap-1.5">
+            <i data-lucide="bar-chart-2" class="w-3.5 h-3.5 text-emerald-400"></i> Сравнение расхода
+          </span>
+          <!-- Water saving badge -->
+          <span class="px-2 py-0.5 rounded-full text-[11px] font-bold bg-emerald-500/15 text-emerald-300 border border-emerald-500/30">
+            -35.8% сбережения
+          </span>
+        </div>
+        <div class="relative w-full h-[150px] sm:h-[180px] mt-2">
+          <canvas id="comparison-chart"></canvas>
+          <canvas id="comparisonChart" class="hidden"></canvas>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- FOOTER: Competition Credit -->
+    <footer class="text-center py-2 text-[11px] text-tg-muted">
+      <span>Su-Tech Smart Irrigation Platform • Infomatrix Asia & Samsung Solve for Tomorrow</span>
+    </footer>
+
+  </div>
+
+  <!-- TOAST CONTAINER -->
+  <div id="toastContainer" class="fixed bottom-4 left-1/2 transform -translate-x-1/2 z-50 flex flex-col space-y-2 w-11/12 max-w-sm pointer-events-none"></div>
+
+  <!-- ===================================================================== -->
+  <!-- JAVASCRIPT & WEBSOCKET ENGINE WITH AUTO-RECONNECT + REST POLLING      -->
+  <!-- ===================================================================== -->
+  <script>
+    // Initialize Lucide icons
+    lucide.createIcons();
+
+    // Web Audio Synthesizer (Haptic audio clicks)
+    let audioCtx = null;
+    function playBeep(freq = 600, duration = 0.08, type = 'sine') {
+      try {
+        if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        if (audioCtx.state === 'suspended') audioCtx.resume();
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        osc.type = type;
+        osc.frequency.setValueAtTime(freq, audioCtx.currentTime);
+        gain.gain.setValueAtTime(0.08, audioCtx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + duration);
+        osc.connect(gain);
+        gain.connect(audioCtx.destination);
+        osc.start();
+        osc.stop(audioCtx.currentTime + duration);
+      } catch (e) {}
+    }
+
+    // Telegram Style Toast
+    function showToast(title, text = '', isError = false) {
+      const container = document.getElementById('toastContainer');
+      const toast = document.createElement('div');
+      toast.className = `pointer-events-auto px-3.5 py-2.5 rounded-xl border text-xs shadow-lg flex items-center justify-between transition-all duration-200 transform translate-y-2 opacity-0 ${
+        isError 
+          ? 'bg-[#1C1819] border-rose-500/40 text-rose-200' 
+          : 'bg-[#17212B] border-white/10 text-slate-200'
+      }`;
+      toast.innerHTML = `
+        <div class="flex items-center space-x-2">
+          <span class="w-1.5 h-1.5 rounded-full ${isError ? 'bg-rose-400' : 'bg-[#2481CC]'}"></span>
+          <span><strong>${title}</strong> ${text ? '• ' + text : ''}</span>
+        </div>
+      `;
+      container.appendChild(toast);
+      requestAnimationFrame(() => toast.classList.remove('translate-y-2', 'opacity-0'));
+      setTimeout(() => {
+        toast.classList.add('opacity-0', 'translate-y-1');
+        setTimeout(() => toast.remove(), 250);
+      }, 2600);
+    }
+
+    // ========================================================================
+    // CHART.JS INITIALIZATION (MINIMALIST TELEGRAM STYLE)
+    // ========================================================================
+    let soilChart = null;
+    let compChart = null;
+
+    function initCharts() {
+      // 1. Soil Moisture Trend Chart
+      const soilCtx = document.getElementById('chart-canvas').getContext('2d');
+      const gradient = soilCtx.createLinearGradient(0, 0, 0, 160);
+      gradient.addColorStop(0, 'rgba(36, 129, 204, 0.25)');
+      gradient.addColorStop(1, 'rgba(36, 129, 204, 0.0)');
+
+      soilChart = new Chart(soilCtx, {
+        type: 'line',
+        data: {
+          labels: [],
+          datasets: [{
+            data: [],
+            borderColor: '#2481CC',
+            backgroundColor: gradient,
+            borderWidth: 2,
+            fill: true,
+            tension: 0.35,
+            pointRadius: 0,
+            pointHoverRadius: 4,
+            pointBackgroundColor: '#38BDF8',
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            legend: { display: false },
+            tooltip: {
+              backgroundColor: '#17212B',
+              titleColor: '#94A3B8',
+              bodyColor: '#FFFFFF',
+              borderColor: 'rgba(255,255,255,0.1)',
+              borderWidth: 1,
+              padding: 8,
+              displayColors: false,
+              callbacks: {
+                label: (ctx) => `Влажность: ${ctx.parsed.y}%`
+              }
+            }
+          },
+          scales: {
+            x: {
+              grid: { display: false },
+              ticks: { color: '#52606D', font: { size: 9, family: 'Inter' }, maxTicksLimit: 6 }
+            },
+            y: {
+              min: 20,
+              max: 85,
+              grid: { color: 'rgba(255, 255, 255, 0.04)' },
+              ticks: {
+                color: '#52606D',
+                font: { size: 9, family: 'JetBrains Mono' },
+                stepSize: 20,
+                callback: (v) => `${v}%`
+              }
+            }
+          }
+        }
+      });
+
+      // 2. Water Saving Comparison Chart
+      const compCtx = document.getElementById('comparison-chart').getContext('2d');
+      compChart = new Chart(compCtx, {
+        type: 'bar',
+        data: {
+          labels: ['Всходы', 'Кущение', 'Колос', 'ИТОГО'],
+          datasets: [
+            {
+              label: 'Арычный',
+              data: [550, 1100, 1950, 4850],
+              backgroundColor: 'rgba(239, 68, 68, 0.65)',
+              borderRadius: 4,
+              barPercentage: 0.6,
+            },
+            {
+              label: 'Su-Tech',
+              data: [380, 710, 1280, 3115],
+              backgroundColor: '#2481CC',
+              borderRadius: 4,
+              barPercentage: 0.6,
+            }
+          ]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            legend: {
+              display: true,
+              position: 'top',
+              align: 'end',
+              labels: {
+                color: '#7E8B9B',
+                boxWidth: 8,
+                boxHeight: 8,
+                font: { size: 10, family: 'Inter' }
+              }
+            },
+            tooltip: {
+              backgroundColor: '#17212B',
+              borderColor: 'rgba(255,255,255,0.1)',
+              borderWidth: 1,
+              padding: 8,
+              callbacks: {
+                label: (ctx) => `${ctx.dataset.label}: ${ctx.parsed.y} м³/га`
+              }
+            }
+          },
+          scales: {
+            x: {
+              grid: { display: false },
+              ticks: { color: '#7E8B9B', font: { size: 9, family: 'Inter' } }
+            },
+            y: {
+              grid: { color: 'rgba(255, 255, 255, 0.04)' },
+              ticks: { color: '#52606D', font: { size: 9, family: 'JetBrains Mono' } }
+            }
+          }
+        }
+      });
+    }
+
+    // ========================================================================
+    // TELEMETRY ENGINE: WEBSOCKET + REST POLLING FALLBACK
+    // ========================================================================
+    let socket = null;
+    let pollInterval = null;
+    let isSocketConnected = false;
+
+    function connectWebSocket() {
+      const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+      const wsUrl = `${protocol}//${window.location.host}/ws/telemetry`;
+
+      socket = new WebSocket(wsUrl);
+
+      socket.onopen = () => {
+        isSocketConnected = true;
+        clearInterval(pollInterval); // Stop REST polling while WebSocket is active
+        updateStatusPill(true, 'Онлайн');
+      };
+
+      socket.onmessage = (event) => {
+        try {
+          const data = JSON.parse(event.data);
+          renderTelemetry(data);
+        } catch (e) {
+          console.error(e);
+        }
+      };
+
+      socket.onclose = () => {
+        isSocketConnected = false;
+        updateStatusPill(false, 'Опрос REST');
+        startRestPollingFallback();
+        setTimeout(connectWebSocket, 3000);
+      };
+
+      socket.onerror = () => {
+        socket.close();
+      };
+    }
+
+    function startRestPollingFallback() {
+      if (pollInterval) clearInterval(pollInterval);
+      pollInterval = setInterval(async () => {
+        if (isSocketConnected) return;
+        try {
+          const resp = await fetch('/api/telemetry');
+          if (resp.ok) {
+            const data = await resp.json();
+            renderTelemetry(data);
+          }
+        } catch (e) {}
+      }, 2000);
+    }
+
+    function updateStatusPill(online, label) {
+      const dot = document.getElementById('pingDot');
+      const pulse = document.getElementById('pingPulse');
+      const badge = document.getElementById('connectionBadge');
+
+      if (badge) badge.innerText = label;
+      if (online) {
+        dot.className = 'relative inline-flex rounded-full h-2 w-2 bg-emerald-500';
+        pulse.className = 'animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75';
+      } else {
+        dot.className = 'relative inline-flex rounded-full h-2 w-2 bg-amber-500';
+        pulse.className = 'hidden';
+      }
+    }
+
+    // ========================================================================
+    // TELEMETRY RENDERING
+    // ========================================================================
+    function renderTelemetry(data) {
+      if (!data || !data.metrics) return;
+
+      const m = data.metrics;
+      const pump = data.pump;
+      const fao = data.fao56;
+
+      // 1. Port & Mode
+      const portBadge = document.getElementById('active-port-badge');
+      if (portBadge) {
+        portBadge.innerText = data.simulation_active ? 'Симуляция' : data.active_port;
+      }
+
+      // 2. Soil Moisture
+      const soilVal = document.getElementById('soil-val');
+      if (soilVal) soilVal.innerText = m.soil_moisture_pct.toFixed(1);
+      const soilValHidden = document.getElementById('soilMoistureValue');
+      if (soilValHidden) soilValHidden.innerText = m.soil_moisture_pct.toFixed(1);
+
+      const soilBar = document.getElementById('soil-bar');
+      if (soilBar) soilBar.style.width = `${Math.min(100, Math.max(0, m.soil_moisture_pct))}%`;
+
+      const soilBadge = document.getElementById('soilStatusBadge');
+      if (soilBadge) {
+        if (m.soil_moisture_pct < 40.0) {
+          soilBadge.innerText = 'Сухо';
+          soilBadge.className = 'text-[11px] font-medium text-amber-400 px-1.5 py-0.5 rounded bg-amber-500/10';
+          if (soilBar) soilBar.className = 'tg-progress-fill h-full bg-amber-500';
+        } else {
+          soilBadge.innerText = 'Оптимально';
+          soilBadge.className = 'text-[11px] font-medium text-emerald-400 px-1.5 py-0.5 rounded bg-emerald-500/10';
+          if (soilBar) soilBar.className = 'tg-progress-fill h-full bg-emerald-500';
+        }
+      }
+
+      // 3. Water Reservoir Tank
+      const waterVal = document.getElementById('water-val');
+      if (waterVal) waterVal.innerText = Math.round(m.water_tank_ml);
+      const tankMlHidden = document.getElementById('tankMlValue');
+      if (tankMlHidden) tankMlHidden.innerText = m.water_tank_ml.toFixed(1);
+
+      const tankPct = document.getElementById('tankPctBadge');
+      if (tankPct) tankPct.innerText = `${m.water_tank_pct.toFixed(1)}%`;
+
+      const waterBar = document.getElementById('water-bar');
+      if (waterBar) waterBar.style.width = `${Math.min(100, Math.max(0, m.water_tank_pct))}%`;
+
+      // Low Water Alert
+      const alertBanner = document.getElementById('water-alert');
+      if (alertBanner) {
+        if (m.water_critical) {
+          alertBanner.classList.remove('hidden');
+        } else {
+          alertBanner.classList.add('hidden');
+        }
+      }
+
+      // 4. Microclimate
+      const tempVal = document.getElementById('temp-val');
+      if (tempVal) tempVal.innerText = m.temperature_c.toFixed(1);
+      const humVal = document.getElementById('hum-val');
+      if (humVal) humVal.innerText = Math.round(m.humidity_pct);
+      const vpd = document.getElementById('vpdStatus');
+      if (vpd) vpd.innerText = `VPD: ${m.vpd_kpa} kPa`;
+
+      // 5. FAO-56 Balance
+      if (fao) {
+        const faoVal = document.getElementById('fao-val');
+        if (faoVal) faoVal.innerText = fao.et0_mm_day.toFixed(1);
+
+        const defVal = document.getElementById('deficit-val');
+        if (defVal) defVal.innerText = `${fao.deficit_dr_mm.toFixed(1)} мм`;
+
+        const faoBadge = document.getElementById('faoStatusBadge');
+        if (faoBadge) {
+          faoBadge.innerText = fao.status_code === 'IRRIGATE' ? 'Полить' : 'Норма';
+          faoBadge.className = fao.status_code === 'IRRIGATE'
+            ? 'text-[11px] font-medium text-amber-400 px-1.5 py-0.5 rounded bg-amber-500/10'
+            : 'text-[11px] font-medium text-emerald-400 px-1.5 py-0.5 rounded bg-emerald-500/10';
+        }
+      }
+
+      // 6. Pump Countdown / Active State
+      const overlay = document.getElementById('irrigationProgressOverlay');
+      const timerText = document.getElementById('countdown-timer');
+      const progBar = document.getElementById('irrigationProgressBar');
+      const btnIrrigate = document.getElementById('btn-irrigate');
+
+      if (pump.active) {
+        overlay.classList.remove('hidden');
+        timerText.innerText = pump.seconds_left.toFixed(1);
+        const pctLeft = (pump.seconds_left / 5.0) * 100;
+        progBar.style.width = `${Math.max(0, pctLeft)}%`;
+        btnIrrigate.disabled = true;
+      } else {
+        overlay.classList.add('hidden');
+        btnIrrigate.disabled = false;
+      }
+
+      // 7. Chart Update
+      if (soilChart && data.chart_history && data.chart_history.length > 0) {
+        soilChart.data.labels = data.chart_history.map(item => item.timestamp);
+        soilChart.data.datasets[0].data = data.chart_history.map(item => item.soil_moisture);
+        soilChart.update('none');
+      }
+    }
+
+    // ========================================================================
+    // ACTIONS: IRRIGATION, RECALC, STOP, BEEP
+    // ========================================================================
+    async function startIrrigation(duration = 5.0) {
+      playBeep(720, 0.08);
+      try {
+        const resp = await fetch('/api/irrigate', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ duration: duration, force: false })
+        });
+        const data = await resp.json();
+        if (resp.ok) {
+          showToast('Полив запущен', `5 секунд активной подачи`);
+        } else {
+          showToast('Ошибка', data.detail || 'Не удалось активировать помпу', true);
+        }
+      } catch (e) {
+        showToast('Ошибка сети', 'Сервер не отвечает', true);
+      }
+    }
+
+    async function emergencyStop() {
+      playBeep(320, 0.12, 'square');
+      try {
+        await fetch('/api/stop', { method: 'POST' });
+        showToast('Помпа остановлена');
+      } catch (e) {}
+    }
+
+    async function recalculateFAO56() {
+      const icon = document.getElementById('recalcIcon');
+      if (icon) icon.classList.add('animate-spin');
+      playBeep(880, 0.05);
+      try {
+        const resp = await fetch('/api/recalculate', { method: 'POST' });
+        if (resp.ok) {
+          showToast('FAO-56 пересчитан', 'Показатели обновлены');
+        }
+      } catch (e) {
+      } finally {
+        setTimeout(() => {
+          if (icon) icon.classList.remove('animate-spin');
+        }, 500);
+      }
+    }
+
+    async function triggerBeep() {
+      playBeep(1200, 0.15, 'triangle');
+      try {
+        await fetch('/api/beep', { method: 'POST' });
+        showToast('Сигнал отправлен');
+      } catch (e) {}
+    }
+
+    async function toggleSimulationMode() {
+      playBeep(640, 0.08);
+      try {
+        const resp = await fetch('/api/toggle-simulation', { method: 'POST' });
+        const data = await resp.json();
+        showToast('Режим изменен', data.message);
+      } catch (e) {}
+    }
+
+    // Startup
+    window.addEventListener('DOMContentLoaded', () => {
+      initCharts();
+      connectWebSocket();
+    });
+  </script>
+</body>
+</html>
