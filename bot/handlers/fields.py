@@ -62,7 +62,7 @@ def _render_field_card(field: FieldResponse, locality_name: Optional[str] = None
         f"🌱 <b>{_phrase(lang, 'Поле', 'Алқап', 'Field')}: {escape(field.name)}</b>\n"
         f"───────────────────────────\n"
         f"🌾 <b>{_phrase(lang, 'Культура', 'Дақыл', 'Crop')}:</b> {t(lang, f'report_crop_{field.crop_type.value}')}\n"
-        f"📐 <b>{_phrase(lang, 'Площадь', 'Аудан', 'Area')}:</b> {field.area_ha:.2f} {'ha' if lang == 'en' else 'га'}\n"
+        f"📐 <b>{_phrase(lang, 'Площадь', 'Аудан', 'Area')}:</b> {field.area_ha.normalize():f} {'ha' if lang == 'en' else 'га'}\n"
         f"💧 <b>{_phrase(lang, 'Метод полива', 'Суару әдісі', 'Irrigation method')}:</b> {t(lang, f'report_irrig_{field.irrigation_method.value}')}\n"
         f"📍 <b>{_phrase(lang, 'Локация', 'Орны', 'Location')}:</b> {loc_str}\n"
         f"🕒 <b>{_phrase(lang, 'Часовой пояс', 'Уақыт белдеуі', 'Time zone')}:</b> {field.timezone}\n"

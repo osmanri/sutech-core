@@ -31,7 +31,7 @@ def get_fields_list_keyboard(fields: List[FieldResponse], lang: str = "ru") -> I
 
     for f in fields[:25]:
         badge = status_badges.get(f.current_status, "🟢")
-        label = f"{badge} {f.name} ({t(lang, f'report_crop_{f.crop_type.value}')}, {f.area_ha:.1f} {'ha' if lang == 'en' else 'га'})"
+        label = f"{badge} {f.name} ({t(lang, f'report_crop_{f.crop_type.value}')}, {f.area_ha.normalize():f} {'ha' if lang == 'en' else 'га'})"
         builder.row(
             InlineKeyboardButton(
                 text=label,

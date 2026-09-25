@@ -107,12 +107,15 @@ try:
     check("Open-Meteo returns valid live data for Kyzylorda", 
           isinstance(weather_live, dict) and "et0" in weather_live and weather_live["et0"] > 0)
     
-    # 3.2 Midnight rollover edge case test: forecast payload where today is not in daily['time']
+    # 3.2 A forecast without the field's current local date must be rejected.
+    # Use relative dates so this diagnostic stays valid after the test day.
+    local_today = datetime.now(timezone(timedelta(seconds=18000))).date()
     dummy_payload = {
         "utc_offset_seconds": 18000,
         "timezone": "Asia/Qyzylorda",
         "daily": {
-            "time": ["2026-09-22", "2026-09-23"],
+            "time": [(local_today - timedelta(days=2)).isoformat(),
+                     (local_today - timedelta(days=1)).isoformat()],
             "et0_fao_evapotranspiration": [4.2, 4.1],
             "precipitation_sum": [0.0, 0.0]
         },
@@ -121,9 +124,16 @@ try:
             "precipitation_sum": "mm"
         }
     }
+    try:
+        parse_daily_weather(dummy_payload)
+    except ValueError as exc:
+        check("Stale weather is rejected instead of used for irrigation", str(exc) == "stale weather")
+    else:
+        check("Stale weather is rejected instead of used for irrigation", False)
+
+    dummy_payload["daily"]["time"][1] = local_today.isoformat()
     parsed = parse_daily_weather(dummy_payload)
-    check("Midnight timezone mismatch handled without ValueError", 
-          parsed["et0"] == 4.2 and parsed["rain"] == 0.0)
+    check("Current local forecast is accepted", parsed["et0"] == 4.1 and parsed["rain"] == 0.0)
 
 except Exception as e:
     check("Weather module import & execution", False, str(e))

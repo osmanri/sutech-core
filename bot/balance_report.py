@@ -12,6 +12,11 @@ def fmt(value):
     return f'{0.0 if rounded == 0 else rounded:.2f}'.rstrip('0').rstrip('.')
 
 
+def fmt_area(value):
+    """Keep the precision of a submitted hectare/sotka area in bot reports."""
+    return f'{value:.10f}'.rstrip('0').rstrip('.')
+
+
 def economics(lang, field, result):
     if result['cost'] is None:
         return t(lang, 'balance_econ_missing')
@@ -28,8 +33,11 @@ def economics(lang, field, result):
 
 
 def format_balance_report(lang, field, result, weather):
+    crop_header = t(lang, 'balance_crop_header', crop=escape(t(lang, f'report_crop_{field.crop}')))
     if result['status'] == 'rice':
-        return t(lang, 'balance_rice',
+        input_line = t(lang, 'balance_rice_inputs', area=fmt_area(field.area_ha),
+                       soil=escape(t(lang, f'balance_soil_{field.soil}')))
+        return crop_header + '\n' + input_line + '\n' + t(lang, 'balance_rice',
             water_layer=result.get('water_layer_cm', 12),
             seepage=fmt(result.get('seepage', 6.0)),
             etc=fmt(result.get('etc', 0.0)),
@@ -52,13 +60,19 @@ def format_balance_report(lang, field, result, weather):
         text += '\n' + t(lang, 'balance_salinity')
     if field.field_type == 'greenhouse':
         text += '\n' + t(lang, 'balance_greenhouse')
-    return text
+    input_line = t(lang, 'balance_inputs',
+                   area=fmt_area(field.area_ha),
+                   soil=escape(t(lang, f'balance_soil_{field.soil}')),
+                   day=field.day,
+                   moisture=escape(t(lang, f'balance_moisture_{field.moisture_condition}')),
+                   irrigation=escape(t(lang, f'report_irrig_{field.method}')))
+    return crop_header + '\n' + input_line + '\n' + text
 
 
 def format_balance_explanation(lang, field, result, weather):
     if result['status'] == 'rice':
         text = t(lang, 'balance_rice_explanation',
-            area=fmt(field.area_ha),
+            area=fmt_area(field.area_ha),
             soil=t(lang, f'balance_soil_{field.soil}'),
             water_layer=result.get('water_layer_cm', 12),
             etc=fmt(result.get('etc', 0.0)),
@@ -75,11 +89,11 @@ def format_balance_explanation(lang, field, result, weather):
                 traditional_volume=fmt(result['traditional_m3']),
                 ai_hours=fmt(result['ai_time_hours']),
                 traditional_hours=fmt(result['traditional_time_hours']),
-                deficit=fmt(result['deficit']), area=fmt(field.area_ha))
+                deficit=fmt(result['deficit']), area=fmt_area(field.area_ha))
         return text + '\n\n' + economics(lang, field, result)
     from_values = dict(
         crop=t(lang, f'report_crop_{field.crop}'), day=field.day,
-        soil=t(lang, f'balance_soil_{field.soil}'), area=fmt(field.area_ha),
+        soil=t(lang, f'balance_soil_{field.soil}'), area=fmt_area(field.area_ha),
         zr=fmt(field.zr), p=fmt(field.p), kc=fmt(field.kc),
         stages='/'.join(str(int(v)) for v in field.stages) or '—',
         yesterday=fmt(field.yesterday), et0=fmt(result['et0']),
@@ -103,5 +117,5 @@ def format_balance_explanation(lang, field, result, weather):
             traditional_volume=fmt(result['traditional_m3']),
             ai_hours=fmt(result['ai_time_hours']),
             traditional_hours=fmt(result['traditional_time_hours']),
-            deficit=fmt(result['deficit']), area=fmt(field.area_ha))
+            deficit=fmt(result['deficit']), area=fmt_area(field.area_ha))
     return text + '\n\n' + economics(lang, field, result)

@@ -51,6 +51,18 @@ class BotAuditTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn("Поле &lt;b&gt;&amp;", card)
         self.assertIn("Район &lt;опасный&gt;", card)
 
+    def test_small_saved_field_keeps_sub_hectare_area_in_bot_card(self):
+        record = self._record(0)
+        record["area_ha"] = 0.067
+        field_input = parse_field(payload(crop="cotton", soil_type="sand",
+                                          irrigation_type="furrow", area=0.067,
+                                          day_of_growth=0))
+        with patch("bot.services.field_manager.field_input_from_record", return_value=field_input):
+            field = FieldService._map_record_to_dto(record)
+        self.assertEqual(field.area_ha, Decimal("0.067"))
+        self.assertIn("<b>Площадь:</b> 0.067 га", _render_field_card(field))
+        self.assertIn("0.067 га", get_fields_list_keyboard([field]).inline_keyboard[0][0].text)
+
     def test_add_field_button_opens_full_webapp_form(self):
         button = get_fields_list_keyboard([], "kz").inline_keyboard[0][0]
         self.assertIsNotNone(button.web_app)

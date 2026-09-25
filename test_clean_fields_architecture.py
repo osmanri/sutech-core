@@ -80,7 +80,7 @@ class CleanFieldsArchitectureTests(unittest.IsolatedAsyncioTestCase):
             current_status=IrrigationStatus.IRRIGATE,
             recommended_volume_m3=Decimal("316.888"),
         )
-        self.assertEqual(field.area_ha, Decimal("15.56"))
+        self.assertEqual(field.area_ha, Decimal("15.556"))
         self.assertEqual(field.accumulated_deficit_mm, Decimal("18.40"))
         self.assertEqual(field.recommended_volume_m3, Decimal("316.89"))
 

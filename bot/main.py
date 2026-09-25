@@ -1,10 +1,15 @@
 import asyncio
+import json
 import logging
 import os
 import sys
+import time
+from datetime import timezone
+from types import SimpleNamespace
 
 from aiohttp import web
 from aiogram import Bot, Dispatcher
+from aiogram.utils.web_app import safe_parse_webapp_init_data
 from aiogram.client.default import DefaultBotProperties
 from aiogram.enums import ParseMode
 from aiogram.webhook.aiohttp_server import SimpleRequestHandler, setup_application
@@ -15,7 +20,7 @@ try:
     from db import init_db, check_db_health
     from handlers.start import start_router
     from handlers.fields import fields_router
-    from handlers.webapp import webapp_router
+    from handlers.webapp import webapp_router, handle_webapp_data
     from water_balance import CALCULATION_VERSION
     from daily_monitor import run_daily_monitor
 except ImportError:
@@ -24,7 +29,7 @@ except ImportError:
     from bot.db import init_db, check_db_health
     from bot.handlers.start import start_router
     from bot.handlers.fields import fields_router
-    from bot.handlers.webapp import webapp_router
+    from bot.handlers.webapp import webapp_router, handle_webapp_data
     from bot.water_balance import CALCULATION_VERSION
     from bot.daily_monitor import run_daily_monitor
 
@@ -45,6 +50,87 @@ logging.basicConfig(
 logging.getLogger("aiogram").setLevel(logging.INFO)
 logging.getLogger("aiohttp.access").setLevel(logging.WARNING)
 logger = logging.getLogger(__name__)
+
+WEBAPP_ORIGINS = {
+    "https://frontend-2-mauve.vercel.app",
+    "http://127.0.0.1:8765",
+    "http://localhost:8765",
+}
+
+
+@web.middleware
+async def webapp_cors(request: web.Request, handler):
+    if request.path != "/api/analyze":
+        return await handler(request)
+    origin = request.headers.get("Origin")
+    if origin and origin not in WEBAPP_ORIGINS:
+        raise web.HTTPForbidden()
+    if request.method == "OPTIONS":
+        response = web.Response(status=204)
+    else:
+        try:
+            response = await handler(request)
+        except web.HTTPException as exc:
+            response = exc
+    if origin:
+        response.headers["Access-Control-Allow-Origin"] = origin
+        response.headers["Vary"] = "Origin"
+        response.headers["Access-Control-Allow-Methods"] = "POST, OPTIONS"
+        response.headers["Access-Control-Allow-Headers"] = "Content-Type"
+    return response
+
+
+async def analyze_webapp(request: web.Request) -> web.Response:
+    """Deliver a Mini App calculation to its signed-in Telegram user.
+
+    Inline and menu Mini Apps cannot use Telegram.WebApp.sendData. Their signed
+    initData identifies the user without trusting a browser-supplied user ID.
+    """
+    raw = await request.content.read(8193)
+    if len(raw) > 8192:
+        raise web.HTTPRequestEntityTooLarge(max_size=8192, actual_size=len(raw))
+    try:
+        body = json.loads(raw)
+    except (ValueError, UnicodeDecodeError):
+        raise web.HTTPBadRequest(text="Invalid JSON") from None
+    if not isinstance(body, dict):
+        raise web.HTTPBadRequest(text="Invalid request")
+    init_data, payload = body.get("init_data"), body.get("payload")
+    if not isinstance(init_data, str) or not init_data or len(init_data) > 4096:
+        raise web.HTTPUnauthorized(text="Telegram login required")
+    if not isinstance(payload, dict) or len(json.dumps(payload, ensure_ascii=False)) > 4096:
+        raise web.HTTPBadRequest(text="Invalid calculation")
+    try:
+        auth = safe_parse_webapp_init_data(BOT_TOKEN, init_data)
+    except (ValueError, TypeError):
+        raise web.HTTPUnauthorized(text="Invalid Telegram login") from None
+    auth_time = auth.auth_date
+    if auth_time.tzinfo is None:
+        auth_time = auth_time.replace(tzinfo=timezone.utc)
+    age = time.time() - auth_time.timestamp()
+    if auth.user is None or age < -300 or age > 86400:
+        raise web.HTTPUnauthorized(text="Expired Telegram login")
+
+    bot = request.app["su_tech_bot"]
+    delivered = False
+
+    async def answer(text: str, **kwargs):
+        nonlocal delivered
+        await bot.send_message(chat_id=auth.user.id, text=text, **kwargs)
+        delivered = kwargs.get("reply_markup") is not None
+
+    message = SimpleNamespace(
+        from_user=SimpleNamespace(id=auth.user.id),
+        web_app_data=SimpleNamespace(data=json.dumps(payload, ensure_ascii=False)),
+        answer=answer,
+    )
+    state = SimpleNamespace(clear=lambda: asyncio.sleep(0))
+    try:
+        await handle_webapp_data(message, state)
+    except Exception:
+        logger.exception("Mini App analysis delivery failed")
+        raise web.HTTPBadGateway(text="Could not deliver Telegram report") from None
+    return web.json_response({"ok": delivered}, status=200 if delivered else 422)
 
 
 async def health_check(request: web.Request) -> web.Response:
@@ -75,9 +161,12 @@ def create_dispatcher() -> Dispatcher:
 
 async def start_http_server(bot: Bot, dp: Dispatcher) -> web.AppRunner:
     """Open the health and Telegram webhook routes before external API calls."""
-    app = web.Application()
+    app = web.Application(middlewares=[webapp_cors])
+    app["su_tech_bot"] = bot
     app.router.add_get("/", health_check)
     app.router.add_get("/health", health_check)
+    app.router.add_route("OPTIONS", "/api/analyze", analyze_webapp)
+    app.router.add_post("/api/analyze", analyze_webapp)
 
     webhook_handler = SimpleRequestHandler(
         dispatcher=dp,

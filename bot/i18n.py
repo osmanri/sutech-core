@@ -555,6 +555,9 @@ STRINGS['ru'].update({
     'balance_error': 'Заполните почву, день роста, состояние почвы и сроки стадий в обновлённом приложении. Для другой культуры нужны Kc, p и глубина корней.',
     'balance_season_ended': 'День роста выходит за пределы календаря. Уточните сроки стадий. Для люцерны после укоса задайте актуальные Kc, p и корни через «Другая культура».',
     'balance_old_app': 'Обновите или заново откройте приложение: теперь вместо ручного дефицита нужно выбрать состояние почвы.',
+    'balance_crop_header': '🌾 <b>Культура:</b> {crop}',
+    'balance_inputs': '<b>Ваши данные:</b> {area} га · {soil} · день {day} · {moisture} · {irrigation}',
+    'balance_rice_inputs': '<b>Ваши данные:</b> {area} га · {soil}',
     'balance_report': (
         '<b>СТАТУС:</b> {status}\n<b>АГРО-ДАННЫЕ:</b>\n'
         '• Доступная влага до стресса (RAW): {raw} мм.\n'
@@ -662,6 +665,9 @@ STRINGS['kz'].update({
     'balance_error': 'Жаңартылған қолданбада топырақ, өсу күні, топырақ күйі және кезең ұзақтығын толтырыңыз. Басқа дақылға Kc, p және тамыр тереңдігі қажет.',
     'balance_season_ended': 'Өсу күні күнтізбеден асып кетті. Кезең ұзақтығын нақтылаңыз. Жоңышқаны орғаннан кейін «Басқа дақыл» арқылы ағымдағы Kc, p және тамыр тереңдігін енгізіңіз.',
     'balance_old_app': 'Қолданбаны жаңартыңыз немесе қайта ашыңыз: енді тапшылықты қолмен енгізудің орнына топырақ күйін таңдаңыз.',
+    'balance_crop_header': '🌾 <b>Дақыл:</b> {crop}',
+    'balance_inputs': '<b>Енгізілген дерек:</b> {area} га · {soil} · {day}-күн · {moisture} · {irrigation}',
+    'balance_rice_inputs': '<b>Енгізілген дерек:</b> {area} га · {soil}',
     'balance_report': (
         '<b>МӘРТЕБЕ:</b> {status}\n<b>АГРО-ДЕРЕКТЕР:</b>\n'
         '• Стресске дейінгі қолжетімді ылғал (RAW): {raw} мм.\n'
@@ -781,6 +787,9 @@ STRINGS['en'] = {**STRINGS['ru'], **{
     'balance_error': 'Check soil type, growth day, soil moisture and stage lengths. For another crop, enter Kc, p and root depth.',
     'balance_season_ended': 'Growth day exceeds the crop calendar. Check the stage lengths. After an alfalfa cutting, use Other crop with current Kc, p and root depth.',
     'balance_old_app': 'Reopen or update the app. Choose observed soil moisture instead of entering a deficit manually.',
+    'balance_crop_header': '🌾 <b>Crop:</b> {crop}',
+    'balance_inputs': '<b>Your inputs:</b> {area} ha · {soil} · day {day} · {moisture} · {irrigation}',
+    'balance_rice_inputs': '<b>Your inputs:</b> {area} ha · {soil}',
     'balance_report': (
         '<b>STATUS:</b> {status}\n<b>FIELD WATER BALANCE:</b>\n'
         '• Readily available water (RAW): {raw} mm.\n'

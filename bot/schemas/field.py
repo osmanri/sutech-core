@@ -18,6 +18,16 @@ def quantize_2dp(value: Optional[float | Decimal | str | int]) -> Optional[Decim
     return Decimal(str(value)).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
 
 
+def quantize_area(value: Optional[float | Decimal | str | int]) -> Optional[Decimal]:
+    """Retain the precision of an entered field area, including small plots."""
+    if value is None or value == "":
+        return None
+    area = Decimal(str(value))
+    if not area.is_finite():
+        raise ValueError("Area must be finite")
+    return area.quantize(Decimal("0.0000000001"), rounding=ROUND_HALF_UP)
+
+
 def quantize_coord(value: Optional[float | Decimal | str | int]) -> Optional[Decimal]:
     """Точное квантование географических координат поля до 4 знаков (Decimal 0.0001)."""
     if value is None or value == "":
@@ -74,7 +84,7 @@ class FieldBase(BaseModel):
     @field_validator("area_ha", mode="before")
     @classmethod
     def validate_area(cls, v):
-        return quantize_2dp(v)
+        return quantize_area(v)
 
     @field_validator("latitude", "longitude", mode="before")
     @classmethod
@@ -100,7 +110,7 @@ class FieldUpdate(BaseModel):
     @field_validator("area_ha", mode="before")
     @classmethod
     def validate_update_area(cls, v):
-        return quantize_2dp(v)
+        return quantize_area(v)
 
     @field_validator("latitude", "longitude", mode="before")
     @classmethod

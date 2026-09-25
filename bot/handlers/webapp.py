@@ -16,7 +16,7 @@ try:
     from db import save_report_explanation, get_report_explanation
     from water_balance import parse_field, calculate_balance, number, BalanceInputError
     from balance_weather import fetch_daily_weather
-    from balance_report import format_balance_report, format_balance_explanation, economics, fmt
+    from balance_report import format_balance_report, format_balance_explanation, economics, fmt, fmt_area
     from field_service import persist_webapp_field
     from field_state import FieldStateError
 except ImportError:
@@ -26,7 +26,7 @@ except ImportError:
     from bot.db import save_report_explanation, get_report_explanation
     from bot.water_balance import parse_field, calculate_balance, number, BalanceInputError
     from bot.balance_weather import fetch_daily_weather
-    from bot.balance_report import format_balance_report, format_balance_explanation, economics, fmt
+    from bot.balance_report import format_balance_report, format_balance_explanation, economics, fmt, fmt_area
     from bot.field_service import persist_webapp_field
     from bot.field_state import FieldStateError
 
@@ -342,7 +342,7 @@ async def handle_webapp_data(message: Message, state: FSMContext) -> None:
         from bot.db import save_calculation
     save_calculation(
         user_id=user_id, crop_name=t(lang, f'report_crop_{field.crop}'),
-        area_text=f'{fmt(field.area_ha)} га',
+        area_text=f"{fmt_area(field.area_ha)} {'ha' if lang == 'en' else 'га'}",
         irrigation_text=t(lang, f'report_irrig_{field.method}'),
         volume_text=f"{fmt(result['gross_m3'])} м³ · {t(lang, 'balance_status_' + result['status'])}",
         savings_text=economics(lang, field, result),

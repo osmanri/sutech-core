@@ -109,7 +109,7 @@ class FieldService:
             user_id=int(record["user_id"]),
             name=record.get("name") or f"Поле #{record['id']}",
             crop_type=CropType(record.get("crop_type") or "tomato"),
-            area_ha=Decimal(str(round(area, 2))),
+            area_ha=Decimal(str(area)),
             irrigation_method=IrrigationMethod(record.get("irrigation_method") or "drip"),
             soil_type=SoilType(record.get("soil_type") or "loam"),
             latitude=Decimal(str(round(lat_f, 4))),
