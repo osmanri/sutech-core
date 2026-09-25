@@ -12,7 +12,7 @@ import re
 import hashlib
 import json
 from contextlib import closing
-from datetime import date, datetime
+from datetime import date, datetime, timedelta, timezone
 from typing import Any
 
 import sys
@@ -358,7 +358,8 @@ def get_daily_balance(field_id: int, balance_date: str) -> dict[str, Any] | None
 
 def save_daily_balance(field_id: int, *, user_id: int, balance_date: str,
                        timezone: str, result: dict[str, Any], deficit_before: float,
-                       replace: bool = False) -> tuple[dict[str, Any], bool]:
+                       replace: bool = False,
+                       notify_pending: bool = False) -> tuple[dict[str, Any], bool]:
     """Persist one calculation date and update the running deficit atomically."""
     field_key = _positive_int(field_id, "field_id")
     owner = _positive_int(user_id, "user_id")
@@ -402,14 +403,16 @@ def save_daily_balance(field_id: int, *, user_id: int, balance_date: str,
                     INSERT INTO field_daily_balances (
                         field_id,balance_date,timezone,et0,rain,effective_rain,etc,
                         deficit_before,deficit_after,status,net_m3,gross_m3,
-                        calculation_version,result_json
-                    ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)
-                """, (field_key, balance_date, *params))
+                        calculation_version,result_json,alert_state
+                    ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+                """, (field_key, balance_date, *params,
+                      "pending" if notify_pending and result["status"] in {"irrigate", "critical"} else "done"))
             else:
                 database.execute_query(conn, """
                     UPDATE field_daily_balances SET timezone=?,et0=?,rain=?,effective_rain=?,etc=?,
                         deficit_before=?,deficit_after=?,status=?,net_m3=?,gross_m3=?,
-                        calculation_version=?,result_json=?,created_at=CURRENT_TIMESTAMP
+                        calculation_version=?,result_json=?,alert_state='done',
+                        alert_claimed_at=NULL,created_at=CURRENT_TIMESTAMP
                     WHERE field_id=? AND balance_date=?
                 """, (*params, field_key, balance_date))
             database.execute_query(
@@ -424,6 +427,62 @@ def save_daily_balance(field_id: int, *, user_id: int, balance_date: str,
         raise
     except database.DatabaseError as exc:
         raise FieldStateError("Could not save daily balance") from exc
+
+
+def list_pending_alerts(field_id: int, *, user_id: int) -> list[dict[str, Any]]:
+    """Return unsent daily recommendations, including stale interrupted sends."""
+    field = get_field(field_id, user_id=user_id)
+    expired = (datetime.now(timezone.utc) - timedelta(minutes=10)).replace(tzinfo=None)
+    try:
+        with closing(_connect()) as conn:
+            rows = database.execute_query(conn, """
+                SELECT * FROM field_daily_balances
+                WHERE field_id=? AND (alert_state='pending' OR
+                    (alert_state='sending' AND alert_claimed_at < ?))
+                ORDER BY balance_date LIMIT 7
+            """, (field["id"], expired.isoformat(sep=" "))).fetchall()
+        result = []
+        for row in rows:
+            item = dict(row)
+            item["result"] = json.loads(item.pop("result_json"))
+            result.append(item)
+        return result
+    except database.DatabaseError as exc:
+        raise FieldStateError("Could not load pending alerts") from exc
+
+
+def claim_pending_alert(balance_id: int, *, field_id: int, user_id: int) -> bool:
+    """Atomically reserve an alert so concurrent monitor runs send it once."""
+    expired = (datetime.now(timezone.utc) - timedelta(minutes=10)).replace(tzinfo=None)
+    now = datetime.now(timezone.utc).replace(tzinfo=None)
+    try:
+        with closing(_connect()) as conn:
+            database.begin_immediate(conn)
+            cursor = database.execute_query(conn, """
+                UPDATE field_daily_balances SET alert_state='sending', alert_claimed_at=?
+                WHERE id=? AND field_id=? AND EXISTS
+                    (SELECT 1 FROM fields WHERE id=? AND user_id=?)
+                  AND (alert_state='pending' OR
+                    (alert_state='sending' AND alert_claimed_at < ?))
+            """, (now.isoformat(sep=" "), balance_id, field_id, field_id, user_id,
+                  expired.isoformat(sep=" ")))
+            conn.commit()
+            return cursor.rowcount == 1
+    except database.DatabaseError as exc:
+        raise FieldStateError("Could not claim alert") from exc
+
+
+def finish_pending_alert(balance_id: int, *, sent: bool) -> None:
+    """Record delivery or release a claim after Telegram rejects the send."""
+    try:
+        with closing(_connect()) as conn:
+            database.execute_query(conn, """
+                UPDATE field_daily_balances SET alert_state=?, alert_claimed_at=NULL
+                WHERE id=? AND alert_state='sending'
+            """, ("done" if sent else "pending", balance_id))
+            conn.commit()
+    except database.DatabaseError as exc:
+        raise FieldStateError("Could not finish alert") from exc
 
 
 def list_daily_balances(field_id: int, *, user_id: int, limit: int = 31) -> list[dict[str, Any]]:

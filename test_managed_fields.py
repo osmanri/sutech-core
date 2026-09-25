@@ -1,5 +1,6 @@
 import tempfile
 import unittest
+from contextlib import closing
 from datetime import date, timedelta
 from pathlib import Path
 from unittest.mock import AsyncMock, patch
@@ -22,6 +23,25 @@ class ManagedFieldServiceTests(unittest.IsolatedAsyncioTestCase):
     def tearDown(self):
         db.DB_PATH = self.old_db_path
         self.temp_dir.cleanup()
+
+    def test_database_initialization_keeps_unknown_location_and_local_timezone(self):
+        with closing(db.get_connection()) as conn:
+            field_id = db.execute_query(conn, """
+                INSERT INTO fields (user_id,crop_type,soil_type,irrigation_method,planting_date)
+                VALUES (?,?,?,?,?) RETURNING id
+            """, (42, "wheat", "loam", "drip", date.today().isoformat())).fetchone()[0]
+            db.execute_query(conn, """
+                INSERT INTO field_daily_balances
+                    (field_id,balance_date,timezone,et0,rain,effective_rain,etc,
+                     deficit_before,deficit_after,status,net_m3,gross_m3,
+                     calculation_version,result_json)
+                VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+            """, (field_id, date.today().isoformat(), "Asia/Oral", 0, 0, 0, 0,
+                  0, 0, "deferred", 0, 0, "test", "{}"))
+            conn.commit()
+        db.init_db()
+        self.assertIsNone(get_field(field_id)["latitude"])
+        self.assertEqual(list_daily_balances(field_id, user_id=42)[0]["timezone"], "Asia/Oral")
 
     async def test_webapp_snapshot_and_same_day_update_are_idempotent(self):
         data = payload(crop="cotton", day_of_growth=30, moisture_condition="normal",
@@ -77,6 +97,32 @@ class ManagedFieldServiceTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(first, {"seen": 1, "updated": 1, "notified": 1, "failed": 0})
         self.assertEqual(second, {"seen": 1, "updated": 0, "notified": 0, "failed": 0})
         bot.send_message.assert_awaited_once()
+
+    async def test_failed_daily_alert_is_retried_without_recalculating_deficit(self):
+        data = payload(crop="wheat", day_of_growth=60, moisture_condition="dry", area=1)
+        field = parse_field(data)
+        today = date.today()
+        initial = {"et0": 0, "rain": 0, "date": today.isoformat(),
+                   "timezone": "Asia/Qyzylorda"}
+        field_id = await persist_webapp_field(
+            42, data, field, 44.85, 65.49, calculate_balance(field, 0, 0), initial)
+        tomorrow = {"et0": 5, "rain": 0,
+                    "date": (today + timedelta(days=1)).isoformat(),
+                    "timezone": "Asia/Qyzylorda"}
+        bot = AsyncMock()
+        bot.send_message.side_effect = [ConnectionError("offline"), None]
+        with patch("bot.field_service.fetch_daily_weather", AsyncMock(return_value=tomorrow)):
+            first = await update_all_fields_once(bot)
+            balance_count = len(list_daily_balances(field_id, user_id=42))
+            deficit = get_field(field_id)["accumulated_deficit"]
+            second = await update_all_fields_once(bot)
+        self.assertEqual(first["failed"], 1)
+        self.assertEqual(first["notified"], 0)
+        self.assertEqual(second["notified"], 1)
+        self.assertEqual(second["updated"], 0)
+        self.assertEqual(len(list_daily_balances(field_id, user_id=42)), balance_count)
+        self.assertEqual(get_field(field_id)["accumulated_deficit"], deficit)
+        self.assertEqual(bot.send_message.await_count, 2)
 
 
 if __name__ == "__main__":

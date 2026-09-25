@@ -37,6 +37,15 @@ COMMANDS = {
         BotCommand(command="help", description="Пайдалану нұсқаулығы"),
         BotCommand(command="about", description="Su-Tech жүйесі туралы"),
     ],
+    "en": [
+        BotCommand(command="start", description="Main menu"),
+        BotCommand(command="app", description="Open irrigation calculator"),
+        BotCommand(command="fields", description="Saved fields"),
+        BotCommand(command="history", description="Calculation history"),
+        BotCommand(command="language", description="Change language"),
+        BotCommand(command="help", description="How to use Su-Tech"),
+        BotCommand(command="about", description="About Su-Tech"),
+    ],
 }
 
 PROFILE = {
@@ -58,6 +67,11 @@ PROFILE = {
             "бот Open-Meteo деректерін ескеріп, қысқа агро-есеп жібереді."
         ),
     },
+    "en": {
+        "name": "Su-Tech | Smart Irrigation",
+        "short": "Irrigation planning from FAO-56 and Open-Meteo data.",
+        "description": "Mark your field on the map, choose a crop and irrigation method, and get a weather-based water-balance report.",
+    },
 }
 
 
@@ -72,7 +86,7 @@ async def configure_user_menu(bot: Bot, chat_id: int, lang: str) -> None:
     await bot.set_chat_menu_button(
         chat_id=chat_id,
         menu_button=MenuButtonWebApp(
-            text="Su-Tech ашу" if lang == "kz" else "Открыть Su-Tech",
+            text={"kz": "Su-Tech ашу", "en": "Open Su-Tech"}.get(lang, "Открыть Su-Tech"),
             web_app=WebAppInfo(url=webapp_url(lang)),
         ),
     )
@@ -93,6 +107,10 @@ async def configure_bot_profile(bot: Bot) -> None:
             lambda: bot.set_my_commands(COMMANDS["kz"], scope=scope, language_code="kk"),
         ),
         (
+            "English commands",
+            lambda: bot.set_my_commands(COMMANDS["en"], scope=scope, language_code="en"),
+        ),
+        (
             "default menu",
             lambda: bot.set_chat_menu_button(
                 menu_button=MenuButtonWebApp(
@@ -103,7 +121,7 @@ async def configure_bot_profile(bot: Bot) -> None:
         ),
     ]
 
-    for lang, language_code in (("ru", "ru"), ("kz", "kk")):
+    for lang, language_code in (("ru", "ru"), ("kz", "kk"), ("en", "en")):
         profile = PROFILE[lang]
         operations.extend(
             [

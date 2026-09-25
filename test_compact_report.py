@@ -7,7 +7,6 @@ from unittest.mock import AsyncMock, patch
 import aiohttp
 
 from bot.handlers.webapp import (
-    DEFAULT_METEO,
     calculate_water_demand,
     fetch_meteo,
     format_compact_report,
@@ -48,14 +47,13 @@ class CompactReportTests(unittest.TestCase):
 
 
 class WebAppReportTests(unittest.IsolatedAsyncioTestCase):
-    async def test_weather_provider_outage_keeps_analysis_available(self):
+    async def test_weather_provider_outage_does_not_invent_meteorology(self):
         with patch(
             "bot.handlers.webapp.aiohttp.ClientSession",
             side_effect=aiohttp.ClientError("provider unavailable"),
         ):
-            meteo = await fetch_meteo(44.852290, 65.488472)
-
-        self.assertEqual(meteo, DEFAULT_METEO)
+            with self.assertRaises(aiohttp.ClientError):
+                await fetch_meteo(44.852290, 65.488472)
 
     async def test_legacy_payload_requests_new_balance_inputs(self):
         for unit, area in (("hectare", .01), ("sotka", 1)):

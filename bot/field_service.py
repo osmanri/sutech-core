@@ -29,7 +29,7 @@ try:
         save_daily_balance,
         upsert_managed_field,
     )
-    from water_balance import CALCULATION_VERSION, calculate_balance, parse_field
+    from water_balance import BalanceInputError, CALCULATION_VERSION, calculate_balance, parse_field
 except ImportError:
     from bot.balance_weather import fetch_daily_weather
     from bot.field_state import (
@@ -40,7 +40,7 @@ except ImportError:
         save_daily_balance,
         upsert_managed_field,
     )
-    from bot.water_balance import CALCULATION_VERSION, calculate_balance, parse_field
+    from bot.water_balance import BalanceInputError, CALCULATION_VERSION, calculate_balance, parse_field
 
 
 def _result_snapshot(result: dict[str, Any]) -> dict[str, Any]:
@@ -114,7 +114,7 @@ async def calculate_saved_field(field_id: int, user_id: int):
     lat = record.get("latitude")
     lon = record.get("longitude")
     if lat is None or lon is None:
-        lat, lon = 47.1167, 51.8833
+        raise BalanceInputError("field_location_missing")
     weather = await fetch_daily_weather(lat, lon)
     balance_date = date.fromisoformat(weather["date"])
     stored = await asyncio.to_thread(get_daily_balance, field_id, weather["date"])
@@ -122,8 +122,6 @@ async def calculate_saved_field(field_id: int, user_id: int):
         field = await asyncio.to_thread(field_input_from_record, record, on_date=balance_date)
         field = replace(field, yesterday=float(stored["deficit_before"]))
         stored_tz = str(stored.get("timezone") or weather["timezone"])
-        if stored_tz == "Asia/Oral":
-            stored_tz = "Asia/Atyrau"
         return field, stored["result"], {
             "date": stored["balance_date"], "timezone": stored_tz,
             "et0": stored["et0"], "rain": stored["rain"],
@@ -134,7 +132,6 @@ async def calculate_saved_field(field_id: int, user_id: int):
     saved, created = await asyncio.to_thread(
         save_daily_balance, field_id, user_id=user_id, balance_date=weather["date"],
         timezone=weather["timezone"], result=_result_snapshot(result),
-        deficit_before=field.yesterday,
+        deficit_before=field.yesterday, notify_pending=True,
     )
     return field, saved["result"], weather, created
-

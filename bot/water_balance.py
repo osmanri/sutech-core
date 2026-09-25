@@ -213,7 +213,11 @@ def calculate_balance(field, et0, rain):
     # A delivery-system limit must never postpone irrigation beyond the crop's
     # stress limit. This matters most for shallow roots and furrow irrigation.
     threshold = min(tech_threshold, raw)
-    status = 'critical' if deficit > raw else 'irrigate' if deficit >= threshold else 'deferred'
+    # Database round-trips and binary arithmetic can differ at RAW by one ULP.
+    # Treat that microscopic difference as equality, never as crop stress.
+    above_raw = deficit > raw and not math.isclose(deficit, raw, rel_tol=0, abs_tol=1e-9)
+    at_threshold = deficit >= threshold or math.isclose(deficit, threshold, rel_tol=0, abs_tol=1e-9)
+    status = 'critical' if above_raw else 'irrigate' if at_threshold else 'deferred'
     potential_net = deficit * 10 * field.area_ha
     net = potential_net if status != 'deferred' else 0.
     gross = net / efficiency

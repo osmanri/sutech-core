@@ -238,6 +238,10 @@ def _init_sqlite(conn):
             FOREIGN KEY (field_id) REFERENCES fields(id) ON DELETE CASCADE
         )
     """)
+    _ensure_columns_sqlite(cursor, "field_daily_balances", {
+        "alert_state": "TEXT NOT NULL DEFAULT 'done'",
+        "alert_claimed_at": "TEXT",
+    })
     cursor.execute("""
         CREATE INDEX IF NOT EXISTS idx_daily_field_date
         ON field_daily_balances (field_id, balance_date DESC)
@@ -255,17 +259,8 @@ def _init_sqlite(conn):
             FOREIGN KEY (field_id) REFERENCES fields(id) ON DELETE CASCADE
         )
     """)
-    # Auto-fix: enforce Asia/Atyrau timezone and default Atyrau coordinates
-    cursor.execute("""
-        UPDATE field_daily_balances
-        SET timezone = 'Asia/Atyrau'
-        WHERE timezone = 'Asia/Oral' OR timezone IS NULL OR timezone = '' OR timezone LIKE '%Oral%'
-    """)
-    cursor.execute("""
-        UPDATE fields
-        SET latitude = 47.1167, longitude = 51.8833
-        WHERE latitude IS NULL OR longitude IS NULL
-    """)
+    # Keep the field's actual timezone and coordinates. Missing locations must
+    # be completed by the farmer, never silently replaced with Atyrau.
     conn.commit()
 
 
@@ -372,17 +367,11 @@ def _init_postgres(conn):
         "greenhouse_et0": "REAL",
         "updated_at": "TEXT NOT NULL DEFAULT ''",
     })
-    # Auto-fix: enforce Asia/Atyrau timezone and default Atyrau coordinates
-    cursor.execute("""
-        UPDATE field_daily_balances
-        SET timezone = 'Asia/Atyrau'
-        WHERE timezone = 'Asia/Oral' OR timezone IS NULL OR timezone = '' OR timezone LIKE '%Oral%'
-    """)
-    cursor.execute("""
-        UPDATE fields
-        SET latitude = 47.1167, longitude = 51.8833
-        WHERE latitude IS NULL OR longitude IS NULL
-    """)
+    _ensure_columns_postgres(cursor, "field_daily_balances", {
+        "alert_state": "TEXT NOT NULL DEFAULT 'done'",
+        "alert_claimed_at": "TIMESTAMP",
+    })
+    # Existing field coordinates and local dates are authoritative.
     conn.commit()
 
 

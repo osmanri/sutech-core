@@ -2,7 +2,7 @@
 user_state.py — In-memory хранилище состояния пользователей Su-Tech.
 
 Хранит:
-  1. Выбранный язык интерфейса по user_id ("ru" или "kz").
+  1. Выбранный язык интерфейса по user_id ("ru", "kz" или "en").
   2. Историю последних расчетов (до 5 записей на пользователя).
 """
 
@@ -13,7 +13,7 @@ try:
 except ImportError:
     from bot.db import get_user_language, set_user_language
 
-# {user_id: "ru" | "kz"}
+# {user_id: "ru" | "kz" | "en"}
 user_langs: dict[int, str] = {}
 
 # {user_id: [record1, record2, ...]}
@@ -35,7 +35,7 @@ def get_lang(user_id: int) -> str:
 
 def set_lang(user_id: int, lang: str) -> None:
     """Сохраняет выбранный язык пользователя."""
-    if lang not in {"ru", "kz"}:
+    if lang not in {"ru", "kz", "en"}:
         raise ValueError(f"Unsupported language: {lang}")
     user_langs[user_id] = lang
     set_user_language(user_id, lang)

@@ -34,11 +34,11 @@ class BotPlatformTests(unittest.IsolatedAsyncioTestCase):
 
         await configure_bot_profile(bot)
 
-        self.assertEqual(bot.set_my_commands.await_count, 3)
+        self.assertEqual(bot.set_my_commands.await_count, 4)
         self.assertEqual(bot.set_chat_menu_button.await_count, 1)
-        self.assertEqual(bot.set_my_name.await_count, 2)
-        self.assertEqual(bot.set_my_short_description.await_count, 2)
-        self.assertEqual(bot.set_my_description.await_count, 2)
+        self.assertEqual(bot.set_my_name.await_count, 3)
+        self.assertEqual(bot.set_my_short_description.await_count, 3)
+        self.assertEqual(bot.set_my_description.await_count, 3)
         self.assertEqual(
             [command.command for command in COMMANDS["ru"]],
             ["start", "app", "fields", "history", "language", "help", "about"],

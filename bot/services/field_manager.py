@@ -6,6 +6,7 @@
 from __future__ import annotations
 
 import asyncio
+import math
 from datetime import date, datetime
 from decimal import Decimal
 from typing import Any, List, Optional, Tuple
@@ -14,7 +15,7 @@ from contextlib import closing
 try:
     import db as database
     from balance_weather import fetch_daily_weather
-    from field_service import calculate_saved_field
+    from field_service import calculate_saved_field, field_input_from_record
     from field_state import (
         FieldNotFoundError,
         FieldStateError,
@@ -29,7 +30,7 @@ try:
 except ImportError:
     from bot import db as database
     from bot.balance_weather import fetch_daily_weather
-    from bot.field_service import calculate_saved_field
+    from bot.field_service import calculate_saved_field, field_input_from_record
     from bot.field_state import (
         FieldNotFoundError,
         FieldStateError,
@@ -57,6 +58,7 @@ from bot.services.geo_service import (
     DEFAULT_FALLBACK_LON,
     resolve_timezone_by_coords,
 )
+from bot.water_balance import BalanceInputError, METHODS, root_zone_capacity
 
 
 class FieldService:
@@ -67,21 +69,31 @@ class FieldService:
         """Преобразует словарь из БД в валидированную Pydantic-модель."""
         raw_deficit = float(record.get("accumulated_deficit") or 0.0)
         
-        # Определение статуса полива
+        # Use the same RAW and method threshold as the actual FAO-56 balance.
+        # Re-evaluate against the live stored deficit so a newly confirmed
+        # irrigation cannot leave a stale "water now" badge on the card.
         if record.get("crop_type") == "rice":
             status = IrrigationStatus.RICE
-        elif raw_deficit >= 30.0:
-            status = IrrigationStatus.CRITICAL
-        elif raw_deficit >= 15.0:
-            status = IrrigationStatus.IRRIGATE
         else:
-            status = IrrigationStatus.NORMAL
+            try:
+                field_input = field_input_from_record(record)
+                _, raw = root_zone_capacity(field_input.soil, field_input.zr, field_input.p)
+                threshold = min(METHODS[field_input.method][0], raw)
+                if raw_deficit > raw and not math.isclose(raw_deficit, raw, rel_tol=0, abs_tol=1e-9):
+                    status = IrrigationStatus.CRITICAL
+                elif raw_deficit >= threshold or math.isclose(raw_deficit, threshold, rel_tol=0, abs_tol=1e-9):
+                    status = IrrigationStatus.IRRIGATE
+                else:
+                    status = IrrigationStatus.NORMAL
+            except (BalanceInputError, ValueError, KeyError):
+                # An expired season or incomplete legacy configuration cannot
+                # justify a fresh irrigation recommendation.
+                status = IrrigationStatus.NORMAL
 
         area = float(record.get("area_ha") or 1.0)
         # Примерный рекомендуемый объем полива с учетом КПД:
         # V = Deficit(мм) * 10 * Area(га) / Efficiency
-        eff_map = {"drip": 0.90, "subsurface": 0.90, "sprinkler": 0.75, "pivot": 0.75, "furrow": 0.50}
-        eff = eff_map.get(record.get("irrigation_method") or "drip", 0.75)
+        eff = METHODS.get(record.get("irrigation_method") or "drip", (0, .75))[1]
         rec_m3 = (raw_deficit * 10.0 * area / eff) if status != IrrigationStatus.NORMAL else 0.0
 
         lat_raw = record.get("latitude")
@@ -90,8 +102,6 @@ class FieldService:
         lon_f = float(lon_raw) if lon_raw is not None else DEFAULT_FALLBACK_LON
 
         stored_tz = str(record.get("timezone") or "").strip()
-        if stored_tz == "Asia/Oral":
-            stored_tz = "Asia/Atyrau"
         field_tz = stored_tz if stored_tz and stored_tz != "None" else resolve_timezone_by_coords(lat_f, lon_f)
 
         return FieldResponse(
@@ -222,8 +232,6 @@ class FieldService:
         for row in rows:
             ts = datetime.fromisoformat(row["created_at"]) if "T" in str(row["created_at"]) else datetime.strptime(str(row["created_at"])[:19], "%Y-%m-%d %H:%M:%S")
             row_tz = str(row.get("timezone") or field_tz)
-            if row_tz == "Asia/Oral":
-                row_tz = "Asia/Atyrau"
 
             records.append(
                 UnifiedJournalRecord(

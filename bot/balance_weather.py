@@ -7,12 +7,6 @@ try:
 except ImportError:
     from bot.water_balance import number
 
-try:
-    from services.geo_service import resolve_timezone_by_coords
-except ImportError:
-    from bot.services.geo_service import resolve_timezone_by_coords
-
-
 def parse_daily_weather(payload):
     """
     Парсит суточный прогноз Open-Meteo.
@@ -30,8 +24,6 @@ def parse_daily_weather(payload):
         raise ValueError('stale weather')
     index = daily['time'].index(today)
     tz = str(payload.get('timezone') or 'UTC')
-    if tz == 'Asia/Oral':
-        tz = 'Asia/Atyrau'
     return {
         'date': daily['time'][index],
         'timezone': tz,
@@ -43,32 +35,20 @@ def parse_daily_weather(payload):
 async def fetch_daily_weather(lat, lon):
     """
     Запрашивает суточный прогноз Open-Meteo строго по GPS-координатам (lat, lon).
-    Таймзона определяется автоматически внешним API (timezone=auto) или
-    через библиотеку timezonefinder при сетевом сбое.
+    Таймзона определяется внешним API (timezone=auto). При сетевом сбое
+    расчет прекращается: нельзя подменять реальную погоду условными числами.
     """
-    try:
-        lat_f, lon_f = float(lat), float(lon)
-    except (TypeError, ValueError):
-        lat_f, lon_f = 47.1167, 51.8833
+    lat_f = number(lat, 'latitude', -90, 90)
+    lon_f = number(lon, 'longitude', -180, 180)
 
-    try:
-        async with aiohttp.ClientSession() as session:
-            async with session.get('https://api.open-meteo.com/v1/forecast', params={
-                'latitude': lat_f,
-                'longitude': lon_f,
-                'timezone': 'auto',
-                'forecast_days': 1,
-                'daily': 'et0_fao_evapotranspiration,precipitation_sum',
-                'precipitation_unit': 'mm',
-            }, timeout=aiohttp.ClientTimeout(total=8)) as response:
-                response.raise_for_status()
-                parsed = parse_daily_weather(await response.json())
-                return parsed
-    except Exception:
-        # Честный FAO-56 climatic fallback строго по GPS-координатам через timezonefinder
-        return {
-            'date': datetime.now().date().isoformat(),
-            'timezone': resolve_timezone_by_coords(lat_f, lon_f),
-            'et0': 4.5,
-            'rain': 0.0,
-        }
+    async with aiohttp.ClientSession() as session:
+        async with session.get('https://api.open-meteo.com/v1/forecast', params={
+            'latitude': lat_f,
+            'longitude': lon_f,
+            'timezone': 'auto',
+            'forecast_days': 1,
+            'daily': 'et0_fao_evapotranspiration,precipitation_sum',
+            'precipitation_unit': 'mm',
+        }, timeout=aiohttp.ClientTimeout(total=8)) as response:
+            response.raise_for_status()
+            return parse_daily_weather(await response.json())

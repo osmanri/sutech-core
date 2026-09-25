@@ -5,14 +5,20 @@
 from __future__ import annotations
 
 from typing import List
-from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
+from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup, WebAppInfo
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 
 from bot.schemas.field import CropType, FieldResponse, IrrigationMethod, IrrigationStatus
 from bot.states.field_states import FieldCallback
+from bot.config import WEBAPP_URL
+from bot.i18n import t
 
 
-def get_fields_list_keyboard(fields: List[FieldResponse]) -> InlineKeyboardMarkup:
+def _label(lang: str, ru: str, kz: str, en: str) -> str:
+    return {"ru": ru, "kz": kz, "en": en}.get(lang, ru)
+
+
+def get_fields_list_keyboard(fields: List[FieldResponse], lang: str = "ru") -> InlineKeyboardMarkup:
     """Генерирует список полей со статусными маркерами и кнопкой добавления."""
     builder = InlineKeyboardBuilder()
 
@@ -25,7 +31,7 @@ def get_fields_list_keyboard(fields: List[FieldResponse]) -> InlineKeyboardMarku
 
     for f in fields[:25]:
         badge = status_badges.get(f.current_status, "🟢")
-        label = f"{badge} {f.name} ({f.crop_type.value}, {f.area_ha:.1f} га)"
+        label = f"{badge} {f.name} ({t(lang, f'report_crop_{f.crop_type.value}')}, {f.area_ha:.1f} {'ha' if lang == 'en' else 'га'})"
         builder.row(
             InlineKeyboardButton(
                 text=label,
@@ -35,42 +41,42 @@ def get_fields_list_keyboard(fields: List[FieldResponse]) -> InlineKeyboardMarku
 
     builder.row(
         InlineKeyboardButton(
-            text="➕ Добавить новое поле",
-            callback_data=FieldCallback(action="add", field_id=0).pack(),
+            text=_label(lang, "➕ Добавить новое поле", "➕ Жаңа алқап қосу", "➕ Add field"),
+            web_app=WebAppInfo(url=f"{WEBAPP_URL}{'&' if '?' in WEBAPP_URL else '?'}lang={lang}"),
         )
     )
     return builder.as_markup()
 
 
-def get_field_card_keyboard(field_id: int) -> InlineKeyboardMarkup:
+def get_field_card_keyboard(field_id: int, lang: str = "ru") -> InlineKeyboardMarkup:
     """Клавиатура карточки выбранного поля: удобная сетка 2х2 + возврат."""
     builder = InlineKeyboardBuilder()
     # 1 ряд: оперативные действия
     builder.row(
         InlineKeyboardButton(
-            text="💧 Отметить полив",
+            text=_label(lang, "💧 Отметить полив", "💧 Суаруды белгілеу", "💧 Record irrigation"),
             callback_data=FieldCallback(action="water", field_id=field_id).pack(),
         ),
         InlineKeyboardButton(
-            text="🔄 Обновить статус",
+            text=_label(lang, "🔄 Обновить статус", "🔄 Мәртебені жаңарту", "🔄 Refresh status"),
             callback_data=FieldCallback(action="update", field_id=field_id).pack(),
         ),
     )
     # 2 ряд: отчет и удаление
     builder.row(
         InlineKeyboardButton(
-            text="📄 Экспорт CSV",
+            text=_label(lang, "📄 Экспорт CSV", "📄 CSV жүктеу", "📄 Export CSV"),
             callback_data=FieldCallback(action="export", field_id=field_id).pack(),
         ),
         InlineKeyboardButton(
-            text="❌ Удалить поле",
+            text=_label(lang, "❌ Удалить поле", "❌ Алқапты жою", "❌ Delete field"),
             callback_data=FieldCallback(action="delete", field_id=field_id).pack(),
         ),
     )
     # 3 ряд: навигация
     builder.row(
         InlineKeyboardButton(
-            text="🔙 К списку полей",
+            text=_label(lang, "🔙 К списку полей", "🔙 Алқаптар тізімі", "🔙 Field list"),
             callback_data=FieldCallback(action="list", field_id=0).pack(),
         )
     )
@@ -132,16 +138,32 @@ def get_irrigation_selection_keyboard() -> InlineKeyboardMarkup:
     return builder.as_markup()
 
 
-def get_water_confirmation_keyboard(field_id: int) -> InlineKeyboardMarkup:
+def get_water_confirmation_keyboard(field_id: int, lang: str = "ru") -> InlineKeyboardMarkup:
     """Подтверждение полива поля."""
     builder = InlineKeyboardBuilder()
     builder.row(
         InlineKeyboardButton(
-            text="✅ Да, полив выполнен",
+            text=_label(lang, "✅ Да, полив выполнен", "✅ Иә, толық суарылды", "✅ Yes, fully irrigated"),
             callback_data=FieldCallback(action="confirm_water", field_id=field_id).pack(),
         ),
         InlineKeyboardButton(
-            text="❌ Отмена",
+            text=_label(lang, "❌ Отмена", "❌ Бас тарту", "❌ Cancel"),
+            callback_data=FieldCallback(action="view", field_id=field_id).pack(),
+        ),
+    )
+    return builder.as_markup()
+
+
+def get_field_delete_confirmation_keyboard(field_id: int, lang: str = "ru") -> InlineKeyboardMarkup:
+    """Require an explicit second tap before deleting a field and its journal."""
+    builder = InlineKeyboardBuilder()
+    builder.row(
+        InlineKeyboardButton(
+            text=_label(lang, "Да, удалить поле и журнал", "Иә, алқап пен журналды жою", "Delete field and log"),
+            callback_data=FieldCallback(action="delete_confirm", field_id=field_id).pack(),
+        ),
+        InlineKeyboardButton(
+            text=_label(lang, "Отмена", "Бас тарту", "Cancel"),
             callback_data=FieldCallback(action="view", field_id=field_id).pack(),
         ),
     )

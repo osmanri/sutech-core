@@ -34,12 +34,6 @@ webapp_router = Router()
 logger = logging.getLogger(__name__)
 
 OPEN_METEO_URL = "https://api.open-meteo.com/v1/forecast"
-DEFAULT_METEO = {
-    "temperature": 25.0,
-    "soil_moisture": 0.20,
-    "wind_speed": 2.0,
-    "radiation": 500.0,
-}
 
 # ── Агрономические коэффициенты культур (Kc по FAO-56, строго 8 культур) ─────
 CROP_KC: dict[str, float] = {
@@ -106,32 +100,26 @@ async def fetch_meteo(lat: float, lon: float) -> dict:
         ValueError,
         RuntimeError,
     ) as exc:
-        # Telegram WebApps can run on networks that block or interrupt external
-        # weather requests. Keep the calculation available with conservative
-        # defaults instead of turning a recoverable API outage into err_internal.
-        logger.warning(
-            "Open-Meteo unavailable for %.6f,%.6f (%s); using defaults",
-            lat,
-            lon,
-            exc,
-        )
-        return DEFAULT_METEO.copy()
+        logger.warning("Open-Meteo unavailable for %.6f,%.6f: %s", lat, lon, exc)
+        raise
 
     if not isinstance(payload, dict):
-        logger.warning("Open-Meteo returned an unexpected payload; using defaults")
-        return DEFAULT_METEO.copy()
+        raise ValueError("Open-Meteo returned an unexpected payload")
 
     current = payload.get("current")
     if not isinstance(current, dict):
-        logger.warning("Open-Meteo response has no current weather block; using defaults")
-        return DEFAULT_METEO.copy()
+        raise ValueError("Open-Meteo response has no current weather block")
 
-    return {
+    weather = {
         "temperature":   current.get("temperature_2m"),
         "soil_moisture": current.get("soil_moisture_3_to_9cm"),
         "wind_speed":    current.get("wind_speed_10m"),
         "radiation":     current.get("shortwave_radiation"),
     }
+    if any(not isinstance(value, (int, float)) or isinstance(value, bool)
+           or not math.isfinite(value) for value in weather.values()):
+        raise ValueError("Open-Meteo current weather is incomplete")
+    return weather
 
 
 def calculate_water_demand(
@@ -312,7 +300,7 @@ async def handle_webapp_data(message: Message, state: FSMContext) -> None:
     except (ValueError, TypeError):
         await message.answer(t(lang, 'err_format'))
         return
-    if data.get('lang') in ('ru', 'kz'):
+    if data.get('lang') in ('ru', 'kz', 'en'):
         lang = data['lang']
         try:
             set_lang(user_id, lang)

@@ -74,7 +74,7 @@ async def lang_chosen(callback: CallbackQuery) -> None:
         except Exception:
             pass
 
-    toast = "Қазақ тілі таңдалды ✅" if lang == "kz" else "Выбран русский язык ✅"
+    toast = {"kz": "Қазақ тілі таңдалды ✅", "en": "English selected ✅"}.get(lang, "Выбран русский язык ✅")
     await callback.answer(toast)
 
 
@@ -95,7 +95,7 @@ def format_history_card(rec: dict, lang: str, page: int, total: int) -> str:
     )
 
 
-@start_router.message(F.text.in_({"📊 История", "📊 Тарих", "/history"}))
+@start_router.message(F.text.in_({"📊 История", "📊 Тарих", "📊 History", "/history"}))
 @start_router.message(Command("history"))
 async def show_history(message: Message) -> None:
     """
@@ -203,7 +203,7 @@ async def handle_history_menu(callback: CallbackQuery) -> None:
 
 
 # ─── ⚙️ Выбор языка ──────────────────────────────────────────────────────────
-@start_router.message(F.text.in_({"⚙️ Язык", "⚙️ Тіл", "/lang", "/language"}))
+@start_router.message(F.text.in_({"⚙️ Язык", "⚙️ Тіл", "⚙️ Language", "/lang", "/language"}))
 @start_router.message(Command("lang", "language"))
 async def change_lang_menu(message: Message) -> None:
     """Отправляет инлайн-кнопки для переключения языка."""
@@ -227,7 +227,7 @@ async def open_app(message: Message) -> None:
 
 
 # ─── 📜 О системе ────────────────────────────────────────────────────────────
-@start_router.message(F.text.in_({"📜 О системе", "📜 Жүйе туралы", "/about"}))
+@start_router.message(F.text.in_({"📜 О системе", "📜 Жүйе туралы", "📜 About", "/about"}))
 @start_router.message(Command("about"))
 async def show_about(message: Message) -> None:
     """Академический паспорт системы Su-Tech v1.0."""
@@ -240,7 +240,7 @@ async def show_about(message: Message) -> None:
 
 
 # ─── ❓ Помощь ───────────────────────────────────────────────────────────────
-@start_router.message(F.text.in_({"❓ Помощь", "❓ Көмек", "/help"}))
+@start_router.message(F.text.in_({"❓ Помощь", "❓ Көмек", "❓ Help", "/help"}))
 @start_router.message(Command("help"))
 async def show_help(message: Message) -> None:
     """Руководство пользователя по работе с системой Su-Tech."""

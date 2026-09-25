@@ -11,13 +11,14 @@ except ImportError:
 def get_lang_keyboard() -> InlineKeyboardMarkup:
     """
     Возвращает инлайн-клавиатуру выбора языка.
-    Callback-данные: 'lang:kz' и 'lang:ru'.
+    Callback data: 'lang:kz', 'lang:ru' and 'lang:en'.
     """
     return InlineKeyboardMarkup(
         inline_keyboard=[
             [
                 InlineKeyboardButton(text="🇰🇿 Қазақша", callback_data="lang:kz"),
                 InlineKeyboardButton(text="🇷🇺 Русский", callback_data="lang:ru"),
+                InlineKeyboardButton(text="🇬🇧 English", callback_data="lang:en"),
             ]
         ]
     )

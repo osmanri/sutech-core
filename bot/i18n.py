@@ -747,6 +747,116 @@ STRINGS['kz'].update({
 })
 
 
+# English is available throughout the Mini App, so the bot must answer in the
+# same language when it receives an English field submission.
+STRINGS['en'] = {**STRINGS['ru'], **{
+    'choose_lang': '🌐 Choose a language / Тілді таңдаңыз:',
+    'welcome': '👋 Hello, <b>{name}</b>!\n\nSu-Tech helps you plan irrigation from field and weather data. Open the app, mark your field and check the recommendation.',
+    'app_prompt': '<b>Su-Tech irrigation calculation</b>\nOpen the map, mark your field and review a FAO-56 based recommendation using Open-Meteo weather data.',
+    'unknown_message': 'I did not understand that message. Open Su-Tech below or choose a menu command.',
+    'btn_webapp': '🌿 Open Su-Tech', 'btn_history': '📊 History',
+    'btn_lang': '⚙️ Language', 'btn_about': '📜 About', 'btn_help': '❓ Help',
+    'btn_fields': '🌱 My fields', 'btn_explain': '💡 Why this result?',
+    'btn_recalculate': '🔄 New calculation', 'btn_field_watered': '💧 I irrigated',
+    'btn_field_update': '🔄 Update today', 'btn_export_field': '📄 Export CSV log',
+    'btn_confirm_watered': 'Yes, I irrigated', 'btn_cancel': 'Cancel',
+    'report_crop_wheat': 'Wheat', 'report_crop_cotton': 'Cotton',
+    'report_crop_corn': 'Corn', 'report_crop_rice': 'Rice',
+    'report_crop_alfalfa': 'Alfalfa', 'report_crop_melon': 'Melons',
+    'report_crop_tomato': 'Tomatoes', 'report_crop_potato': 'Potatoes',
+    'report_crop_other': 'Other crop', 'report_crop_sunflower': 'Sunflower',
+    'report_irrig_drip': 'Drip irrigation', 'report_irrig_sprinkler': 'Sprinkler',
+    'report_irrig_pivot': 'Center pivot', 'report_irrig_furrow': 'Furrow irrigation',
+    'report_irrig_subsurface': 'Subsurface irrigation',
+    'balance_status_deferred': 'Irrigation can wait',
+    'balance_status_irrigate': 'Irrigation needed',
+    'balance_status_critical': 'Urgent irrigation: crop stress risk',
+    'balance_status_rice': 'Flooded rice plot',
+    'balance_soil_sand': 'Sand', 'balance_soil_loam': 'Loam',
+    'balance_soil_clay': 'Clay',
+    'balance_moisture_recent': 'recently irrigated / rain',
+    'balance_moisture_normal': 'moderately moist',
+    'balance_moisture_dry': 'dry soil',
+    'balance_moisture_stored': 'saved field deficit',
+    'balance_error': 'Check soil type, growth day, soil moisture and stage lengths. For another crop, enter Kc, p and root depth.',
+    'balance_season_ended': 'Growth day exceeds the crop calendar. Check the stage lengths. After an alfalfa cutting, use Other crop with current Kc, p and root depth.',
+    'balance_old_app': 'Reopen or update the app. Choose observed soil moisture instead of entering a deficit manually.',
+    'balance_report': (
+        '<b>STATUS:</b> {status}\n<b>FIELD WATER BALANCE:</b>\n'
+        '• Readily available water (RAW): {raw} mm.\n'
+        '• Accumulated deficit: {deficit} mm.\n'
+        '• Effective threshold for {irrigation}: {threshold} mm.\n'
+        '<b>RECOMMENDATION:</b>\n• Gross volume: {volume} m³ (efficiency {efficiency}%).\n'
+        '<b>PUMP COST:</b>\n• {economics}\n\n'
+        '<i>Estimated balance at the end of {date}, {timezone}. Daily ET₀ and rainfall: Open-Meteo.</i>'
+    ),
+    'balance_econ_missing': 'Pump cost unavailable. Enter the tariff (₸/kWh), pump power (kW) and flow rate (m³/h).',
+    'balance_econ_comparison': 'Modelled conventional irrigation: {traditional} ₸. Su-Tech plan: {ai} ₸. Difference: {savings} ₸ ({kwh} kWh).',
+    'balance_econ_deferred': 'The pump is not needed now. This postpones the cost; season-long savings also depend on later irrigation.',
+    'balance_pump_breakdown': (
+        '<b>Pump calculation:</b> {power} kW, {flow} m³/h, tariff {tariff} ₸/kWh.\n'
+        'For comparison, both plans use a {deficit} mm deficit on {area} ha.\n'
+        'Conventional volume = deficit × 10 × area × 1.35 ÷ 0.50 = {traditional_volume} m³. '
+        'The 35% excess and 50% efficiency are comparison assumptions.\n'
+        'Su-Tech: {ai_volume} m³ ÷ {flow} = {ai_hours} h. '
+        'Conventional: {traditional_volume} m³ ÷ {flow} = {traditional_hours} h.\n'
+        'Cost = hours × power × tariff. Difference = conventional − Su-Tech. Only the display is rounded.'
+    ),
+    'balance_rice': (
+        '<b>STATUS:</b> Flooded rice plot ({water_layer} cm layer)\n'
+        '• Crop water use (ETc): {etc} mm/day; seepage: {seepage} mm/day.\n'
+        '<b>RECOMMENDATION:</b> {volume} m³ to replenish the plot.\n'
+        '<b>PUMP COST:</b> {economics}\n\n'
+        '<i>Water-layer estimate for {date}, {timezone}.</i>'
+    ),
+    'balance_rice_explanation': (
+        '💡 <b>Rice water balance</b>\nRice · {area} ha · {soil}\n\n'
+        '1. The target water layer is {water_layer} cm.\n'
+        '2. Daily loss is ETc {etc} mm plus seepage {seepage} mm for {soil}.\n'
+        '3. Effective rainfall: {peff} mm.\n'
+        '4. Replenishment: {net_mm} mm ({net} m³ net; {gross} m³ gross at 50% plot efficiency).\n'
+        '5. Maintain the actual water level and check local drainage.'
+    ),
+    'balance_overflow': 'The calculated deficit exceeded TAW and was capped at available storage. Check plant condition and inputs.',
+    'balance_salinity': 'Saline soil selected. Extra leaching water is not included; assess salts and drainage separately.',
+    'balance_greenhouse': 'Greenhouse: microclimate ET₀ was estimated or supplied from a measurement; outdoor rainfall was excluded.',
+    'balance_custom': 'Current Kc, p and root depth were supplied by the user.',
+    'balance_calendar': 'Stage dates are approximate. Kc changes linearly during development and late season; roots grow until the end of development. Adjust for variety and conditions. Alfalfa uses the first cycle, not an automatic cutting calendar.',
+    'balance_explanation': (
+        '💡 <b>How was this calculated?</b>\n{crop} · day {day} · {soil} · {area} ha\n'
+        'Stages (initial/development/middle/late): {stages} days.\n\n'
+        '1. Root depth Zr = {zr} m; Kc = {kc}; p = {p}.\n'
+        '2. TAW = 1000 × (FC − PWP) × Zr = {taw} mm. RAW = p × TAW = {raw} mm.\n'
+        '3. Rainfall: {rain} mm; effective: {peff} mm (under 5 mm: 0, otherwise 75%).\n'
+        '4. Observed “{moisture}” sets {yesterday} mm initially; {yesterday} + {et0} × {kc} − {peff} → {deficit} mm.\n'
+        '5. Threshold = min({tech_threshold}, RAW) = {threshold} mm. Deficit &gt; RAW is checked first, then ≥ threshold. Result: {status}.\n'
+        '6. Net volume = deficit × 10 × {area} ha; gross = net ÷ {efficiency}. '
+        'Here: {net} m³ net, {gross} m³ gross.\n\n'
+        'A recommendation does not reset the deficit. Check the actual soil condition at the next calculation. '
+        'Method thresholds and rainfall factor are project rules based on the FAO-56 balance.'
+    ),
+    'field_saved_note': 'Field saved to your daily Su-Tech log.',
+    'fields_empty': 'No saved fields yet. Run a calculation in Su-Tech to save one.',
+    'fields_title': '<b>Your fields</b>\nChoose a field to update its balance or record irrigation.',
+    'field_not_found': 'Field not found or belongs to another user.',
+    'field_update_error': 'Could not update this field. Check weather access and field inputs later.',
+    'field_export_empty': 'This field has no log entries to export yet.',
+    'daily_field_alert': '<b>Daily field update</b>\n{report}',
+    'history_empty': '<b>No calculations yet.</b> Open Su-Tech to create your first irrigation plan.',
+    'history_carousel_card': '<b>CALCULATION {page} OF {total}</b>\n\n<b>Date:</b> {date}\n<b>Crop:</b> {crop_name}\n<b>Area:</b> {area_text}\n<b>Irrigation:</b> {irrigation_text}\n\n<b>Volume:</b> {volume_text}\n<b>Pump cost:</b> {savings_text}',
+    'history_page_btn': 'Page {page} of {total}',
+    'history_btn_menu': '🔙 Main menu',
+    'history_menu_returned': 'Back in the Su-Tech main menu.',
+    'explanation_unavailable': 'The explanation is unavailable. Run a new calculation.',
+    'err_no_coords': 'Field coordinates are missing. Select a field on the map.',
+    'err_weather': 'Open-Meteo weather data is unavailable. Please try again later.',
+    'err_format': 'The field data could not be read. Please try again.',
+    'err_internal': 'Something went wrong. Please try again later.',
+    'about_text': '<b>Su-Tech · Smart Irrigation</b>\nA planning aid based on the FAO-56 TAW/RAW root-zone water balance. It uses daily Open-Meteo weather, soil, crop stage and observed moisture. The recommendation depends on the quality of your inputs; each result includes an explanation.',
+    'help_text': '<b>How to calculate</b>\n1. Select your field, crop and area.\n2. Choose soil, growth day and observed moisture.\n3. Check the irrigation method and, if needed, the advanced crop stages.\n4. For pump cost, enter tariff, power and flow rate.\n5. Tap Calculate irrigation.\n\nYour field is saved automatically. Use My fields to refresh the daily balance, record actual irrigation or export the CSV log. Updating twice on the same day does not add the deficit twice.',
+    'methodology_text': '<b>Su-Tech · Water balance</b>\nTAW = 1000 × (FC − PWP) × Zr; RAW = p × TAW. ETc = ET₀ × Kc. The observed soil condition sets the starting deficit. The trigger is min(method threshold, RAW). Gross volume = net volume ÷ irrigation efficiency. ET₀ and rainfall come from Open-Meteo. Thresholds and effective-rain factor are project assumptions, not universal FAO thresholds.',
+}}
+
 # History contains both older savings estimates and new electricity costs.
 STRINGS['ru']['history_carousel_card'] = STRINGS['ru']['history_carousel_card'].replace('Сэкономлено:', 'Экономика:')
 STRINGS['kz']['history_carousel_card'] = STRINGS['kz']['history_carousel_card'].replace('Үнемделді:', 'Экономика:')
