@@ -5,7 +5,14 @@ import os
 import sys
 import time
 from datetime import timezone
+from pathlib import Path
 from types import SimpleNamespace
+
+# Render starts this file as `python main.py` with `bot/` as its root directory.
+# Add the repository root so imports shared with `python -m bot.main` can find
+# the `bot` package in both launch modes.
+if __package__ in (None, ""):
+    sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from aiohttp import web
 from aiogram import Bot, Dispatcher
