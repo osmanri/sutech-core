@@ -155,7 +155,7 @@ async def analyze_webapp(request: web.Request) -> web.Response:
 
 
 async def health_check(request: web.Request) -> web.Response:
-    """Render and UptimeRobot readiness endpoint; verifies database connectivity."""
+    """Readiness endpoint that verifies database connectivity."""
     db_health = check_db_health()
     is_healthy = db_health.get("status") in {"connected", "ok"}
     status_code = 200 if is_healthy else 503
@@ -170,6 +170,11 @@ async def health_check(request: web.Request) -> web.Response:
         },
         status=status_code,
     )
+
+
+async def ping_check(request: web.Request) -> web.Response:
+    """Lightweight uptime probe that does not wake the database."""
+    return web.json_response({"status": "ok", "service": "su-tech-bot"})
 
 
 async def handle_bot_error(event: ErrorEvent) -> bool:
@@ -210,6 +215,7 @@ async def start_http_server(bot: Bot, dp: Dispatcher) -> web.AppRunner:
     app[BOT_APP_KEY] = bot
     app.router.add_get("/", health_check)
     app.router.add_get("/health", health_check)
+    app.router.add_get("/ping", ping_check)
     app.router.add_route("OPTIONS", "/api/analyze", analyze_webapp)
     app.router.add_post("/api/analyze", analyze_webapp)
 
