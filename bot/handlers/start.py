@@ -47,6 +47,9 @@ async def lang_chosen(callback: CallbackQuery) -> None:
     на выбранном языке.
     """
     lang = callback.data.split(":")[1]  # "lang:kz" → "kz"
+    if lang not in {"ru", "kz", "en"}:
+        await callback.answer("Unsupported language", show_alert=True)
+        return
     user_id = callback.from_user.id
     name = html.escape(callback.from_user.first_name or "Фермер")
 
@@ -72,7 +75,15 @@ async def lang_chosen(callback: CallbackQuery) -> None:
                 parse_mode="HTML",
             )
         except Exception:
-            pass
+            try:
+                await callback.bot.send_message(
+                    chat_id=user_id,
+                    text=t(lang, "welcome", name=name),
+                    parse_mode="HTML",
+                    reply_markup=get_main_reply_keyboard(lang),
+                )
+            except Exception:
+                logger.exception("Could not deliver language welcome to user_id=%s", user_id)
 
     toast = {"kz": "Қазақ тілі таңдалды ✅", "en": "English selected ✅"}.get(lang, "Выбран русский язык ✅")
     await callback.answer(toast)

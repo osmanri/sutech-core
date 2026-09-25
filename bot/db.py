@@ -465,7 +465,7 @@ def get_user_language(user_id: int) -> str | None:
                 (user_id,),
             )
             row = cursor.fetchone()
-        return row[0] if row and row[0] in {"ru", "kz"} else None
+        return row[0] if row and row[0] in {"ru", "kz", "en"} else None
     except Exception as exc:
         logger.error("Error fetching user language: %s", exc)
         return None
@@ -473,7 +473,7 @@ def get_user_language(user_id: int) -> str | None:
 
 def set_user_language(user_id: int, lang: str) -> None:
     """Persist the selected language across bot and Render restarts."""
-    if lang not in {"ru", "kz"}:
+    if lang not in {"ru", "kz", "en"}:
         raise ValueError(f"Unsupported language: {lang}")
     try:
         with closing(get_connection()) as conn:

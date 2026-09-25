@@ -9,6 +9,7 @@ from types import SimpleNamespace
 
 from aiohttp import web
 from aiogram import Bot, Dispatcher
+from aiogram.types import ErrorEvent
 from aiogram.utils.web_app import safe_parse_webapp_init_data
 from aiogram.client.default import DefaultBotProperties
 from aiogram.enums import ParseMode
@@ -23,6 +24,8 @@ try:
     from handlers.webapp import webapp_router, handle_webapp_data
     from water_balance import CALCULATION_VERSION
     from daily_monitor import run_daily_monitor
+    from i18n import t
+    from user_state import get_lang
 except ImportError:
     from bot.bot_setup import configure_bot_profile
     from bot.config import BOT_TOKEN, USE_WEBHOOK, WEBHOOK_PATH, WEBHOOK_SECRET, WEBHOOK_URL
@@ -32,6 +35,8 @@ except ImportError:
     from bot.handlers.webapp import webapp_router, handle_webapp_data
     from bot.water_balance import CALCULATION_VERSION
     from bot.daily_monitor import run_daily_monitor
+    from bot.i18n import t
+    from bot.user_state import get_lang
 
 
 if sys.platform == "win32":
@@ -50,6 +55,7 @@ logging.basicConfig(
 logging.getLogger("aiogram").setLevel(logging.INFO)
 logging.getLogger("aiohttp.access").setLevel(logging.WARNING)
 logger = logging.getLogger(__name__)
+BOT_APP_KEY = web.AppKey("su_tech_bot", Bot)
 
 WEBAPP_ORIGINS = {
     "https://frontend-2-mauve.vercel.app",
@@ -111,13 +117,15 @@ async def analyze_webapp(request: web.Request) -> web.Response:
     if auth.user is None or age < -300 or age > 86400:
         raise web.HTTPUnauthorized(text="Expired Telegram login")
 
-    bot = request.app["su_tech_bot"]
-    delivered = False
+    bot = request.app[BOT_APP_KEY]
+    bot_replied = False
+    report_sent = False
 
     async def answer(text: str, **kwargs):
-        nonlocal delivered
+        nonlocal bot_replied, report_sent
         await bot.send_message(chat_id=auth.user.id, text=text, **kwargs)
-        delivered = kwargs.get("reply_markup") is not None
+        bot_replied = True
+        report_sent = kwargs.get("reply_markup") is not None
 
     message = SimpleNamespace(
         from_user=SimpleNamespace(id=auth.user.id),
@@ -129,8 +137,14 @@ async def analyze_webapp(request: web.Request) -> web.Response:
         await handle_webapp_data(message, state)
     except Exception:
         logger.exception("Mini App analysis delivery failed")
-        raise web.HTTPBadGateway(text="Could not deliver Telegram report") from None
-    return web.json_response({"ok": delivered}, status=200 if delivered else 422)
+        if not bot_replied:
+            try:
+                lang = payload.get("lang") if payload.get("lang") in {"ru", "kz", "en"} else "ru"
+                await answer(t(lang, "err_internal"))
+            except Exception:
+                raise web.HTTPBadGateway(text="Could not deliver Telegram report") from None
+    return web.json_response({"ok": report_sent, "bot_replied": bot_replied},
+                             status=200 if bot_replied else 422)
 
 
 async def health_check(request: web.Request) -> web.Response:
@@ -151,8 +165,32 @@ async def health_check(request: web.Request) -> web.Response:
     )
 
 
+async def handle_bot_error(event: ErrorEvent) -> bool:
+    """Give a user-visible answer when an update handler fails unexpectedly."""
+    logger.error("Bot update failed: %s", type(event.exception).__name__)
+    update = event.update
+    message = update.message
+    callback = update.callback_query
+    user = message.from_user if message else callback.from_user if callback else None
+    lang = get_lang(user.id) if user else "ru"
+    text = t(lang, "err_internal")
+    try:
+        if message:
+            await message.answer(text)
+        elif callback:
+            try:
+                await callback.answer(text, show_alert=True)
+            except Exception:
+                if callback.message:
+                    await callback.message.answer(text)
+    except Exception:
+        logger.exception("Could not send bot error response")
+    return True
+
+
 def create_dispatcher() -> Dispatcher:
     dp = Dispatcher()
+    dp.errors.register(handle_bot_error)
     dp.include_router(fields_router)
     dp.include_router(start_router)
     dp.include_router(webapp_router)
@@ -162,7 +200,7 @@ def create_dispatcher() -> Dispatcher:
 async def start_http_server(bot: Bot, dp: Dispatcher) -> web.AppRunner:
     """Open the health and Telegram webhook routes before external API calls."""
     app = web.Application(middlewares=[webapp_cors])
-    app["su_tech_bot"] = bot
+    app[BOT_APP_KEY] = bot
     app.router.add_get("/", health_check)
     app.router.add_get("/health", health_check)
     app.router.add_route("OPTIONS", "/api/analyze", analyze_webapp)
