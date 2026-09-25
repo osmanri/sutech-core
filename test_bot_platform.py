@@ -378,7 +378,12 @@ class BotPlatformTests(unittest.IsolatedAsyncioTestCase):
         chat = Chat(id=42, type='private')
         callbacks = ('lang:en', 'show_history_inline', 'hist_page:0',
                      'hist_menu', 'methodology:info', 'explain:unavailable',
-                     'fields:list', 'field:view:999999')
+                     'fields:list', 'field:list:0', 'field:view:999999',
+                     'field:update:999999', 'field:water:999999',
+                     'field:watered:999999', 'field:confirm_water:999999',
+                     'field:confirm-watered:999999', 'field:export:999999',
+                     'field:delete:999999', 'field:delete_confirm:999999',
+                     'field:add:0')
         try:
             with patch.object(Bot, '__call__', new_callable=AsyncMock) as transport, \
                  patch('bot.handlers.start.set_lang'), \
@@ -387,7 +392,13 @@ class BotPlatformTests(unittest.IsolatedAsyncioTestCase):
                  patch('bot.handlers.fields.FieldService.get_user_fields',
                        new_callable=AsyncMock, return_value=[]), \
                  patch('bot.handlers.fields.FieldService.get_field_by_id',
-                       new_callable=AsyncMock, return_value=None):
+                       new_callable=AsyncMock, return_value=None), \
+                 patch('bot.handlers.fields.FieldService.update_balance_today',
+                       new_callable=AsyncMock, side_effect=RuntimeError('missing field')), \
+                 patch('bot.handlers.fields.FieldService.record_irrigation_fact',
+                       new_callable=AsyncMock, side_effect=RuntimeError('missing field')), \
+                 patch('bot.handlers.fields.FieldService.delete_field',
+                       new_callable=AsyncMock, return_value=False):
                 for index, data in enumerate(callbacks, 1):
                     with self.subTest(callback=data):
                         transport.reset_mock()

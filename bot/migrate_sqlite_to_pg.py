@@ -100,7 +100,8 @@ def migrate(sqlite_path: str, pg_url: str) -> bool:
             columns=[
                 "id", "field_id", "balance_date", "timezone", "et0", "rain", "effective_rain",
                 "etc", "deficit_before", "deficit_after", "status", "net_m3", "gross_m3",
-                "calculation_version", "result_json", "created_at"
+                "calculation_version", "result_json", "created_at", "alert_state",
+                "alert_claimed_at"
             ],
             conflict_target="id",
             conflict_action="DO NOTHING",
@@ -181,10 +182,9 @@ def _migrate_table(
             SELECT setval(pg_get_serial_sequence('{table}', 'id'), coalesce(max(id), 1))
             FROM {table};
         """
-        try:
-            pg_cur.execute(seq_sql)
-        except Exception as exc:
-            logger.warning("Could not reset sequence for %s: %s", table, exc)
+        # A failed statement aborts the PostgreSQL transaction. Let migrate()
+        # roll the whole copy back instead of reporting a false success.
+        pg_cur.execute(seq_sql)
 
     logger.info("Table '%s': %d rows processed.", table, len(rows))
 
