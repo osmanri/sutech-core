@@ -23,8 +23,9 @@ MAX_SESSIONS = 128
 class AIError(Exception):
     """A safe error code, never a provider response containing credentials."""
 
-    def __init__(self, code: str):
+    def __init__(self, code: str, *, retryable: bool = False):
         self.code = code
+        self.retryable = retryable
         super().__init__(code)
 
 
@@ -126,7 +127,7 @@ class GeminiClient:
                     if response.status in {400, 401, 403, 404}:
                         raise AIError("configuration")
                     if response.status != 200:
-                        raise AIError("unavailable")
+                        raise AIError("unavailable", retryable=response.status in {500, 502, 503, 504})
                     data = await response.json()
         except (aiohttp.ClientError, asyncio.TimeoutError, ValueError):
             raise AIError("unavailable") from None
@@ -249,7 +250,8 @@ class AgronomistService:
         return self.sessions[user_id]
 
     async def reply(self, user_id: int, text: str, lang: str,
-                    image: bytes | None = None, *, deep: bool = False) -> str:
+                    image: bytes | None = None, *, deep: bool = False,
+                    allow_fallback: bool = True) -> str:
         if not self.client.configured:
             raise AIError("not_configured")
         text = text.strip()
@@ -278,7 +280,7 @@ class AgronomistService:
                                    self.user_daily_limit, 4 if client is self.deep_client else 12,
                                    self.cooldown)
                 except AIError as exc:
-                    if client is not self.deep_client or exc.code not in {"daily_limit", "rate_limit"}:
+                    if not allow_fallback or client is not self.deep_client or exc.code not in {"daily_limit", "rate_limit"}:
                         raise
                     client, fallback = self.client, True
                     model = client.model
@@ -299,9 +301,27 @@ class AgronomistService:
             history = [] if image is not None else self._history_for_model(
                 session.history, session.model, model)
             try:
-                result = await client.generate(history, text, lang, image)
+                try:
+                    result = await client.generate(history, text, lang, image)
+                except AIError as exc:
+                    # One transient capacity retry, charged as a separate API
+                    # attempt. Never retry auth, safety, or exhausted quota.
+                    if client is not self.deep_client or not exc.retryable:
+                        raise
+                    await asyncio.sleep(2)
+                    if version != session.version:
+                        raise AIError("cancelled")
+                    if self.store:
+                        await self._db("reserve", user_id, model, 18,
+                                       self.user_daily_limit, 4, 0)
+                    else:
+                        own = sum(uid == user_id for _, uid in self.requests)
+                        if own >= self.user_daily_limit or len(self.requests) >= self.daily_limit:
+                            raise AIError("daily_limit")
+                        self.requests.append((time.monotonic(), user_id))
+                    result = await client.generate(history, text, lang, image)
             except AIError as exc:
-                if client is not self.deep_client or exc.code not in {
+                if not allow_fallback or client is not self.deep_client or exc.code not in {
                         "quota", "unavailable", "no_answer", "configuration"}:
                     raise
                 client, fallback = self.client, True

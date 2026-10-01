@@ -104,6 +104,32 @@ class HistoryTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(self.lite.generate.await_args.args[3], JPEG)
         self.assertEqual(self.store.page(1)["entry"]["model"], self.lite.model)
 
+    async def test_deep_retry_charges_each_attempt_and_strict_probe_never_uses_lite(self):
+        self.deep.generate.side_effect = [AIError("unavailable", retryable=True), "Ответ 3.8"]
+        with patch("bot.services.agronomist.asyncio.sleep", new_callable=AsyncMock):
+            answer = await self.service().reply(1, "Question", "en", deep=True, allow_fallback=False)
+        self.assertEqual(answer.model, self.deep.model)
+        self.assertFalse(answer.fallback)
+        with closing(db.get_connection()) as conn:
+            attempts = conn.execute("SELECT COUNT(*) FROM ai_usage WHERE user_id=1").fetchone()[0]
+        self.assertEqual(attempts, 2)
+        self.assertEqual(self.store.page(1)["total"], 1)
+        self.lite.generate.assert_not_called()
+        self.deep.generate.side_effect = AIError("quota")
+        with self.assertRaises(AIError) as error:
+            await self.service().reply(2, "Question", "en", deep=True, allow_fallback=False)
+        self.assertEqual(error.exception.code, "quota")
+        self.lite.generate.assert_not_called()
+
+    async def test_deep_retry_stops_when_user_quota_is_exhausted(self):
+        self.deep.generate.side_effect = AIError("unavailable", retryable=True)
+        with patch("bot.services.agronomist.asyncio.sleep", new_callable=AsyncMock):
+            with self.assertRaises(AIError) as error:
+                await self.service(user_daily_limit=1).reply(1, "Question", "en", deep=True)
+        self.assertEqual(error.exception.code, "daily_limit")
+        self.deep.generate.assert_awaited_once()
+        self.lite.generate.assert_not_called()
+
     async def test_full_deep_quota_falls_back_without_spending_provider_request(self):
         for _ in range(18):
             self.store.reserve(2, self.deep.model, 18, 100, 100, 0)

@@ -59,7 +59,13 @@ async def check():
         restarted = AgronomistService(GeminiClient(GEMINI_API_KEY, GEMINI_MODEL),
             deep_client=GeminiClient(GEMINI_API_KEY, GEMINI_DEEP_MODEL, "HIGH"),
             store=store, cooldown=0)
-        result = await restarted.reply(user_id, "А как отличить перелив от нехватки воды?", "ru", deep=True)
+        try:
+            result = await restarted.reply(user_id, "А как отличить перелив от нехватки воды?",
+                                           "ru", deep=True, allow_fallback=False)
+        except AIError:
+            print("AI_RELEASE_DEEP_STATUS", json.dumps(restarted.deep_client.last_diagnostic,
+                                                        sort_keys=True), flush=True)
+            raise
         if not result.strip():
             raise AIError("no_answer")
         print("AI_RELEASE_DEEP_OK" if result.model == GEMINI_DEEP_MODEL else "AI_RELEASE_DEEP_FALLBACK",

@@ -107,6 +107,22 @@ class GeminiTests(unittest.IsolatedAsyncioTestCase):
                 await GeminiClient("test").generate([], "Вопрос", "ru")
         self.assertEqual(error.exception.code, "unavailable")
 
+    async def test_empty_reasoning_response_has_safe_release_diagnostics(self):
+        client = GeminiClient("private-test-key", "gemini-3.8-flash", "HIGH")
+        data = {"candidates": [{"finishReason": "MAX_TOKENS", "content": {"parts": []}}],
+                "usageMetadata": {"thoughtsTokenCount": 4096, "candidatesTokenCount": 0,
+                                  "private": "do-not-log"}, "secret": "do-not-log"}
+        with patch("bot.services.agronomist.aiohttp.ClientSession",
+                   return_value=Session(Response(data))):
+            with self.assertRaises(AIError) as error:
+                await client.generate([], "Лист желтеет", "ru")
+        self.assertEqual(error.exception.code, "no_answer")
+        self.assertEqual(client.last_diagnostic, {"http_status": 200,
+                         "finish_reason": "MAX_TOKENS", "thoughtsTokenCount": 4096,
+                         "candidatesTokenCount": 0})
+        self.assertNotIn("private-test-key", str(client.last_diagnostic))
+        self.assertNotIn("do-not-log", str(client.last_diagnostic))
+
     async def test_missing_key_does_not_call_provider(self):
         with patch("bot.services.agronomist.aiohttp.ClientSession") as factory:
             with self.assertRaises(AIError) as error:
@@ -130,6 +146,21 @@ class ConversationTests(unittest.IsolatedAsyncioTestCase):
     def service(self, **kwargs):
         self.client = SimpleNamespace(configured=True, generate=AsyncMock(return_value="Ответ"))
         return AgronomistService(self.client, cooldown=0, **kwargs)
+
+    async def test_deep_capacity_error_retries_same_model_before_fallback(self):
+        service = self.service()
+        self.client.model = "gemini-3.5-flash-lite"
+        error = AIError("unavailable")
+        error.retryable = True
+        service.deep_client = SimpleNamespace(configured=True, model="gemini-3.8-flash",
+            generate=AsyncMock(side_effect=[error, "Ответ модели 3.8"]))
+        with patch("bot.services.agronomist.asyncio.sleep", new_callable=AsyncMock):
+            answer = await service.reply(1, "Что делать при переливе?", "ru", deep=True)
+        self.assertEqual(answer.model, "gemini-3.8-flash")
+        self.assertFalse(answer.fallback)
+        self.assertEqual(service.deep_client.generate.await_count, 2)
+        self.client.generate.assert_not_called()
+        self.assertEqual(len(service.requests), 2)
 
     async def test_followups_are_isolated_bounded_and_photos_not_retained(self):
         service = self.service(user_daily_limit=30)
