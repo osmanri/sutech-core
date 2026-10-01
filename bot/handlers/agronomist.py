@@ -10,7 +10,7 @@ from aiogram.exceptions import TelegramBadRequest
 from aiogram.filters import Command, CommandStart, StateFilter
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
-from aiogram.types import (CallbackQuery, KeyboardButton, Message, ReplyKeyboardMarkup,
+from aiogram.types import (CallbackQuery, Message, ReplyKeyboardMarkup, ReplyKeyboardRemove,
                           WebAppInfo, InlineKeyboardButton, InlineKeyboardMarkup)
 
 from bot.ai_i18n import AI_STRINGS, ai_text
@@ -22,7 +22,7 @@ from bot.services.agronomist import (AIError, AgronomistService, GeminiClient,
                                     LimitedImageBuffer, MAX_IMAGE_BYTES, MAX_TEXT_CHARS)
 from bot.user_state import get_lang, set_lang
 from bot.services.ai_history import SQLAIHistory
-from bot.handlers.chat_planner import PLAN_BUTTON, register_chat_planner
+from bot.handlers.chat_planner import PLAN_BUTTON, begin_plan, register_chat_planner
 
 agronomist_router = Router(name="agronomist")
 agronomist_router.message.filter(F.chat.type == "private")
@@ -32,6 +32,7 @@ assistant = AgronomistService(GeminiClient(GEMINI_API_KEY, GEMINI_MODEL),
                              store=SQLAIHistory())
 logger = logging.getLogger(__name__)
 request_slots = asyncio.Semaphore(4)
+active_status_events: dict[int, asyncio.Event] = {}
 register_chat_planner(agronomist_router)
 
 
@@ -90,22 +91,64 @@ def history_keyboard(lang: str, index: int, total: int) -> InlineKeyboardMarkup:
     if index + 1 < total:
         buttons.append(InlineKeyboardButton(text="→", callback_data=f"ai_history:{index + 1}"))
     rows = [buttons] if buttons else []
-    rows.append([InlineKeyboardButton(text=ai_text(lang, "history_delete"), callback_data="ai_delete_prompt")])
+    rows.append([InlineKeyboardButton(text=ai_text(lang, "menu_button"), callback_data="ai_nav:menu"),
+                 InlineKeyboardButton(text=ai_text(lang, "history_delete"), callback_data="ai_delete_prompt")])
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
-def chat_keyboard(lang: str) -> ReplyKeyboardMarkup:
-    return ReplyKeyboardMarkup(keyboard=[
-        [KeyboardButton(text=ai_text(lang, "photo_button"), style="success")],
-        [KeyboardButton(text=ai_text(lang, "water_button")),
-         KeyboardButton(text=ai_text(lang, "care_button"))],
-        [KeyboardButton(text=ai_text(lang, "calculate_button"),
-                        web_app=WebAppInfo(url=webapp_url(lang))),
-         KeyboardButton(text=PLAN_BUTTON.get(lang, PLAN_BUTTON['ru']))],
-        [KeyboardButton(text=ai_text(lang, "history_button")),
-         KeyboardButton(text=ai_text(lang, "new_button"))],
-        [KeyboardButton(text=ai_text(lang, "exit_button"))],
-    ], resize_keyboard=True, input_field_placeholder=ai_text(lang, "placeholder"))
+def stop_visible_request(user_id: int) -> None:
+    event = active_status_events.get(user_id)
+    if event:
+        event.set()
+
+
+def chat_keyboard(lang: str, screen: str = "menu") -> InlineKeyboardMarkup:
+    if screen == "menu":
+        rows = [
+            [InlineKeyboardButton(text=ai_text(lang, "photo_button"), callback_data="ai_nav:photo"),
+             InlineKeyboardButton(text=ai_text(lang, "water_button"), callback_data="ai_nav:water")],
+            [InlineKeyboardButton(text=ai_text(lang, "care_button"), callback_data="ai_nav:care"),
+             InlineKeyboardButton(text=ai_text(lang, "deep_button"), callback_data="ai_nav:deep")],
+            [InlineKeyboardButton(text=ai_text(lang, "calculate_button"),
+                                  web_app=WebAppInfo(url=webapp_url(lang))),
+             InlineKeyboardButton(text=PLAN_BUTTON.get(lang, PLAN_BUTTON["ru"]),
+                                  callback_data="ai_nav:plan")],
+            [InlineKeyboardButton(text=ai_text(lang, "history_button"), callback_data="ai_nav:history"),
+             InlineKeyboardButton(text=ai_text(lang, "new_button"), callback_data="ai_nav:new")],
+            [InlineKeyboardButton(text=ai_text(lang, "exit_button"), callback_data="ai_nav:exit")],
+        ]
+    else:
+        rows = [
+            [InlineKeyboardButton(text=ai_text(lang, "menu_button"), callback_data="ai_nav:menu"),
+             InlineKeyboardButton(text=ai_text(lang, "history_button"), callback_data="ai_nav:history")],
+            [InlineKeyboardButton(text=ai_text(lang, "new_button"), callback_data="ai_nav:new"),
+             InlineKeyboardButton(text=ai_text(lang, "exit_button"), callback_data="ai_nav:exit")],
+        ]
+    return InlineKeyboardMarkup(inline_keyboard=rows)
+
+
+async def open_ai_menu(message: Message, state: FSMContext, lang: str, text: str) -> Message:
+    """Hide any legacy reply keyboard, then show one editable inline menu card."""
+    data = await state.get_data()
+    old_id = data.get("ai_ui_message_id")
+    if old_id:
+        try:
+            await message.bot.delete_message(chat_id=message.chat.id, message_id=old_id)
+        except TelegramBadRequest:
+            pass
+    sent = await message.answer(text, parse_mode=None, reply_markup=ReplyKeyboardRemove())
+    try:
+        await message.bot.edit_message_reply_markup(
+            chat_id=message.chat.id, message_id=sent.message_id,
+            reply_markup=chat_keyboard(lang))
+    except TelegramBadRequest:
+        try:
+            await sent.delete()
+        except TelegramBadRequest:
+            pass
+        sent = await message.answer(text, parse_mode=None, reply_markup=chat_keyboard(lang))
+    await state.update_data(ai_ui_message_id=sent.message_id)
+    return sent
 
 
 @agronomist_router.message(Command("ai", "disease"))
@@ -141,8 +184,7 @@ async def start_ai(message: Message, state: FSMContext) -> None:
         await message.answer(ai_text(lang, exc.code), parse_mode=None)
         return
     await state.set_state(AgronomistChat.active)
-    await replace_ui_message(message, state, ai_text(lang, "intro"),
-                             reply_markup=chat_keyboard(lang))
+    await open_ai_menu(message, state, lang, ai_text(lang, "intro"))
 
 
 @agronomist_router.message(Command("newchat"))
@@ -162,8 +204,7 @@ async def new_chat(message: Message, state: FSMContext) -> None:
     await state.set_state(AgronomistChat.active)
     if previous_ui_id:
         await state.update_data(ai_ui_message_id=previous_ui_id)
-    await replace_ui_message(message, state, ai_text(lang, "cleared"),
-                             reply_markup=chat_keyboard(lang))
+    await open_ai_menu(message, state, lang, ai_text(lang, "cleared"))
 
 
 @agronomist_router.message(Command("exit"))
@@ -191,8 +232,7 @@ async def choose_deep(message: Message, state: FSMContext) -> None:
         return
     await state.set_state(AgronomistChat.active)
     await state.update_data(ai_deep=True, ai_topic=None)
-    await replace_ui_message(message, state, ai_text(lang, "deep_hint"),
-                             reply_markup=chat_keyboard(lang))
+    await open_ai_menu(message, state, lang, ai_text(lang, "deep_hint"))
 
 
 async def send_history(message: Message, user_id: int, lang: str, offset=0,
@@ -200,10 +240,11 @@ async def send_history(message: Message, user_id: int, lang: str, offset=0,
     page = await assistant.history_page(user_id, offset)
     if not page["entry"]:
         if state is not None and not edit:
-            await replace_ui_message(message, state, ai_text(lang, "history_empty"))
+            await replace_ui_message(message, state, ai_text(lang, "history_empty"),
+                                     reply_markup=chat_keyboard(lang, screen="detail"))
         elif edit:
             await message.edit_text(ai_text(lang, "history_empty"), parse_mode=None,
-                                    reply_markup=InlineKeyboardMarkup(inline_keyboard=[]))
+                                    reply_markup=chat_keyboard(lang, screen="detail"))
         else:
             await message.answer(ai_text(lang, "history_empty"), parse_mode=None)
         return
@@ -226,7 +267,9 @@ async def send_history(message: Message, user_id: int, lang: str, offset=0,
 @agronomist_router.message(F.text.in_({copy["history_button"] for copy in AI_STRINGS.values()}))
 async def show_ai_history(message: Message, state: FSMContext) -> None:
     lang = get_lang(message.from_user.id)
+    stop_visible_request(message.from_user.id)
     try:
+        await open_ai_menu(message, state, lang, ai_text(lang, "history_empty"))
         await send_history(message, message.from_user.id, lang, state=state)
     except AIError as exc:
         await replace_ui_message(message, state, ai_text(lang, exc.code))
@@ -235,6 +278,7 @@ async def show_ai_history(message: Message, state: FSMContext) -> None:
 @agronomist_router.callback_query(F.data.startswith("ai_history:"))
 async def ai_history_page(callback: CallbackQuery) -> None:
     await callback.answer()
+    stop_visible_request(callback.from_user.id)
     lang = get_lang(callback.from_user.id)
     try:
         offset = int(callback.data.split(":")[1])
@@ -248,6 +292,7 @@ async def ai_history_page(callback: CallbackQuery) -> None:
 @agronomist_router.callback_query(F.data.in_({"ai_delete_prompt", "ai_delete_yes", "ai_delete_no"}))
 async def delete_ai_history(callback: CallbackQuery, state: FSMContext) -> None:
     await callback.answer()
+    stop_visible_request(callback.from_user.id)
     if not callback.message:
         return
     lang = get_lang(callback.from_user.id)
@@ -264,13 +309,11 @@ async def delete_ai_history(callback: CallbackQuery, state: FSMContext) -> None:
             await state.update_data(ai_ui_message_id=callback.message.message_id)
             await callback.message.edit_text(
                 ai_text(lang, "deleted"), parse_mode=None,
-                reply_markup=InlineKeyboardMarkup(inline_keyboard=[]))
+                reply_markup=chat_keyboard(lang))
         except AIError as exc:
             await callback.message.answer(ai_text(lang, exc.code), parse_mode=None)
     else:
-        await callback.message.edit_text(
-            ai_text(lang, "delete_no"), parse_mode=None,
-            reply_markup=InlineKeyboardMarkup(inline_keyboard=[]))
+        await send_history(callback.message, callback.from_user.id, lang, edit=True)
 
 
 @agronomist_router.message(F.text.in_(ACTION_BUTTONS - {
@@ -285,8 +328,68 @@ async def choose_topic(message: Message, state: FSMContext) -> None:
     # Choosing an action shows guidance; it must never spend an AI request.
     await state.set_state(AgronomistChat.active)
     await state.update_data(ai_topic=topic)
-    await replace_ui_message(message, state, ai_text(lang, topic + "_hint"),
-                             reply_markup=chat_keyboard(lang))
+    await open_ai_menu(message, state, lang, ai_text(lang, topic + "_hint"))
+
+
+@agronomist_router.callback_query(AgronomistChat.active, F.data.startswith("ai_nav:"))
+async def ai_navigation(callback: CallbackQuery, state: FSMContext) -> None:
+    if not isinstance(callback.message, Message):
+        await callback.answer()
+        return
+    lang = get_lang(callback.from_user.id)
+    action = callback.data.split(":", 1)[1]
+    stop_visible_request(callback.from_user.id)
+    message = callback.message.model_copy(update={"from_user": callback.from_user}).as_(callback.bot)
+    await callback.answer()
+    if action == "plan":
+        await begin_plan(message, state)
+        return
+    if action == "history":
+        try:
+            await send_history(callback.message, callback.from_user.id, lang, edit=True)
+        except AIError as exc:
+            await replace_ui_message(message, state, ai_text(lang, exc.code),
+                                     reply_markup=chat_keyboard(lang, screen="detail"))
+        return
+    if action == "new":
+        try:
+            await assistant.reset(callback.from_user.id)
+        except AIError as exc:
+            await replace_ui_message(message, state, ai_text(lang, exc.code),
+                                     reply_markup=chat_keyboard(lang, screen="detail"))
+            return
+        await state.set_state(AgronomistChat.active)
+        await state.update_data(ai_deep=False, ai_topic=None)
+        await replace_ui_message(message, state, ai_text(lang, "cleared"),
+                                 reply_markup=chat_keyboard(lang))
+        return
+    if action == "exit":
+        try:
+            await assistant.set_active(callback.from_user.id, False)
+        except AIError:
+            pass
+        await state.clear()
+        try:
+            await callback.message.delete()
+        except TelegramBadRequest:
+            pass
+        await message.answer(ai_text(lang, "closed"),
+                             reply_markup=get_main_reply_keyboard(lang))
+        return
+    if action == "menu":
+        await state.update_data(ai_topic=None, ai_deep=False)
+        await replace_ui_message(message, state, ai_text(lang, "intro"),
+                                 reply_markup=chat_keyboard(lang))
+        return
+    if action == "deep":
+        await state.update_data(ai_topic=None, ai_deep=True)
+        await replace_ui_message(message, state, ai_text(lang, "deep_hint"),
+                                 reply_markup=chat_keyboard(lang, screen="detail"))
+        return
+    if action in {"photo", "water", "care"}:
+        await state.update_data(ai_topic=action)
+        await replace_ui_message(message, state, ai_text(lang, action + "_hint"),
+                                 reply_markup=chat_keyboard(lang, screen="detail"))
 
 
 # Exit the AI state before the usual menu handlers receive their commands.
@@ -364,6 +467,7 @@ async def ask_ai(message: Message, state: FSMContext) -> None:
     status = await replace_ui_message(
         message, state, ai_text(lang, "working" if has_image else "thinking"))
     stop_animation = asyncio.Event()
+    active_status_events[user_id] = stop_animation
     animation = asyncio.create_task(animate_status(
         message.bot, message.chat.id, status.message_id, lang, stop_animation))
 
@@ -380,26 +484,29 @@ async def ask_ai(message: Message, state: FSMContext) -> None:
                     await message.bot.download(file, destination=buffer, timeout=20)
                     image = buffer.getvalue()
             result = await assistant.reply(user_id, text, lang, image, deep=deep)
-        if await state.get_state() == AgronomistChat.active.state:
+        if not stop_animation.is_set() and await state.get_state() == AgronomistChat.active.state:
             await state.update_data(ai_deep=False)
             if getattr(result, "fallback", False):
                 result = f"{result}\n\n{ai_text(lang, 'deep_fallback')}"
             await stop_loading_animation()
             await status.edit_text(result, parse_mode=None)
-            await state.update_data(ai_ui_message_id=None)
+            await state.update_data(ai_ui_message_id=status.message_id)
     except AIError as exc:
-        if exc.code != "cancelled":
+        if exc.code != "cancelled" and not stop_animation.is_set():
             await stop_loading_animation()
             await status.edit_text(ai_text(lang, exc.code), parse_mode=None)
-            await state.update_data(ai_ui_message_id=None)
+            await state.update_data(ai_ui_message_id=status.message_id)
     except Exception as exc:
         # Do not log photos, questions, Telegram file URLs or provider secrets.
         logger.warning("Agronomist request failed (%s)", type(exc).__name__)
         await stop_loading_animation()
-        await status.edit_text(ai_text(lang, "unavailable"), parse_mode=None)
-        await state.update_data(ai_ui_message_id=None)
+        if not stop_animation.is_set():
+            await status.edit_text(ai_text(lang, "unavailable"), parse_mode=None)
+            await state.update_data(ai_ui_message_id=status.message_id)
     finally:
         await stop_loading_animation()
+        if active_status_events.get(user_id) is stop_animation:
+            active_status_events.pop(user_id, None)
 
 
 @agronomist_router.message(AgronomistChat.active, ~F.web_app_data,

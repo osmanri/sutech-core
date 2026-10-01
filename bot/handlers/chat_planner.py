@@ -149,15 +149,34 @@ async def begin_plan(message: Message, state: FSMContext):
         await assistant.set_active(message.from_user.id,False)
     except AIError:
         pass
+    previous_ui_id=(await state.get_data()).get('ai_ui_message_id')
     await state.clear()
     await state.set_state(ChatPlan.collecting)
-    await state.update_data(token=secrets.token_hex(4),step=0,values={'balance_version':2,'area_unit':'hectare','lang':get_lang(message.from_user.id)})
+    await state.update_data(token=secrets.token_hex(4),step=0,
+                            prompt_id=previous_ui_id,
+                            values={'balance_version':2,'area_unit':'hectare','lang':get_lang(message.from_user.id)})
     await show_step(message,state,get_lang(message.from_user.id))
 
 
 async def cancel_plan(message: Message, state: FSMContext):
+    data=await state.get_data()
     await state.clear()
     lang=get_lang(message.from_user.id)
+    if data.get('prompt_id'):
+        from bot.handlers.agronomist import AgronomistChat, assistant
+        from bot.ai_i18n import ai_text
+        try:
+            await assistant.set_active(message.from_user.id,True)
+            await state.set_state(AgronomistChat.active)
+            await state.update_data(ai_ui_message_id=data['prompt_id'])
+            await message.bot.edit_message_text(
+                chat_id=message.chat.id,message_id=data['prompt_id'],
+                text=phrase(lang,'cancelled'),parse_mode=None,
+                reply_markup=InlineKeyboardMarkup(inline_keyboard=[[
+                    InlineKeyboardButton(text=ai_text(lang,'menu_button'),callback_data='ai_nav:menu')]]))
+            return
+        except Exception:
+            await state.clear()
     await message.answer(phrase(lang,'cancelled'),parse_mode=None,reply_markup=get_main_reply_keyboard(lang))
 
 
@@ -191,6 +210,9 @@ async def plan_callback(callback: CallbackQuery, state: FSMContext):
             await callback.answer(); await show_step(msg,state,lang); return
     # Keep the shared handler's owner-scoped report/history/field persistence.
     await handle_field_payload(msg,state,data['values'])
+    if data.get('prompt_id'):
+        try: await msg.bot.delete_message(chat_id=msg.chat.id,message_id=data['prompt_id'])
+        except Exception: pass
     await msg.answer('/ai · /plan',parse_mode=None,reply_markup=get_main_reply_keyboard(lang))
 
 
