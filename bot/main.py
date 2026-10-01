@@ -21,7 +21,7 @@ from aiogram.utils.web_app import safe_parse_webapp_init_data
 from aiogram.client.default import DefaultBotProperties
 from aiogram.enums import ParseMode
 from aiogram.webhook.aiohttp_server import SimpleRequestHandler, setup_application
-from bot.handlers.agronomist import agronomist_router
+from bot.handlers.agronomist import agronomist_router, assistant
 
 try:
     from bot_setup import configure_bot_profile
@@ -168,6 +168,12 @@ async def health_check(request: web.Request) -> web.Response:
             "database": db_health,
             "calculation_version": CALCULATION_VERSION,
             "revision": os.getenv("RENDER_GIT_COMMIT", "local")[:12],
+            "ai": {
+                "configured": assistant.client.configured,
+                "model": assistant.client.model,
+                "deep_model": assistant.deep_client.model,
+                "history_storage": db_health.get("engine"),
+            },
         },
         status=status_code,
     )

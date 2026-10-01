@@ -114,6 +114,71 @@ AI_ACTION_COPY = {
 for language, copy in AI_ACTION_COPY.items():
     AI_STRINGS[language].update(copy)
 
+AI_CHAT_COPY = {
+    "ru": {
+        "intro": "🌿 ИИ-агроном Su-Tech\n\nОтправьте фото растения с подписью или задайте вопрос о поливе и уходе. После ответа можно уточнять в этом же чате.\n\n«Углублённый анализ» включает более сильную модель для следующего вопроса или фото.\n\nДиалог и последние 100 разборов сохраняются в вашей истории после перезапуска. Само фото не сохраняется. «Новый разбор» начинает новый диалог, сохраняя старые ответы.\n\nОценка по фото предварительная. Фото и сообщения передаются Google Gemini.",
+        "cleared": "Новый диалог начат. Предыдущие ответы доступны в «Истории ИИ». Пришлите фото или вопрос.",
+        "deep_button": "🔎 Углублённый анализ",
+        "deep_hint": "🔎 Углублённый анализ включён для следующего запроса.\n\nПришлите фото с описанием или задайте уточняющий вопрос. Чтобы подробнее изучить прежний снимок, прикрепите его ещё раз. Если сильная модель недоступна, я продолжу в обычном режиме и сообщу об этом.",
+        "deep_fallback": "Углублённая модель сейчас недоступна. Этот ответ подготовлен в обычном режиме.",
+        "history_button": "🗂 История ИИ",
+        "history_empty": "История ИИ пока пуста. Отправьте фото или первый вопрос.",
+        "history_title": "Разбор {page} из {total}",
+        "history_question": "Ваш вопрос",
+        "history_answer": "Ответ ИИ",
+        "history_photo": "📷 К вопросу было приложено фото; изображение не хранится.",
+        "history_delete": "🗑 Удалить историю ИИ",
+        "delete_confirm": "Удалить всю вашу историю ИИ и текущий диалог? Это действие нельзя отменить. Поля и расчёты полива сохранятся.",
+        "delete_yes": "Да, удалить историю ИИ",
+        "delete_no": "Отмена",
+        "deleted": "История ИИ удалена. Можно начать новый диалог.",
+        "rate_limit": "Сейчас поступает много запросов. Повторите примерно через минуту.",
+        "storage_error": "История временно недоступна. Попробуйте ещё раз через минуту — ваши сохранённые разборы не удалены.",
+    },
+    "kz": {
+        "intro": "🌿 Su-Tech ЖИ-агрономы\n\nӨсімдік фотосын сипаттамасымен жіберіңіз немесе суару мен күтім туралы сұрақ қойыңыз. Жауаптан кейін осы чатта нақтылауға болады.\n\n«Терең талдау» келесі сұраққа не фотоға қуаттырақ модельді қосады.\n\nДиалог пен соңғы 100 талдау қайта іске қосылғаннан кейін де сақталады. Фотолар сақталмайды. «Жаңа талдау» бұрынғы жауаптарды тарихта қалдырып, жаңа диалог бастайды.\n\nФото бойынша бағалау алдын ала жасалады. Фото мен мәтін Google Gemini қызметіне жіберіледі.",
+        "cleared": "Жаңа диалог басталды. Бұрынғы жауаптар «ЖИ тарихында» сақталған. Фото немесе сұрақ жіберіңіз.",
+        "deep_button": "🔎 Терең талдау",
+        "deep_hint": "🔎 Келесі сұрау үшін терең талдау қосылды.\n\nФото мен сипаттаманы жіберіңіз немесе нақтылаушы сұрақ қойыңыз. Алдыңғы фотоны қайта зерттеу үшін оны қайта тіркеңіз. Қуатты модель қолжетімсіз болса, қалыпты режимде жауап беріп, хабарлаймын.",
+        "deep_fallback": "Терең талдау моделі қазір қолжетімсіз. Жауап қалыпты режимде дайындалды.",
+        "history_button": "🗂 ЖИ тарихы",
+        "history_empty": "ЖИ тарихы әзірше бос. Фото немесе алғашқы сұрақты жіберіңіз.",
+        "history_title": "{total} талдаудың {page}-і",
+        "history_question": "Сіздің сұрағыңыз",
+        "history_answer": "ЖИ жауабы",
+        "history_photo": "📷 Сұраққа фото тіркелген; сурет сақталмайды.",
+        "history_delete": "🗑 ЖИ тарихын жою",
+        "delete_confirm": "Барлық ЖИ тарихын және қазіргі диалогты жою керек пе? Мұны қайтару мүмкін емес. Танаптар мен суару есептері сақталады.",
+        "delete_yes": "Иә, ЖИ тарихын жою",
+        "delete_no": "Бас тарту",
+        "deleted": "ЖИ тарихы жойылды. Жаңа диалог бастауға болады.",
+        "rate_limit": "Қазір сұраулар көп. Шамамен бір минуттан кейін қайталаңыз.",
+        "storage_error": "Тарих уақытша қолжетімсіз. Бір минуттан кейін қайталаңыз — сақталған талдаулар жойылған жоқ.",
+    },
+    "en": {
+        "intro": "🌿 Su-Tech AI agronomist\n\nSend a plant photo with a description, or ask about irrigation and care. Follow up in this same chat.\n\nDeep analysis uses a stronger model for your next question or photo.\n\nYour conversation and latest 100 assessments survive restarts. Photos are not stored. New assessment starts a fresh conversation and keeps previous answers in history.\n\nPhoto assessments are preliminary. Photos and messages are sent to Google Gemini.",
+        "cleared": "New conversation started. Previous answers remain in AI history. Send a photo or question.",
+        "deep_button": "🔎 Deep analysis",
+        "deep_hint": "🔎 Deep analysis is enabled for the next request.\n\nSend a photo with a description or ask a follow-up question. To re-examine an earlier photo, attach it again. If the stronger model is unavailable, I will answer in standard mode and let you know.",
+        "deep_fallback": "The deep analysis model is currently unavailable. This answer was prepared in standard mode.",
+        "history_button": "🗂 AI history",
+        "history_empty": "No AI history yet. Send a photo or your first question.",
+        "history_title": "Assessment {page} of {total}",
+        "history_question": "Your question",
+        "history_answer": "AI answer",
+        "history_photo": "📷 A photo was attached; the image is not stored.",
+        "history_delete": "🗑 Delete AI history",
+        "delete_confirm": "Delete all your AI history and current conversation? This cannot be undone. Fields and irrigation calculations will remain.",
+        "delete_yes": "Yes, delete AI history",
+        "delete_no": "Cancel",
+        "deleted": "AI history deleted. You can start a new conversation.",
+        "rate_limit": "There are many requests right now. Try again in about a minute.",
+        "storage_error": "History is temporarily unavailable. Try again in a minute — your saved assessments have not been deleted.",
+    },
+}
+for language, copy in AI_CHAT_COPY.items():
+    AI_STRINGS[language].update(copy)
+
 
 def ai_text(lang: str, key: str) -> str:
     return AI_STRINGS.get(lang, AI_STRINGS["ru"])[key]

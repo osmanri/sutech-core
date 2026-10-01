@@ -82,9 +82,11 @@ class GeminiReply(str):
 
 
 class GeminiClient:
-    def __init__(self, api_key: str, model: str = "gemini-3.8-flash"):
+    def __init__(self, api_key: str, model: str = "gemini-3.5-flash-lite",
+                 thinking_level: str = "LOW"):
         self.api_key = api_key
         self.model = model
+        self.thinking_level = thinking_level
 
     @property
     def configured(self) -> bool:
@@ -104,7 +106,7 @@ class GeminiClient:
         if self.model.startswith("gemini-3"):
             # Gemini 3 uses its default sampling and needs room for reasoning.
             generation = {"maxOutputTokens": 4096,
-                          "thinkingConfig": {"thinkingLevel": "LOW"}}
+                          "thinkingConfig": {"thinkingLevel": self.thinking_level}}
         payload = {
             "systemInstruction": {"parts": [{"text": system_prompt(lang)}]},
             "contents": [*history, {"role": "user", "parts": parts}],
@@ -153,26 +155,71 @@ class Conversation:
     touched: float = field(default_factory=time.monotonic)
     busy: bool = False
     version: int = 0
+    model: str = ""
 
 
 class AgronomistService:
-    def __init__(self, client: GeminiClient, user_daily_limit: int = 30,
-                 daily_limit: int = 60, cooldown: float = 3):
+    def __init__(self, client: GeminiClient, user_daily_limit: int = 100,
+                 daily_limit: int = 450, cooldown: float = 3, *,
+                 store=None, deep_client: GeminiClient | None = None):
         self.client = client
         self.user_daily_limit = user_daily_limit
         self.daily_limit = daily_limit
         self.cooldown = cooldown
+        self.store = store
+        self.deep_client = deep_client
         self.sessions: OrderedDict[int, Conversation] = OrderedDict()
         # One bounded global log also supplies per-user limits, including reset.
         self.requests: deque[tuple[float, int]] = deque()
 
     def clear(self, user_id: int) -> None:
+        """Cancel an in-flight reply and drop RAM cache; retain saved history."""
         session = self.sessions.get(user_id)
         if session and session.busy:
             session.history = []
             session.version += 1
         else:
             self.sessions.pop(user_id, None)
+
+    async def _db(self, method, *args):
+        from bot.services.ai_history import HistoryError
+        try:
+            return await asyncio.to_thread(getattr(self.store, method), *args)
+        except HistoryError as exc:
+            raise AIError(exc.code) from None
+        except Exception:
+            raise AIError("storage_error") from None
+
+    async def reset(self, user_id: int, delete: bool = False) -> None:
+        self.clear(user_id)
+        if self.store:
+            await self._db("reset", user_id, delete)
+
+    async def set_active(self, user_id: int, active: bool) -> None:
+        self.clear(user_id)
+        if self.store:
+            await self._db("set_active", user_id, active)
+
+    async def is_active(self, user_id: int) -> bool:
+        return bool(self.store and (await self._db("load", user_id))["active"])
+
+    async def history_page(self, user_id: int, offset: int = 0) -> dict:
+        if not self.store:
+            return {"total": 0, "offset": 0, "entry": None}
+        return await self._db("page", user_id, offset)
+
+    @staticmethod
+    def _history_for_model(history, previous_model, model):
+        if not previous_model or previous_model == model:
+            return history
+        # Thought signatures belong to the model that produced them. On a model
+        # switch retain observations and visible answers, never foreign signatures.
+        return [{"role": turn["role"], "parts": [{"text": part["text"]}
+                for part in turn["parts"] if isinstance(part.get("text"), str)
+                and not part.get("thought")]}
+                for turn in history
+                if any(isinstance(part.get("text"), str) and not part.get("thought")
+                       for part in turn["parts"])]
 
     def _conversation(self, user_id: int) -> Conversation:
         now = time.monotonic()
@@ -190,7 +237,7 @@ class AgronomistService:
         return self.sessions[user_id]
 
     async def reply(self, user_id: int, text: str, lang: str,
-                    image: bytes | None = None) -> str:
+                    image: bytes | None = None, *, deep: bool = False) -> str:
         if not self.client.configured:
             raise AIError("not_configured")
         text = text.strip()
@@ -201,28 +248,72 @@ class AgronomistService:
         session = self._conversation(user_id)
         if session.busy:
             raise AIError("busy")
-        now = time.monotonic()
-        while self.requests and now - self.requests[0][0] >= 86400:
-            self.requests.popleft()
-        own = [stamp for stamp, uid in self.requests if uid == user_id]
-        if len(own) >= self.user_daily_limit or len(self.requests) >= self.daily_limit:
-            raise AIError("daily_limit")
-        if own and now - own[-1] < self.cooldown:
-            raise AIError("cooldown")
-        # Reserve quota before awaiting network, so parallel updates cannot bypass it.
-        self.requests.append((now, user_id))
         session.busy = True
-        session.touched = now
+        session.touched = time.monotonic()
         version = session.version
-        history = [] if image is not None else session.history
         try:
-            result = await self.client.generate(history, text, lang, image)
+            client = self.deep_client if deep and self.deep_client else self.client
+            model = getattr(client, "model", "test-model")
+            fallback = False
+            db_version = 0
+            if self.store:
+                saved = await self._db("load", user_id)
+                db_version = saved["version"]
+                session.history, session.model = saved["history"], saved["model"]
+                try:
+                    await self._db("reserve", user_id, model,
+                                   18 if client is self.deep_client else self.daily_limit,
+                                   self.user_daily_limit, 4 if client is self.deep_client else 12,
+                                   self.cooldown)
+                except AIError as exc:
+                    if client is not self.deep_client or exc.code not in {"daily_limit", "rate_limit"}:
+                        raise
+                    client, fallback = self.client, True
+                    model = client.model
+                    await self._db("reserve", user_id, model, self.daily_limit,
+                                   self.user_daily_limit, 12, self.cooldown)
+            else:
+                now = time.monotonic()
+                while self.requests and now - self.requests[0][0] >= 86400:
+                    self.requests.popleft()
+                own = [stamp for stamp, uid in self.requests if uid == user_id]
+                if len(own) >= self.user_daily_limit or len(self.requests) >= self.daily_limit:
+                    raise AIError("daily_limit")
+                if own and now - own[-1] < self.cooldown:
+                    raise AIError("cooldown")
+                self.requests.append((now, user_id))
+            if version != session.version:
+                raise AIError("cancelled")
+            history = [] if image is not None else self._history_for_model(
+                session.history, session.model, model)
+            try:
+                result = await client.generate(history, text, lang, image)
+            except AIError as exc:
+                if client is not self.deep_client or exc.code not in {
+                        "quota", "unavailable", "no_answer", "configuration"}:
+                    raise
+                client, fallback = self.client, True
+                model = client.model
+                if self.store:
+                    await self._db("reserve", user_id, model, self.daily_limit,
+                                   self.user_daily_limit, 12, 0)
+                history = [] if image is not None else self._history_for_model(
+                    session.history, session.model, model)
+                result = await client.generate(history, text, lang, image)
             if version != session.version:
                 raise AIError("cancelled")
             user_text = ("[New plant photo supplied in this turn.] " if image is not None else "") + text
-            session.history = [*history, {"role": "user", "parts": [{"text": user_text}]},
-                               {"role": "model", "parts": getattr(result, "history_parts",
-                                                                  [{"text": result}])}][-MAX_HISTORY_MESSAGES:]
+            next_history = [*history, {"role": "user", "parts": [{"text": user_text}]},
+                            {"role": "model", "parts": getattr(result, "history_parts",
+                                                               [{"text": str(result)}])}][-MAX_HISTORY_MESSAGES:]
+            if self.store:
+                await self._db("save", user_id, db_version, next_history,
+                               text, result, model, image is not None)
+            if version != session.version:
+                raise AIError("cancelled")
+            session.history, session.model = next_history, model
+            result = GeminiReply(str(result), next_history[-1]["parts"])
+            result.model, result.fallback = model, fallback
             return result
         finally:
             session.busy = False

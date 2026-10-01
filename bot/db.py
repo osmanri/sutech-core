@@ -139,6 +139,8 @@ def init_db():
             _init_postgres(conn)
         else:
             _init_sqlite(conn)
+        from bot.services.ai_history import init_ai_tables
+        init_ai_tables(conn)
         logger.info("Database initialized successfully on %s.", "PostgreSQL" if is_postgres() else "SQLite")
     except Exception as e:
         logger.exception("Error initializing database: %s", e)

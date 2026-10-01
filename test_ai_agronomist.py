@@ -50,7 +50,7 @@ class GeminiTests(unittest.IsolatedAsyncioTestCase):
             result = await client.generate([], "Пшеница", "ru", JPEG)
         args, kwargs = session.post.call_args
         self.assertNotIn(client.api_key, args[0])
-        self.assertIn('/models/gemini-3.8-flash:generateContent', args[0])
+        self.assertIn('/models/gemini-3.5-flash-lite:generateContent', args[0])
         config = kwargs['json']['generationConfig']
         self.assertEqual(config['thinkingConfig']['thinkingLevel'], 'LOW')
         self.assertNotIn('temperature', config)
@@ -277,6 +277,36 @@ class TelegramAITests(unittest.IsolatedAsyncioTestCase):
             await self.send(text="/start ai")
         self.assertEqual(await self.state.get_state(), handler.AgronomistChat.active.state)
         self.assertEqual(transport.await_args.args[0].text, ai_text("ru", "intro"))
+
+    async def test_deep_button_is_one_request_mode_and_history_does_not_spend_quota(self):
+        deep = SimpleNamespace(configured=True, model="gemini-3.8-flash",
+                               generate=AsyncMock(return_value="Глубокий ответ"))
+        self.service.deep_client = deep
+        with patch.object(Bot, "__call__", new_callable=AsyncMock):
+            await self.send(text=ai_text("ru", "deep_button"))
+            self.assertTrue((await self.state.get_data())["ai_deep"])
+            await self.send(text="Пятна на томате")
+            deep.generate.assert_awaited_once()
+            self.client.generate.assert_not_called()
+            self.assertFalse((await self.state.get_data())["ai_deep"])
+            await self.send(text=ai_text("ru", "history_button"))
+            deep.generate.assert_awaited_once()
+            await self.send(text="Что проверить?")
+            self.client.generate.assert_awaited_once()
+
+    async def test_history_card_keeps_full_text_without_telegram_html_parsing(self):
+        self.service.history_page = AsyncMock(return_value={"total": 2, "offset": 0,
+            "entry": {"created_at": 1790850000000, "question": "<crop>" * 300,
+                      "answer": "<answer>" * 400, "has_image": 1}})
+        with patch.object(Bot, "__call__", new_callable=AsyncMock) as transport:
+            await self.send(text="/aihistory")
+        answers = [call.args[0] for call in transport.await_args_list
+                   if type(call.args[0]).__name__ == "SendMessage"]
+        self.assertEqual(len(answers), 2)
+        self.assertIn("<crop>" * 300, answers[0].text)
+        self.assertIn("<answer>" * 400, answers[1].text)
+        self.assertTrue(all(len(answer.text) <= 4096 and answer.parse_mode is None for answer in answers))
+        self.service.history_page.assert_awaited_once_with(812, 0)
 
     def test_chat_keyboard_has_photo_topics_calculator_and_placeholder(self):
         for lang in ("ru", "kz", "en"):
