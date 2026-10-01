@@ -50,11 +50,38 @@ class GeminiTests(unittest.IsolatedAsyncioTestCase):
             result = await client.generate([], "Пшеница", "ru", JPEG)
         args, kwargs = session.post.call_args
         self.assertNotIn(client.api_key, args[0])
+        self.assertIn('/models/gemini-3.7-flash:generateContent', args[0])
+        config = kwargs['json']['generationConfig']
+        self.assertEqual(config['thinkingConfig']['thinkingLevel'], 'LOW')
+        self.assertNotIn('temperature', config)
         self.assertEqual(kwargs["headers"]["x-goog-api-key"], client.api_key)
         parts = kwargs["json"]["contents"][0]["parts"]
         self.assertEqual(base64.b64decode(parts[0]["inlineData"]["data"]), JPEG)
         self.assertIn("Russian", kwargs["json"]["systemInstruction"]["parts"][0]["text"])
         self.assertEqual(result, "Возможный дефицит воды.")
+
+    async def test_signed_followup_context_is_preserved_without_showing_thoughts(self):
+        signed_parts = [{"text": "Internal reasoning", "thought": True,
+                         "thoughtSignature": "opaque-signature"},
+                        {"text": "Проверьте влажность почвы."}]
+        session = Session(Response({"candidates": [{"finishReason": "STOP", "content": {
+            "parts": signed_parts}}]}))
+        service = AgronomistService(GeminiClient("private-test-key"), cooldown=0)
+        with patch("bot.services.agronomist.aiohttp.ClientSession", return_value=session):
+            answer = await service.reply(1, "Лист желтеет", "ru", JPEG)
+            self.assertEqual(answer, "Проверьте влажность почвы.")
+            await service.reply(1, "Как проверить?", "ru")
+        contents = session.post.call_args.kwargs['json']['contents']
+        self.assertEqual(contents[1]['parts'], signed_parts)
+        self.assertNotIn('inlineData', str(contents))
+
+    async def test_older_model_override_keeps_compatible_generation_parameters(self):
+        session = Session(Response({"candidates": [{"content": {"parts": [{"text": "Ответ"}]}}]}))
+        with patch("bot.services.agronomist.aiohttp.ClientSession", return_value=session):
+            await GeminiClient("test", "gemini-2.5-flash-lite").generate([], "Вопрос", "ru")
+        config = session.post.call_args.kwargs['json']['generationConfig']
+        self.assertNotIn('thinkingConfig', config)
+        self.assertEqual(config['maxOutputTokens'], 1200)
 
     async def test_quota_auth_empty_and_blocked_answers_are_safe_errors(self):
         for status, data, code in (

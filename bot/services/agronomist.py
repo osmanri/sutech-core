@@ -72,8 +72,17 @@ For follow-up questions use the conversation observations, and request another
 photo if needed rather than pretending you can re-inspect an old image."""
 
 
+class GeminiReply(str):
+    """Visible answer with provider context for subsequent Gemini turns."""
+
+    def __new__(cls, text: str, history_parts: list[dict]):
+        reply = super().__new__(cls, text)
+        reply.history_parts = history_parts
+        return reply
+
+
 class GeminiClient:
-    def __init__(self, api_key: str, model: str = "gemini-2.5-flash-lite"):
+    def __init__(self, api_key: str, model: str = "gemini-3.7-flash"):
         self.api_key = api_key
         self.model = model
 
@@ -91,10 +100,15 @@ class GeminiClient:
         if image is not None:
             parts.insert(0, {"inlineData": {"mimeType": image_mime(image),
                                          "data": base64.b64encode(image).decode("ascii")}})
+        generation = {"temperature": 0.25, "maxOutputTokens": 1200}
+        if self.model.startswith("gemini-3"):
+            # Gemini 3 uses its default sampling and needs room for reasoning.
+            generation = {"maxOutputTokens": 4096,
+                          "thinkingConfig": {"thinkingLevel": "LOW"}}
         payload = {
             "systemInstruction": {"parts": [{"text": system_prompt(lang)}]},
             "contents": [*history, {"role": "user", "parts": parts}],
-            "generationConfig": {"temperature": 0.25, "maxOutputTokens": 1200},
+            "generationConfig": generation,
         }
         url = f"https://generativelanguage.googleapis.com/v1beta/models/{self.model}:generateContent"
         try:
@@ -117,14 +131,20 @@ class GeminiClient:
         candidate = candidates[0]
         if candidate.get("finishReason") not in {None, "STOP", "MAX_TOKENS"}:
             raise AIError("no_answer")
-        result = "\n".join(p["text"] for p in candidate.get("content", {}).get("parts", [])
+        response_parts = candidate.get("content", {}).get("parts", [])
+        result = "\n".join(p["text"] for p in response_parts
                            if isinstance(p.get("text"), str) and not p.get("thought")).strip()
         if not result:
             raise AIError("no_answer")
         # Leave room for a clean end; no Telegram HTML parsing of model output.
         if len(result) > MAX_REPLY_CHARS:
             result = result[:MAX_REPLY_CHARS].rsplit(" ", 1)[0] + "…"
-        return result
+        # Preserve signed text/thought parts unchanged for Gemini 3 follow-ups.
+        # Never retain generated image bytes or expose internal thoughts in chat.
+        history_parts = [{key: part[key] for key in ("text", "thought", "thoughtSignature")
+                          if key in part} for part in response_parts
+                         if isinstance(part.get("text"), str) or part.get("thoughtSignature")]
+        return GeminiReply(result, history_parts)
 
 
 @dataclass
@@ -201,7 +221,8 @@ class AgronomistService:
                 raise AIError("cancelled")
             user_text = ("[New plant photo supplied in this turn.] " if image is not None else "") + text
             session.history = [*history, {"role": "user", "parts": [{"text": user_text}]},
-                               {"role": "model", "parts": [{"text": result}]}][-MAX_HISTORY_MESSAGES:]
+                               {"role": "model", "parts": getattr(result, "history_parts",
+                                                                  [{"text": result}])}][-MAX_HISTORY_MESSAGES:]
             return result
         finally:
             session.busy = False
