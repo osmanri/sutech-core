@@ -50,7 +50,7 @@ class GeminiTests(unittest.IsolatedAsyncioTestCase):
             result = await client.generate([], "Пшеница", "ru", JPEG)
         args, kwargs = session.post.call_args
         self.assertNotIn(client.api_key, args[0])
-        self.assertIn('/models/gemini-3.7-flash:generateContent', args[0])
+        self.assertIn('/models/gemini-3.8-flash:generateContent', args[0])
         config = kwargs['json']['generationConfig']
         self.assertEqual(config['thinkingConfig']['thinkingLevel'], 'LOW')
         self.assertNotIn('temperature', config)

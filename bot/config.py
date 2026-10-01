@@ -14,7 +14,7 @@ WEBAPP_URL: str = os.getenv("WEBAPP_URL", "https://frontend-2-mauve.vercel.app")
 
 # Optional: missing credentials must not prevent irrigation features starting.
 GEMINI_API_KEY: str = os.getenv("GEMINI_API_KEY", "").strip()
-GEMINI_MODEL: str = os.getenv("GEMINI_MODEL", "gemini-3.7-flash").strip()
+GEMINI_MODEL: str = os.getenv("GEMINI_MODEL", "gemini-3.8-flash").strip()
 
 DATABASE_URL: str = os.getenv("DATABASE_URL", "").strip()
 if DATABASE_URL.startswith("postgres://"):
