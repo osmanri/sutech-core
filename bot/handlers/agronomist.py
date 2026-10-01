@@ -8,10 +8,11 @@ from aiogram.dispatcher.event.bases import SkipHandler
 from aiogram.filters import Command, CommandStart, StateFilter
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
-from aiogram.types import CallbackQuery, KeyboardButton, Message, ReplyKeyboardMarkup
+from aiogram.types import CallbackQuery, KeyboardButton, Message, ReplyKeyboardMarkup, WebAppInfo
 
 from bot.ai_i18n import AI_STRINGS, ai_text
 from bot.config import GEMINI_API_KEY, GEMINI_MODEL
+from bot.bot_setup import webapp_url
 from bot.i18n import t
 from bot.keyboards.reply import get_main_reply_keyboard
 from bot.services.agronomist import (AIError, AgronomistService, GeminiClient,
@@ -30,10 +31,15 @@ class AgronomistChat(StatesGroup):
 
 
 def chat_keyboard(lang: str) -> ReplyKeyboardMarkup:
-    return ReplyKeyboardMarkup(keyboard=[[
-        KeyboardButton(text=ai_text(lang, "new_button")),
-        KeyboardButton(text=ai_text(lang, "exit_button")),
-    ]], resize_keyboard=True)
+    return ReplyKeyboardMarkup(keyboard=[
+        [KeyboardButton(text=ai_text(lang, "photo_button"), style="success")],
+        [KeyboardButton(text=ai_text(lang, "water_button")),
+         KeyboardButton(text=ai_text(lang, "care_button"))],
+        [KeyboardButton(text=ai_text(lang, "calculate_button"),
+                        web_app=WebAppInfo(url=webapp_url(lang)))],
+        [KeyboardButton(text=ai_text(lang, "new_button")),
+         KeyboardButton(text=ai_text(lang, "exit_button"))],
+    ], resize_keyboard=True, input_field_placeholder=ai_text(lang, "placeholder"))
 
 
 @agronomist_router.message(Command("ai", "disease"))
@@ -74,6 +80,25 @@ async def exit_ai(message: Message, state: FSMContext) -> None:
     await message.answer(ai_text(lang, "closed"), reply_markup=get_main_reply_keyboard(lang))
 
 
+ACTION_BUTTONS = {copy[key] for copy in AI_STRINGS.values()
+                  for key in ("photo_button", "water_button", "care_button")}
+
+
+@agronomist_router.message(F.text.in_(ACTION_BUTTONS))
+async def choose_topic(message: Message, state: FSMContext) -> None:
+    lang = get_lang(message.from_user.id)
+    if not assistant.client.configured:
+        await start_ai(message, state)
+        return
+    topic = next(key.removesuffix("_button") for key in ("photo_button", "water_button", "care_button")
+                 if any(copy[key] == message.text for copy in AI_STRINGS.values()))
+    # Choosing an action shows guidance; it must never spend an AI request.
+    await state.set_state(AgronomistChat.active)
+    await state.update_data(ai_topic=topic)
+    await message.answer(ai_text(lang, topic + "_hint"), parse_mode=None,
+                         reply_markup=chat_keyboard(lang))
+
+
 # Exit the AI state before the usual menu handlers receive their commands.
 MENU_TEXTS = {t(lang, key) for lang in ("ru", "kz", "en")
               for key in ("btn_fields", "btn_history", "btn_lang", "btn_about", "btn_help")}
@@ -96,7 +121,7 @@ async def leave_for_callback(callback: CallbackQuery, state: FSMContext) -> None
 
 @agronomist_router.message(StateFilter(None, AgronomistChat.active), F.photo | F.document)
 @agronomist_router.message(AgronomistChat.active, F.text,
-                           ~F.text.startswith("/"), ~F.text.in_(MENU_TEXTS))
+                           ~F.text.startswith("/"), ~F.text.in_(MENU_TEXTS | ACTION_BUTTONS))
 async def ask_ai(message: Message, state: FSMContext) -> None:
     user_id = message.from_user.id
     lang = get_lang(user_id)
@@ -115,6 +140,14 @@ async def ask_ai(message: Message, state: FSMContext) -> None:
     if message.document and message.document.mime_type not in {"image/jpeg", "image/png"}:
         await message.answer(ai_text(lang, "bad_image"))
         return
+    topic = (await state.get_data()).get("ai_topic")
+    if topic == "photo" and not has_image:
+        await message.answer(ai_text(lang, "photo_pending"), reply_markup=chat_keyboard(lang))
+        return
+    if not has_image and topic in {"water", "care"}:
+        text = ai_text(lang, topic + "_button") + ": " + text
+    # One-time prompt context; follow-ups use the assistant's conversation.
+    await state.update_data(ai_topic=None)
     if await state.get_state() is None:
         # Direct photos are supported, with the same privacy notice as /ai.
         await state.set_state(AgronomistChat.active)

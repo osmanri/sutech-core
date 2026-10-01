@@ -136,8 +136,8 @@ class Conversation:
 
 
 class AgronomistService:
-    def __init__(self, client: GeminiClient, user_daily_limit: int = 10,
-                 daily_limit: int = 60, cooldown: float = 8):
+    def __init__(self, client: GeminiClient, user_daily_limit: int = 30,
+                 daily_limit: int = 60, cooldown: float = 3):
         self.client = client
         self.user_daily_limit = user_daily_limit
         self.daily_limit = daily_limit

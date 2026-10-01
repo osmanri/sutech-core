@@ -225,6 +225,41 @@ class TelegramAITests(unittest.IsolatedAsyncioTestCase):
         self.assertIn("GEMINI_API_KEY", answer.text)
         self.assertIsNotNone(answer.reply_markup)
 
+    async def test_quick_actions_show_guidance_without_spending_quota(self):
+        with patch.object(Bot, "__call__", new_callable=AsyncMock):
+            for topic in ("photo", "water", "care"):
+                await self.send(text=ai_text("ru", topic + "_button"))
+                self.assertEqual((await self.state.get_data())["ai_topic"], topic)
+        self.client.generate.assert_not_called()
+        self.assertEqual(len(self.service.requests), 0)
+
+    async def test_photo_action_waits_for_image_and_water_action_sets_context(self):
+        with patch.object(Bot, "__call__", new_callable=AsyncMock):
+            await self.send(text=ai_text("ru", "photo_button"))
+            await self.send(text="Томат")
+            self.client.generate.assert_not_called()
+            await self.send(text=ai_text("ru", "water_button"))
+            await self.send(text="Томат, суглинок, 30 дней")
+        text = self.client.generate.await_args.args[1]
+        self.assertIn("поливе", text)
+        self.assertIn("Томат", text)
+        self.assertIsNone((await self.state.get_data()).get("ai_topic"))
+
+    async def test_app_deep_link_opens_ai_instead_of_language_picker(self):
+        with patch.object(Bot, "__call__", new_callable=AsyncMock) as transport:
+            await self.send(text="/start ai")
+        self.assertEqual(await self.state.get_state(), handler.AgronomistChat.active.state)
+        self.assertEqual(transport.await_args.args[0].text, ai_text("ru", "intro"))
+
+    def test_chat_keyboard_has_photo_topics_calculator_and_placeholder(self):
+        for lang in ("ru", "kz", "en"):
+            keyboard = handler.chat_keyboard(lang)
+            self.assertEqual(keyboard.input_field_placeholder, ai_text(lang, "placeholder"))
+            buttons = [button for row in keyboard.keyboard for button in row]
+            self.assertIn(ai_text(lang, "photo_button"), [button.text for button in buttons])
+            app = next(button for button in buttons if button.web_app)
+            self.assertIn("lang=" + lang, app.web_app.url)
+
     async def test_webapp_submission_is_not_swallowed_by_ai_chat(self):
         await self.state.set_state(handler.AgronomistChat.active)
         with patch.object(Bot, "__call__", new_callable=AsyncMock) as transport:

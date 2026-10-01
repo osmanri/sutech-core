@@ -24,7 +24,7 @@ def get_main_reply_keyboard(lang: str = "ru") -> ReplyKeyboardMarkup:
                     web_app=WebAppInfo(url=url_with_lang),
                 )
             ],
-            [KeyboardButton(text=ai_text(lang, "button"))],
+            [KeyboardButton(text=ai_text(lang, "button"), style="success")],
             # Ряд 2: История и Язык
             [
                 KeyboardButton(text=t(lang, "btn_fields")),

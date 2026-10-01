@@ -73,5 +73,47 @@ AI_STRINGS = {
 }
 
 
+AI_ACTION_COPY = {
+    "ru": {
+        "intro": "🌿 ИИ-агроном Su-Tech\n\nПришлите фото растения с подписью: культура и что вас беспокоит. Или выберите «Полив» / «Уход» и задайте вопрос. После ответа можно уточнять в этом же чате.\n\nОценка по фото предварительная. Фото и сообщения передаются Google Gemini.\n\n«Новый разбор» очищает диалог. «Главное меню» возвращает к расчёту полива.",
+        "photo_button": "📷 Разобрать фото",
+        "water_button": "💧 Вопрос о поливе",
+        "care_button": "🌱 Уход за растениями",
+        "photo_hint": "📷 Пришлите фото растения\n\n1. Снимите повреждённый лист крупно при дневном свете.\n2. Подпишите культуру, когда появились симптомы и как часто поливаете.\n\nПример: «Томат. Края листа желтеют 3 дня. Поливаю каждый вечер».\n\nНовый снимок начнёт отдельный разбор.",
+        "water_hint": "💧 Задайте вопрос о поливе\n\nУкажите культуру, стадию роста, почву и что хотите узнать. Для точного объёма по погоде откройте расчёт полива кнопкой ниже.",
+        "care_hint": "🌱 Что происходит с растением?\n\nНапишите культуру, симптомы и сколько дней они наблюдаются. Можно добавить фото. Я помогу разобраться в возможных причинах и следующих действиях.",
+        "placeholder": "Задайте вопрос или прикрепите фото…",
+        "calculate_button": "🗺 Расчёт полива",
+        "photo_pending": "Жду фото растения. Можно прикрепить его скрепкой и добавить подпись.",
+    },
+    "kz": {
+        "intro": "🌿 Su-Tech ЖИ-агрономы\n\nӨсімдік фотосын жіберіп, дақылды және не мазалайтынын жазыңыз. Немесе «Суару» / «Күтім» таңдап, сұрақ қойыңыз. Жауаптан кейін осы чатта нақтылауға болады.\n\nФото бойынша бағалау алдын ала жасалады. Фото мен мәтін Google Gemini қызметіне жіберіледі.\n\n«Жаңа талдау» диалогты тазалайды. «Басты мәзір» суару есебіне қайтарады.",
+        "photo_button": "📷 Фотоны талдау",
+        "water_button": "💧 Суару туралы сұрақ",
+        "care_button": "🌱 Өсімдік күтімі",
+        "photo_hint": "📷 Өсімдік фотосын жіберіңіз\n\n1. Зақымдалған жапырақты күндізгі жарықта жақыннан түсіріңіз.\n2. Дақылды, белгілер қашан пайда болғанын және суару жиілігін жазыңыз.\n\nМысал: «Қызанақ. Жапырақ шеті 3 күннен бері сарғайған. Әр кеш сайын суарамын».\n\nЖаңа фото бөлек талдауды бастайды.",
+        "water_hint": "💧 Суару туралы сұрақ қойыңыз\n\nДақылды, өсу кезеңін, топырақты және нені білгіңіз келетінін жазыңыз. Ауа райына сай нақты су көлемі үшін төмендегі суару есебін ашыңыз.",
+        "care_hint": "🌱 Өсімдікте не өзгерді?\n\nДақылды, белгілерді және қанша күн байқалғанын жазыңыз. Фото қосуға болады. Ықтимал себептер мен келесі әрекеттерді талдаймын.",
+        "placeholder": "Сұрақ қойыңыз немесе фото тіркеңіз…",
+        "calculate_button": "🗺 Суару есебі",
+        "photo_pending": "Өсімдік фотосын күтемін. Оны тіркеп, қысқаша сипаттама қосыңыз.",
+    },
+    "en": {
+        "intro": "🌿 Su-Tech AI agronomist\n\nSend a plant photo and name the crop and your concern. Or choose Irrigation / Plant care and ask a question. Follow up in this same chat after the answer.\n\nPhoto assessments are preliminary. Photos and messages are sent to Google Gemini.\n\nNew assessment clears the conversation. Main menu returns to irrigation planning.",
+        "photo_button": "📷 Assess a photo",
+        "water_button": "💧 Irrigation question",
+        "care_button": "🌱 Plant care",
+        "photo_hint": "📷 Send a plant photo\n\n1. Take a close-up of the affected leaf in daylight.\n2. Name the crop, when symptoms started and how often you water.\n\nExample: 'Tomato. Leaf edges yellow for 3 days. Watered every evening.'\n\nA new photo starts a separate assessment.",
+        "water_hint": "💧 Ask about irrigation\n\nInclude the crop, growth stage, soil and what you want to know. For a precise weather-based volume, open the irrigation calculator below.",
+        "care_hint": "🌱 What changed in your plant?\n\nName the crop, symptoms and how long they have been present. You can add a photo. I will help identify possible causes and next steps.",
+        "placeholder": "Ask a question or attach a photo…",
+        "calculate_button": "🗺 Irrigation calculator",
+        "photo_pending": "Waiting for a plant photo. Attach it and add a short description.",
+    },
+}
+for language, copy in AI_ACTION_COPY.items():
+    AI_STRINGS[language].update(copy)
+
+
 def ai_text(lang: str, key: str) -> str:
     return AI_STRINGS.get(lang, AI_STRINGS["ru"])[key]
