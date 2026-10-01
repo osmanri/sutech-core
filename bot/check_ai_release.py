@@ -1,4 +1,4 @@
-"""Manual release probe on Render; consumes at most two normal API requests.
+"""Manual release probe on Render; consumes at most three API requests.
 
 Run once with production environment, never from a public HTTP endpoint.
 Prints only model IDs/statuses, never credentials, prompts, photos or answers.
@@ -6,6 +6,7 @@ All probe history is removed; usage remains counted against the real API quota.
 """
 
 import asyncio
+import json
 from contextlib import closing
 from pathlib import Path
 import struct
@@ -63,6 +64,10 @@ async def check():
             raise AIError("no_answer")
         print("AI_RELEASE_DEEP_OK" if result.model == GEMINI_DEEP_MODEL else "AI_RELEASE_DEEP_FALLBACK",
               result.model, flush=True)
+        print("AI_RELEASE_DEEP_STATUS", json.dumps(restarted.deep_client.last_diagnostic,
+                                                    sort_keys=True), flush=True)
+        if result.model != GEMINI_DEEP_MODEL or result.fallback:
+            raise AIError("deep_fallback")
         if store.page(user_id)["total"] != 2:
             raise AIError("storage_error")
         print("AI_RELEASE_HISTORY_RESTART_OK", "postgresql" if db.is_postgres() else "sqlite", flush=True)

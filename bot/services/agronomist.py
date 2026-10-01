@@ -87,6 +87,7 @@ class GeminiClient:
         self.api_key = api_key
         self.model = model
         self.thinking_level = thinking_level
+        self.last_diagnostic = {}
 
     @property
     def configured(self) -> bool:
@@ -94,6 +95,7 @@ class GeminiClient:
 
     async def generate(self, history: list[dict], text: str, lang: str,
                        image: bytes | None = None) -> str:
+        self.last_diagnostic = {}
         if not self.configured:
             raise AIError("not_configured")
         if not re.fullmatch(r"[A-Za-z0-9._-]+", self.model):
@@ -118,6 +120,7 @@ class GeminiClient:
                 async with session.post(url, json=payload,
                                         headers={"x-goog-api-key": self.api_key},
                                         allow_redirects=False) as response:
+                    self.last_diagnostic = {"http_status": response.status}
                     if response.status == 429:
                         raise AIError("quota")
                     if response.status in {400, 401, 403, 404}:
@@ -131,6 +134,15 @@ class GeminiClient:
         if not candidates:
             raise AIError("no_answer")
         candidate = candidates[0]
+        finish = candidate.get("finishReason")
+        if finish in {"STOP", "MAX_TOKENS", "SAFETY", "RECITATION", "OTHER", "BLOCKLIST",
+                      "PROHIBITED_CONTENT", "SPII", "MALFORMED_FUNCTION_CALL"}:
+            self.last_diagnostic["finish_reason"] = finish
+        usage = data.get("usageMetadata", {})
+        for key in ("promptTokenCount", "candidatesTokenCount", "thoughtsTokenCount"):
+            count = usage.get(key) if isinstance(usage, dict) else None
+            if type(count) is int and 0 <= count <= 1048576:
+                self.last_diagnostic[key] = count
         if candidate.get("finishReason") not in {None, "STOP", "MAX_TOKENS"}:
             raise AIError("no_answer")
         response_parts = candidate.get("content", {}).get("parts", [])
