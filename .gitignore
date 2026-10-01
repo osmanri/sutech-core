@@ -11,3 +11,6 @@ __pycache__/
 
 # Local test dependencies
 .test-deps/
+tmp/ai-test-deps/
+tmp/ai-test-env/
+tmp/ai-chat-tests.log

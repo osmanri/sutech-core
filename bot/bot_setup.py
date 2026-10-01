@@ -22,6 +22,7 @@ COMMANDS = {
     "ru": [
         BotCommand(command="start", description="Главное меню"),
         BotCommand(command="app", description="Открыть расчет полива"),
+        BotCommand(command="ai", description="ИИ-агроном: вопросы и фото растений"),
         BotCommand(command="fields", description="Сохранённые поля"),
         BotCommand(command="history", description="История расчетов"),
         BotCommand(command="language", description="Сменить язык"),
@@ -31,6 +32,7 @@ COMMANDS = {
     "kz": [
         BotCommand(command="start", description="Басты мәзір"),
         BotCommand(command="app", description="Суару есебін ашу"),
+        BotCommand(command="ai", description="ЖИ-агроном: сұрақтар мен өсімдік фотосы"),
         BotCommand(command="fields", description="Сақталған алқаптар"),
         BotCommand(command="history", description="Есептеулер тарихы"),
         BotCommand(command="language", description="Тілді өзгерту"),
@@ -40,6 +42,7 @@ COMMANDS = {
     "en": [
         BotCommand(command="start", description="Main menu"),
         BotCommand(command="app", description="Open irrigation calculator"),
+        BotCommand(command="ai", description="AI agronomist: questions and plant photos"),
         BotCommand(command="fields", description="Saved fields"),
         BotCommand(command="history", description="Calculation history"),
         BotCommand(command="language", description="Change language"),

@@ -21,6 +21,7 @@ from aiogram.utils.web_app import safe_parse_webapp_init_data
 from aiogram.client.default import DefaultBotProperties
 from aiogram.enums import ParseMode
 from aiogram.webhook.aiohttp_server import SimpleRequestHandler, setup_application
+from bot.handlers.agronomist import agronomist_router
 
 try:
     from bot_setup import configure_bot_profile
@@ -203,6 +204,7 @@ async def handle_bot_error(event: ErrorEvent) -> bool:
 def create_dispatcher() -> Dispatcher:
     dp = Dispatcher()
     dp.errors.register(handle_bot_error)
+    dp.include_router(agronomist_router)
     dp.include_router(fields_router)
     dp.include_router(start_router)
     dp.include_router(webapp_router)

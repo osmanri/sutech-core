@@ -275,7 +275,7 @@ class BotPlatformTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(bot.set_my_description.await_count, 3)
         self.assertEqual(
             [command.command for command in COMMANDS["ru"]],
-            ["start", "app", "fields", "history", "language", "help", "about"],
+            ["start", "app", "ai", "fields", "history", "language", "help", "about"],
         )
 
     async def test_language_selection_updates_personal_menu(self):

@@ -1,4 +1,5 @@
 from aiogram.types import KeyboardButton, ReplyKeyboardMarkup, WebAppInfo
+from bot.ai_i18n import ai_text
 
 try:
     from config import WEBAPP_URL
@@ -10,10 +11,7 @@ except ImportError:
 
 def get_main_reply_keyboard(lang: str = "ru") -> ReplyKeyboardMarkup:
     """
-    Возвращает постоянную нижнюю клавиатуру (Reply Menu) Su-Tech:
-      - Ряд 1: 🌿 Открыть Su-Tech / 🌿 Su-Tech ашу (WebApp-кнопка на всю ширину)
-      - Ряд 2: 📊 История / 📊 Тарих | ⚙️ Язык / ⚙️ Тіл
-      - Ряд 3: 📜 О системе / 📜 Жүйе туралы | ❓ Помощь / ❓ Көмек
+    Основное меню: Mini App, ИИ-агроном, поля, история и справка.
     """
     url_with_lang = f"{WEBAPP_URL}{'&' if '?' in WEBAPP_URL else '?'}lang={lang}"
 
@@ -26,6 +24,7 @@ def get_main_reply_keyboard(lang: str = "ru") -> ReplyKeyboardMarkup:
                     web_app=WebAppInfo(url=url_with_lang),
                 )
             ],
+            [KeyboardButton(text=ai_text(lang, "button"))],
             # Ряд 2: История и Язык
             [
                 KeyboardButton(text=t(lang, "btn_fields")),
