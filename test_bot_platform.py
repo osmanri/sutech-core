@@ -331,7 +331,7 @@ class BotPlatformTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_main_commands_always_send_a_bot_message(self):
         from bot.handlers import start, fields
-        message = SimpleNamespace(from_user=SimpleNamespace(id=42), answer=AsyncMock())
+        message = SimpleNamespace(from_user=SimpleNamespace(id=42), text="/start", answer=AsyncMock())
         state = SimpleNamespace(clear=AsyncMock())
         with patch.object(start, 'get_lang', return_value='ru'), \
              patch.object(start, 'get_user_history', return_value=[]), \

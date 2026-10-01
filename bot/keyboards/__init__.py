@@ -7,6 +7,7 @@ from .inline import (
 from .reply import (
     get_main_keyboard,
     get_main_reply_keyboard,
+    get_more_reply_keyboard,
     get_webapp_keyboard,
 )
 
@@ -17,5 +18,6 @@ __all__ = [
     "get_report_inline_keyboard",
     "get_main_keyboard",
     "get_main_reply_keyboard",
+    "get_more_reply_keyboard",
     "get_webapp_keyboard",
 ]

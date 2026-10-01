@@ -9,14 +9,14 @@ try:
     from bot_setup import configure_user_menu
     from i18n import t
     from keyboards.inline import get_history_carousel_keyboard, get_lang_keyboard, get_launch_keyboard
-    from keyboards.reply import get_main_reply_keyboard
+    from keyboards.reply import get_main_reply_keyboard, get_more_reply_keyboard
     from user_state import get_lang, set_lang
     from db import get_user_history
 except ImportError:
     from bot.bot_setup import configure_user_menu
     from bot.i18n import t
     from bot.keyboards.inline import get_history_carousel_keyboard, get_lang_keyboard, get_launch_keyboard
-    from bot.keyboards.reply import get_main_reply_keyboard
+    from bot.keyboards.reply import get_main_reply_keyboard, get_more_reply_keyboard
     from bot.user_state import get_lang, set_lang
     from bot.db import get_user_history
 
@@ -31,6 +31,17 @@ async def cmd_start(message: Message) -> None:
     Обработчик /start — отправляет инлайн-клавиатуру выбора языка.
     Приветствие и постоянное Reply-меню придут после выбора языка.
     """
+    payload = (message.text or "").split(maxsplit=1)
+    if len(payload) == 2 and payload[1] in {"app_ru", "app_kz", "app_en"}:
+        lang = payload[1].removeprefix("app_")
+        set_lang(message.from_user.id, lang)
+        try:
+            await configure_user_menu(message.bot, message.from_user.id, lang)
+        except Exception as exc:
+            logger.warning("Could not update localized app menu (%s)", type(exc).__name__)
+        await message.answer(t(lang, "app_prompt"),
+                             reply_markup=get_main_reply_keyboard(lang))
+        return
     lang = get_lang(message.from_user.id)
     await message.answer(
         text=t(lang, "choose_lang"),
@@ -222,6 +233,28 @@ async def change_lang_menu(message: Message) -> None:
     await message.answer(
         text=t(lang, "choose_lang"),
         reply_markup=get_lang_keyboard(),
+    )
+
+
+@start_router.message(F.text.in_({"☰ Ещё", "☰ Тағы", "☰ More", "/more"}))
+@start_router.message(Command("more"))
+async def show_more_menu(message: Message) -> None:
+    """Open infrequent settings without crowding the daily farmer menu."""
+    lang = get_lang(message.from_user.id)
+    await message.answer(
+        text={"kz": "Қосымша бөлім:", "en": "More options:"}.get(lang, "Дополнительные действия:"),
+        reply_markup=get_more_reply_keyboard(lang),
+    )
+
+
+@start_router.message(F.text.in_({"🔙 Назад", "🔙 Артқа", "🔙 Back", "/back"}))
+@start_router.message(Command("back"))
+async def return_to_main_menu(message: Message) -> None:
+    """Return to the compact main menu."""
+    lang = get_lang(message.from_user.id)
+    await message.answer(
+        text={"kz": "Басты мәзір:", "en": "Main menu:"}.get(lang, "Главное меню:"),
+        reply_markup=get_main_reply_keyboard(lang),
     )
 
 

@@ -6,7 +6,7 @@ AI_STRINGS = {
         "intro": "🌿 ИИ-агроном Su-Tech\n\nПришлите чёткое фото листа или растения и напишите культуру и что изменилось. Я разберу видимые симптомы, возможные причины и подскажу, что проверить. Можно также задать вопрос о поливе или уходе.\n\nФото даёт предварительную оценку, а не подтверждённый диагноз. Сообщения и фото передаются Google Gemini для ответа.\n\nНовый снимок начинает отдельный разбор. Диалог хранится временно; /newchat очищает его, /exit возвращает меню.",
         "not_configured": "ИИ-агроном ещё не подключён. Администратору нужно добавить GEMINI_API_KEY в настройки сервера. Расчёт полива доступен как обычно.",
         "new_button": "🆕 Новый разбор",
-        "exit_button": "↩️ Главное меню",
+        "exit_button": "🔙 Назад",
         "cleared": "Диалог очищен. Пришлите новое фото или задайте вопрос.",
         "closed": "Вернулись в главное меню.",
         "working": "Рассматриваю фото и симптомы…" ,
@@ -29,7 +29,7 @@ AI_STRINGS = {
         "intro": "🌿 Su-Tech ЖИ-агрономы\n\nЖапырақтың не өсімдіктің анық фотосын жіберіп, дақылды және не өзгергенін жазыңыз. Көрінетін белгілерді, ықтимал себептерді және нені тексеру керегін талдаймын. Суару мен күтім туралы да сұрақ қоюға болады.\n\nФото нақты диагноз емес, алдын ала бағалау береді. Жауап алу үшін мәтін мен фото Google Gemini қызметіне жіберіледі.\n\nЖаңа фото бөлек талдауды бастайды. Диалог уақытша сақталады; /newchat оны тазалайды, /exit мәзірге қайтарады.",
         "not_configured": "ЖИ-агроном әлі қосылмаған. Әкімші сервер баптауларына GEMINI_API_KEY қосуы керек. Суару есебі әдеттегідей қолжетімді.",
         "new_button": "🆕 Жаңа талдау",
-        "exit_button": "↩️ Басты мәзір",
+        "exit_button": "🔙 Артқа",
         "cleared": "Диалог тазаланды. Жаңа фото немесе сұрақ жіберіңіз.",
         "closed": "Басты мәзірге оралдық.",
         "working": "Фото мен белгілерді талдап жатырмын…",
@@ -52,7 +52,7 @@ AI_STRINGS = {
         "intro": "🌿 Su-Tech AI agronomist\n\nSend a clear photo of a leaf or plant, name the crop and describe what changed. I will review visible symptoms, possible causes and what to check. You can also ask about irrigation or plant care.\n\nA photo provides a preliminary assessment, not a confirmed diagnosis. Your messages and photos are sent to Google Gemini for an answer.\n\nA new photo starts a separate assessment. Conversation history is temporary; /newchat clears it, /exit returns to the menu.",
         "not_configured": "The AI agronomist is not connected yet. The administrator needs to add GEMINI_API_KEY to the server settings. Irrigation planning remains available.",
         "new_button": "🆕 New assessment",
-        "exit_button": "↩️ Main menu",
+        "exit_button": "🔙 Back",
         "cleared": "Conversation cleared. Send a new photo or question.",
         "closed": "Back to the main menu.",
         "working": "Reviewing the photo and symptoms…",
@@ -116,7 +116,7 @@ for language, copy in AI_ACTION_COPY.items():
 
 AI_CHAT_COPY = {
     "ru": {
-        "intro": "🌿 ИИ-агроном Su-Tech\n\nОтправьте фото растения с подписью или задайте вопрос о поливе и уходе. После ответа можно уточнять в этом же чате.\n\n«Углублённый анализ» включает более сильную модель для следующего вопроса или фото.\n\nДиалог и последние 100 разборов сохраняются в вашей истории после перезапуска. Само фото не сохраняется. «Новый разбор» начинает новый диалог, сохраняя старые ответы.\n\nОценка по фото предварительная. Фото и сообщения передаются Google Gemini.",
+        "intro": "🌿 ИИ-агроном Su-Tech\n\nОтправьте фото растения с подписью или задайте вопрос о поливе и уходе. После ответа можно уточнять в этом же чате.\n\nДиалог и последние 100 разборов сохраняются в вашей истории после перезапуска. Само фото не сохраняется. «Новый разбор» начинает новый диалог, сохраняя старые ответы.\n\nОценка по фото предварительная. Фото и сообщения передаются Google Gemini.",
         "cleared": "Новый диалог начат. Предыдущие ответы доступны в «Истории ИИ». Пришлите фото или вопрос.",
         "deep_button": "🔎 Углублённый анализ",
         "deep_hint": "🔎 Углублённый анализ включён для следующего запроса.\n\nПришлите фото с описанием или задайте уточняющий вопрос. Чтобы подробнее изучить прежний снимок, прикрепите его ещё раз. Если сильная модель недоступна, я продолжу в обычном режиме и сообщу об этом.",
@@ -136,7 +136,7 @@ AI_CHAT_COPY = {
         "storage_error": "История временно недоступна. Попробуйте ещё раз через минуту — ваши сохранённые разборы не удалены.",
     },
     "kz": {
-        "intro": "🌿 Su-Tech ЖИ-агрономы\n\nӨсімдік фотосын сипаттамасымен жіберіңіз немесе суару мен күтім туралы сұрақ қойыңыз. Жауаптан кейін осы чатта нақтылауға болады.\n\n«Терең талдау» келесі сұраққа не фотоға қуаттырақ модельді қосады.\n\nДиалог пен соңғы 100 талдау қайта іске қосылғаннан кейін де сақталады. Фотолар сақталмайды. «Жаңа талдау» бұрынғы жауаптарды тарихта қалдырып, жаңа диалог бастайды.\n\nФото бойынша бағалау алдын ала жасалады. Фото мен мәтін Google Gemini қызметіне жіберіледі.",
+        "intro": "🌿 Su-Tech ЖИ-агрономы\n\nӨсімдік фотосын сипаттамасымен жіберіңіз немесе суару мен күтім туралы сұрақ қойыңыз. Жауаптан кейін осы чатта нақтылауға болады.\n\nДиалог пен соңғы 100 талдау қайта іске қосылғаннан кейін де сақталады. Фотолар сақталмайды. «Жаңа талдау» бұрынғы жауаптарды тарихта қалдырып, жаңа диалог бастайды.\n\nФото бойынша бағалау алдын ала жасалады. Фото мен мәтін Google Gemini қызметіне жіберіледі.",
         "cleared": "Жаңа диалог басталды. Бұрынғы жауаптар «ЖИ тарихында» сақталған. Фото немесе сұрақ жіберіңіз.",
         "deep_button": "🔎 Терең талдау",
         "deep_hint": "🔎 Келесі сұрау үшін терең талдау қосылды.\n\nФото мен сипаттаманы жіберіңіз немесе нақтылаушы сұрақ қойыңыз. Алдыңғы фотоны қайта зерттеу үшін оны қайта тіркеңіз. Қуатты модель қолжетімсіз болса, қалыпты режимде жауап беріп, хабарлаймын.",
@@ -156,7 +156,7 @@ AI_CHAT_COPY = {
         "storage_error": "Тарих уақытша қолжетімсіз. Бір минуттан кейін қайталаңыз — сақталған талдаулар жойылған жоқ.",
     },
     "en": {
-        "intro": "🌿 Su-Tech AI agronomist\n\nSend a plant photo with a description, or ask about irrigation and care. Follow up in this same chat.\n\nDeep analysis uses a stronger model for your next question or photo.\n\nYour conversation and latest 100 assessments survive restarts. Photos are not stored. New assessment starts a fresh conversation and keeps previous answers in history.\n\nPhoto assessments are preliminary. Photos and messages are sent to Google Gemini.",
+        "intro": "🌿 Su-Tech AI agronomist\n\nSend a plant photo with a description, or ask about irrigation and care. Follow up in this same chat.\n\nYour conversation and latest 100 assessments survive restarts. Photos are not stored. New assessment starts a fresh conversation and keeps previous answers in history.\n\nPhoto assessments are preliminary. Photos and messages are sent to Google Gemini.",
         "cleared": "New conversation started. Previous answers remain in AI history. Send a photo or question.",
         "deep_button": "🔎 Deep analysis",
         "deep_hint": "🔎 Deep analysis is enabled for the next request.\n\nSend a photo with a description or ask a follow-up question. To re-examine an earlier photo, attach it again. If the stronger model is unavailable, I will answer in standard mode and let you know.",

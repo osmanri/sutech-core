@@ -14,12 +14,12 @@ from aiogram.types import (CallbackQuery, KeyboardButton, Message, ReplyKeyboard
 
 from bot.ai_i18n import AI_STRINGS, ai_text
 from bot.config import GEMINI_API_KEY, GEMINI_MODEL, GEMINI_DEEP_MODEL
-from bot.bot_setup import webapp_url
+from bot.bot_setup import webapp_url, configure_user_menu
 from bot.i18n import t
 from bot.keyboards.reply import get_main_reply_keyboard
 from bot.services.agronomist import (AIError, AgronomistService, GeminiClient,
                                     LimitedImageBuffer, MAX_IMAGE_BYTES, MAX_TEXT_CHARS)
-from bot.user_state import get_lang
+from bot.user_state import get_lang, set_lang
 from bot.services.ai_history import SQLAIHistory
 
 agronomist_router = Router(name="agronomist")
@@ -43,17 +43,29 @@ def chat_keyboard(lang: str) -> ReplyKeyboardMarkup:
          KeyboardButton(text=ai_text(lang, "care_button"))],
         [KeyboardButton(text=ai_text(lang, "calculate_button"),
                         web_app=WebAppInfo(url=webapp_url(lang)))],
-        [KeyboardButton(text=ai_text(lang, "deep_button")),
-         KeyboardButton(text=ai_text(lang, "history_button"))],
-        [KeyboardButton(text=ai_text(lang, "new_button")),
-         KeyboardButton(text=ai_text(lang, "exit_button"))],
+        [KeyboardButton(text=ai_text(lang, "history_button")),
+         KeyboardButton(text=ai_text(lang, "new_button"))],
+        [KeyboardButton(text=ai_text(lang, "exit_button"))],
     ], resize_keyboard=True, input_field_placeholder=ai_text(lang, "placeholder"))
 
 
 @agronomist_router.message(Command("ai", "disease"))
-@agronomist_router.message(CommandStart(deep_link=True, magic=F.args == "ai"))
+@agronomist_router.message(CommandStart(deep_link=True, magic=F.args.in_({"ai", "ai_ru", "ai_kz", "ai_en"})))
 @agronomist_router.message(F.text.in_({copy["button"] for copy in AI_STRINGS.values()}))
 async def start_ai(message: Message, state: FSMContext) -> None:
+    payload = (message.text or "").split(maxsplit=1)
+    requested_lang = None
+    if len(payload) == 2 and payload[1] in {"ai_ru", "ai_kz", "ai_en"}:
+        requested_lang = payload[1].removeprefix("ai_")
+    elif message.text:
+        requested_lang = next((language for language, copy in AI_STRINGS.items()
+                               if copy["button"] == message.text), None)
+    if requested_lang:
+        set_lang(message.from_user.id, requested_lang)
+        try:
+            await configure_user_menu(message.bot, message.from_user.id, requested_lang)
+        except Exception as exc:
+            logger.warning("Could not update localized AI menu (%s)", type(exc).__name__)
     lang = get_lang(message.from_user.id)
     await state.clear()
     assistant.clear(message.from_user.id)
@@ -206,7 +218,7 @@ async def choose_topic(message: Message, state: FSMContext) -> None:
 
 # Exit the AI state before the usual menu handlers receive their commands.
 MENU_TEXTS = {t(lang, key) for lang in ("ru", "kz", "en")
-              for key in ("btn_fields", "btn_history", "btn_lang", "btn_about", "btn_help", "btn_webapp")}
+              for key in ("btn_fields", "btn_history", "btn_lang", "btn_about", "btn_help", "btn_webapp", "btn_more", "btn_back")}
 
 
 @agronomist_router.message(AgronomistChat.active,

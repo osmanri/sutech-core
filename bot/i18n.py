@@ -68,6 +68,8 @@ STRINGS: dict[str, dict[str, str]] = {
         "btn_lang":     "⚙️ Язык",
         "btn_about":    "📜 О системе",
         "btn_help":     "❓ Помощь",
+        "btn_more":     "☰ Ещё",
+        "btn_back":     "🔙 Назад",
 
         # Инлайн-кнопки под отчетом
         "btn_recalculate": "🔄 Новый расчет",
@@ -299,6 +301,8 @@ STRINGS: dict[str, dict[str, str]] = {
         "btn_lang":     "⚙️ Тіл",
         "btn_about":    "📜 Жүйе туралы",
         "btn_help":     "❓ Көмек",
+        "btn_more":     "☰ Тағы",
+        "btn_back":     "🔙 Артқа",
 
         # Инлайн-кнопки под отчетом
         "btn_recalculate": "🔄 Қайта есептеу",
@@ -762,6 +766,7 @@ STRINGS['en'] = {**STRINGS['ru'], **{
     'unknown_message': 'I did not understand that message. Open Su-Tech below or choose a menu command.',
     'btn_webapp': '🌿 Open Su-Tech', 'btn_history': '📊 History',
     'btn_lang': '⚙️ Language', 'btn_about': '📜 About', 'btn_help': '❓ Help',
+    'btn_more': '☰ More', 'btn_back': '🔙 Back',
     'btn_fields': '🌱 My fields', 'btn_explain': '💡 Why this result?',
     'btn_recalculate': '🔄 New calculation', 'btn_field_watered': '💧 I irrigated',
     'btn_field_update': '🔄 Update today', 'btn_export_field': '📄 Export CSV log',

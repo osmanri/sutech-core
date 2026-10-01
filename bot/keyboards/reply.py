@@ -11,7 +11,7 @@ except ImportError:
 
 def get_main_reply_keyboard(lang: str = "ru") -> ReplyKeyboardMarkup:
     """
-    Основное меню: Mini App, ИИ-агроном, поля, история и справка.
+    Короткое главное меню: только действия, которыми фермер пользуется чаще всего.
     """
     url_with_lang = f"{WEBAPP_URL}{'&' if '?' in WEBAPP_URL else '?'}lang={lang}"
 
@@ -25,17 +25,28 @@ def get_main_reply_keyboard(lang: str = "ru") -> ReplyKeyboardMarkup:
                 )
             ],
             [KeyboardButton(text=ai_text(lang, "button"), style="success")],
-            # Ряд 2: История и Язык
+            # Основные действия: расчёт, ИИ, поля и история.
             [
                 KeyboardButton(text=t(lang, "btn_fields")),
                 KeyboardButton(text=t(lang, "btn_history")),
             ],
-            # Ряд 3: О системе и Помощь
             [
-                KeyboardButton(text=t(lang, "btn_lang")),
-                KeyboardButton(text=t(lang, "btn_about")),
-                KeyboardButton(text=t(lang, "btn_help")),
+                KeyboardButton(text=t(lang, "btn_more")),
             ],
+        ],
+        resize_keyboard=True,
+        persistent=True,
+    )
+
+
+def get_more_reply_keyboard(lang: str = "ru") -> ReplyKeyboardMarkup:
+    """Secondary menu for infrequent actions; keeps the daily menu uncluttered."""
+    return ReplyKeyboardMarkup(
+        keyboard=[
+            [KeyboardButton(text=t(lang, "btn_lang")),
+             KeyboardButton(text=t(lang, "btn_help"))],
+            [KeyboardButton(text=t(lang, "btn_about"))],
+            [KeyboardButton(text=t(lang, "btn_back"))],
         ],
         resize_keyboard=True,
         persistent=True,
