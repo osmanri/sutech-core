@@ -49,7 +49,8 @@ async def replace_ui_message(message: Message, state: FSMContext, text: str,
             edited = await message.bot.edit_message_text(
                 chat_id=message.chat.id, message_id=previous_id, text=text,
                 parse_mode=None,
-                reply_markup=reply_markup if isinstance(reply_markup, InlineKeyboardMarkup) else None)
+                reply_markup=(reply_markup if isinstance(reply_markup, InlineKeyboardMarkup)
+                              else InlineKeyboardMarkup(inline_keyboard=[])))
             await state.update_data(ai_ui_message_id=edited.message_id)
             return edited
         except TelegramBadRequest:
@@ -202,16 +203,16 @@ async def send_history(message: Message, user_id: int, lang: str, offset=0,
             await replace_ui_message(message, state, ai_text(lang, "history_empty"))
         elif edit:
             await message.edit_text(ai_text(lang, "history_empty"), parse_mode=None,
-                                    reply_markup=None)
+                                    reply_markup=InlineKeyboardMarkup(inline_keyboard=[]))
         else:
             await message.answer(ai_text(lang, "history_empty"), parse_mode=None)
         return
     entry, index, total = page["entry"], page["offset"], page["total"]
     date = datetime.fromtimestamp(entry["created_at"] / 1000, timezone.utc).strftime("%d.%m.%Y %H:%M UTC")
     card = (ai_text(lang, "history_title").format(page=index + 1, total=total) + " · " + date
-            + "\n\n" + ai_text(lang, "history_question") + ":\n" + entry["question"]
+            + "\n\n" + ai_text(lang, "history_question") + ":\n" + entry["question"][:1000]
             + ("\n" + ai_text(lang, "history_photo") if entry["has_image"] else "")
-            + "\n\n" + ai_text(lang, "history_answer") + ":\n" + entry["answer"])
+            + "\n\n" + ai_text(lang, "history_answer") + ":\n" + entry["answer"][:2700])
     markup = history_keyboard(lang, index, total)
     if edit:
         await message.edit_text(card, parse_mode=None, reply_markup=markup)
@@ -261,11 +262,15 @@ async def delete_ai_history(callback: CallbackQuery, state: FSMContext) -> None:
             await state.clear()
             await state.set_state(AgronomistChat.active)
             await state.update_data(ai_ui_message_id=callback.message.message_id)
-            await callback.message.edit_text(ai_text(lang, "deleted"), parse_mode=None, reply_markup=None)
+            await callback.message.edit_text(
+                ai_text(lang, "deleted"), parse_mode=None,
+                reply_markup=InlineKeyboardMarkup(inline_keyboard=[]))
         except AIError as exc:
             await callback.message.answer(ai_text(lang, exc.code), parse_mode=None)
     else:
-        await callback.message.edit_text(ai_text(lang, "delete_no"), parse_mode=None, reply_markup=None)
+        await callback.message.edit_text(
+            ai_text(lang, "delete_no"), parse_mode=None,
+            reply_markup=InlineKeyboardMarkup(inline_keyboard=[]))
 
 
 @agronomist_router.message(F.text.in_(ACTION_BUTTONS - {
