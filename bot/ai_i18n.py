@@ -179,6 +179,13 @@ AI_CHAT_COPY = {
 for language, copy in AI_CHAT_COPY.items():
     AI_STRINGS[language].update(copy)
 
+for language, message in {
+    "ru": "Я отвечаю на вопросы о растениях, болезнях и вредителях, почве, поливе и Su-Tech. Уточните культуру или вопрос по проекту. Этот запрос не отправлен в Gemini и не расходует лимит.",
+    "kz": "Мен өсімдіктер, аурулар мен зиянкестер, топырақ, суару және Su-Tech туралы сұрақтарға жауап беремін. Дақылды немесе жобаға қатысты сұрақты нақтылаңыз. Бұл сұрау Gemini-ге жіберілген жоқ, лимит жұмсалмайды.",
+    "en": "I help with plants, diseases and pests, soil, irrigation and Su-Tech. Please name the crop or clarify your project question. This request was not sent to Gemini and does not use your quota.",
+}.items():
+    AI_STRINGS[language]["off_topic"] = message
+
 
 def ai_text(lang: str, key: str) -> str:
     return AI_STRINGS.get(lang, AI_STRINGS["ru"])[key]

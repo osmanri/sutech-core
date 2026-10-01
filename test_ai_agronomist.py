@@ -78,7 +78,7 @@ class GeminiTests(unittest.IsolatedAsyncioTestCase):
     async def test_older_model_override_keeps_compatible_generation_parameters(self):
         session = Session(Response({"candidates": [{"content": {"parts": [{"text": "Ответ"}]}}]}))
         with patch("bot.services.agronomist.aiohttp.ClientSession", return_value=session):
-            await GeminiClient("test", "gemini-2.5-flash-lite").generate([], "Вопрос", "ru")
+            await GeminiClient("test", "gemini-2.5-flash-lite").generate([], "Как поливать томат?", "ru")
         config = session.post.call_args.kwargs['json']['generationConfig']
         self.assertNotIn('thinkingConfig', config)
         self.assertEqual(config['maxOutputTokens'], 1200)
@@ -95,7 +95,7 @@ class GeminiTests(unittest.IsolatedAsyncioTestCase):
                 with patch("bot.services.agronomist.aiohttp.ClientSession",
                            return_value=Session(Response(data, status))):
                     with self.assertRaises(AIError) as error:
-                        await GeminiClient("test").generate([], "Вопрос", "ru")
+                        await GeminiClient("test").generate([], "Как поливать томат?", "ru")
                 self.assertEqual(error.exception.code, code)
                 self.assertNotIn("do-not-show", str(error.exception))
 
@@ -104,7 +104,7 @@ class GeminiTests(unittest.IsolatedAsyncioTestCase):
         session.post.side_effect = asyncio.TimeoutError()
         with patch("bot.services.agronomist.aiohttp.ClientSession", return_value=session):
             with self.assertRaises(AIError) as error:
-                await GeminiClient("test").generate([], "Вопрос", "ru")
+                await GeminiClient("test").generate([], "Как поливать томат?", "ru")
         self.assertEqual(error.exception.code, "unavailable")
 
     async def test_empty_reasoning_response_has_safe_release_diagnostics(self):
@@ -126,7 +126,7 @@ class GeminiTests(unittest.IsolatedAsyncioTestCase):
     async def test_missing_key_does_not_call_provider(self):
         with patch("bot.services.agronomist.aiohttp.ClientSession") as factory:
             with self.assertRaises(AIError) as error:
-                await GeminiClient("").generate([], "Вопрос", "ru")
+                await GeminiClient("").generate([], "Как поливать томат?", "ru")
         self.assertEqual(error.exception.code, "not_configured")
         factory.assert_not_called()
 
@@ -172,19 +172,19 @@ class ConversationTests(unittest.IsolatedAsyncioTestCase):
         await service.reply(2, "Другой фермер", "en")
         self.assertEqual(self.client.generate.await_args.args[0], [])
         for i in range(12):
-            await service.reply(1, f"Вопрос {i}", "ru")
+            await service.reply(1, f"Полив: вопрос {i}", "ru")
         self.assertEqual(len(service.sessions[1].history), MAX_HISTORY_MESSAGES)
         await service.reply(1, "Новое растение", "ru", JPEG)
         self.assertEqual(self.client.generate.await_args.args[0], [])
 
     async def test_daily_limit_survives_new_chat_and_is_global(self):
         service = self.service(user_daily_limit=1, daily_limit=2)
-        await service.reply(1, "Вопрос", "ru")
+        await service.reply(1, "Как поливать томат?", "ru")
         service.clear(1)
         with self.assertRaises(AIError) as error:
-            await service.reply(1, "Обход лимита", "ru")
+            await service.reply(1, "Полив томата", "ru")
         self.assertEqual(error.exception.code, "daily_limit")
-        await service.reply(2, "Вопрос", "ru")
+        await service.reply(2, "Как поливать томат?", "ru")
         with self.assertRaises(AIError):
             await service.reply(3, "Третий фермер", "ru")
 
@@ -213,12 +213,12 @@ class ConversationTests(unittest.IsolatedAsyncioTestCase):
     async def test_session_cache_has_ttl_and_capacity(self):
         service = self.service(user_daily_limit=1000, daily_limit=1000)
         for uid in range(MAX_SESSIONS + 2):
-            await service.reply(uid, "Вопрос", "ru")
+            await service.reply(uid, "Как поливать томат?", "ru")
         self.assertEqual(len(service.sessions), MAX_SESSIONS)
         self.assertNotIn(0, service.sessions)
         for session in service.sessions.values():
             session.touched -= 1801
-        await service.reply(999, "Вопрос", "ru")
+        await service.reply(999, "Как поливать томат?", "ru")
         self.assertEqual(list(service.sessions), [999])
 
 
@@ -299,7 +299,7 @@ class TelegramAITests(unittest.IsolatedAsyncioTestCase):
             await self.send(text=ai_text("ru", "water_button"))
             await self.send(text="Томат, суглинок, 30 дней")
         text = self.client.generate.await_args.args[1]
-        self.assertIn("поливе", text)
+        self.assertEqual(text, "Томат, суглинок, 30 дней")
         self.assertIn("Томат", text)
         self.assertIsNone((await self.state.get_data()).get("ai_topic"))
 
@@ -308,6 +308,18 @@ class TelegramAITests(unittest.IsolatedAsyncioTestCase):
             await self.send(text="/start ai")
         self.assertEqual(await self.state.get_state(), handler.AgronomistChat.active.state)
         self.assertEqual(transport.await_args.args[0].text, ai_text("ru", "intro"))
+
+    async def test_water_button_cannot_disguise_off_topic_text_or_consume_deep_mode(self):
+        with patch.object(Bot, "__call__", new_callable=AsyncMock) as transport:
+            await self.send(text=ai_text("ru", "water_button"))
+            await self.state.update_data(ai_deep=True)
+            await self.send(text="Посоветуй фильм")
+        self.client.generate.assert_not_called()
+        self.assertEqual(len(self.service.requests), 0)
+        self.assertTrue((await self.state.get_data())["ai_deep"])
+        messages = [call.args[0].text for call in transport.await_args_list
+                    if type(call.args[0]).__name__ == "SendMessage"]
+        self.assertIn(ai_text("ru", "off_topic"), messages)
 
     async def test_deep_button_is_one_request_mode_and_history_does_not_spend_quota(self):
         deep = SimpleNamespace(configured=True, model="gemini-3.8-flash",

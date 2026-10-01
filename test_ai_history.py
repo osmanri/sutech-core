@@ -72,8 +72,8 @@ class HistoryTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_new_dialog_retains_archive_delete_is_owner_scoped(self):
         service = self.service()
-        await service.reply(1, "User one's private question", "en")
-        await service.reply(2, "Other user's question", "en")
+        await service.reply(1, "User one's private crop question", "en")
+        await service.reply(2, "Other user's crop question", "en")
         await service.reset(1)
         self.assertEqual(self.store.load(1)["history"], [])
         self.assertEqual(self.store.page(1)["total"], 1)
@@ -88,8 +88,8 @@ class HistoryTests(unittest.IsolatedAsyncioTestCase):
             {"text": "Hidden", "thought": True, "thoughtSignature": "lite-signature"},
             {"text": "Visible answer", "thoughtSignature": "another-lite-signature"}])
         service = self.service()
-        await service.reply(1, "Question", "en")
-        answer = await service.reply(1, "Analyze in depth", "en", deep=True)
+        await service.reply(1, "Irrigation question", "en")
+        answer = await service.reply(1, "Analyze irrigation in depth", "en", deep=True)
         self.assertEqual(answer.model, self.deep.model)
         history = self.deep.generate.await_args.args[0]
         self.assertIn("Visible answer", str(history))
@@ -107,7 +107,7 @@ class HistoryTests(unittest.IsolatedAsyncioTestCase):
     async def test_deep_retry_charges_each_attempt_and_strict_probe_never_uses_lite(self):
         self.deep.generate.side_effect = [AIError("unavailable", retryable=True), "Ответ 3.8"]
         with patch("bot.services.agronomist.asyncio.sleep", new_callable=AsyncMock):
-            answer = await self.service().reply(1, "Question", "en", deep=True, allow_fallback=False)
+            answer = await self.service().reply(1, "Irrigation question", "en", deep=True, allow_fallback=False)
         self.assertEqual(answer.model, self.deep.model)
         self.assertFalse(answer.fallback)
         with closing(db.get_connection()) as conn:
@@ -117,7 +117,7 @@ class HistoryTests(unittest.IsolatedAsyncioTestCase):
         self.lite.generate.assert_not_called()
         self.deep.generate.side_effect = AIError("quota")
         with self.assertRaises(AIError) as error:
-            await self.service().reply(2, "Question", "en", deep=True, allow_fallback=False)
+            await self.service().reply(2, "Irrigation question", "en", deep=True, allow_fallback=False)
         self.assertEqual(error.exception.code, "quota")
         self.lite.generate.assert_not_called()
 
@@ -125,7 +125,7 @@ class HistoryTests(unittest.IsolatedAsyncioTestCase):
         self.deep.generate.side_effect = AIError("unavailable", retryable=True)
         with patch("bot.services.agronomist.asyncio.sleep", new_callable=AsyncMock):
             with self.assertRaises(AIError) as error:
-                await self.service(user_daily_limit=1).reply(1, "Question", "en", deep=True)
+                await self.service(user_daily_limit=1).reply(1, "Irrigation question", "en", deep=True)
         self.assertEqual(error.exception.code, "daily_limit")
         self.deep.generate.assert_awaited_once()
         self.lite.generate.assert_not_called()
@@ -133,7 +133,7 @@ class HistoryTests(unittest.IsolatedAsyncioTestCase):
     async def test_full_deep_quota_falls_back_without_spending_provider_request(self):
         for _ in range(18):
             self.store.reserve(2, self.deep.model, 18, 100, 100, 0)
-        answer = await self.service().reply(1, "Question", "en", deep=True)
+        answer = await self.service().reply(1, "Irrigation question", "en", deep=True)
         self.assertTrue(answer.fallback)
         self.deep.generate.assert_not_called()
         self.lite.generate.assert_awaited_once()
@@ -147,7 +147,7 @@ class HistoryTests(unittest.IsolatedAsyncioTestCase):
             return "Stale answer"
 
         self.lite.generate.side_effect = slow
-        task = asyncio.create_task(self.service().reply(1, "Question", "en"))
+        task = asyncio.create_task(self.service().reply(1, "Irrigation question", "en"))
         await ready.wait()
         await self.service().reset(1, delete=True)
         release.set()
@@ -158,10 +158,10 @@ class HistoryTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(self.store.load(1)["history"], [])
 
     async def test_quota_survives_restart_history_deletion_and_explicit_model_change(self):
-        await self.service(user_daily_limit=1).reply(1, "Question", "en")
+        await self.service(user_daily_limit=1).reply(1, "Irrigation question", "en")
         await self.service().reset(1, delete=True)
         with self.assertRaises(AIError) as error:
-            await self.service(user_daily_limit=1).reply(1, "Another", "en", deep=True)
+            await self.service(user_daily_limit=1).reply(1, "Another irrigation question", "en", deep=True)
         self.assertEqual(error.exception.code, "daily_limit")
         self.deep.generate.assert_not_called()
 
@@ -198,7 +198,7 @@ class HistoryTests(unittest.IsolatedAsyncioTestCase):
     async def test_storage_failure_never_sends_unsaved_request(self):
         with patch.object(self.store, "load", side_effect=RuntimeError("secret database URL")):
             with self.assertRaises(AIError) as error:
-                await self.service().reply(1, "Question", "en")
+                await self.service().reply(1, "Irrigation question", "en")
         self.assertEqual(error.exception.code, "storage_error")
         self.assertNotIn("secret", str(error.exception))
         self.lite.generate.assert_not_called()

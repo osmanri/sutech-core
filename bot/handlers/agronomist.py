@@ -267,8 +267,8 @@ async def ask_ai(message: Message, state: FSMContext) -> None:
     if topic == "photo" and not has_image:
         await message.answer(ai_text(lang, "photo_pending"), reply_markup=chat_keyboard(lang))
         return
-    if not has_image and topic in {"water", "care"}:
-        text = ai_text(lang, topic + "_button") + ": " + text
+    # Do not prepend a crop-care topic to arbitrary text: it could make an
+    # unrelated question appear relevant to the local quota-saving filter.
     # One-time prompt context; follow-ups use the assistant's conversation.
     await state.update_data(ai_topic=None)
     if await state.get_state() is None:
