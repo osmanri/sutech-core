@@ -1,6 +1,9 @@
 """Open-Meteo daily forecast in the field's local time; Strict GPS-first architecture."""
 from datetime import datetime, timedelta, timezone
+import logging
 import aiohttp
+
+logger = logging.getLogger(__name__)
 
 try:
     from water_balance import number
@@ -42,13 +45,27 @@ async def fetch_daily_weather(lat, lon):
     lon_f = number(lon, 'longitude', -180, 180)
 
     async with aiohttp.ClientSession() as session:
-        async with session.get('https://api.open-meteo.com/v1/forecast', params={
+        params = {
             'latitude': lat_f,
             'longitude': lon_f,
             'timezone': 'auto',
             'forecast_days': 1,
             'daily': 'et0_fao_evapotranspiration,precipitation_sum',
             'precipitation_unit': 'mm',
-        }, timeout=aiohttp.ClientTimeout(total=8)) as response:
-            response.raise_for_status()
-            return parse_daily_weather(await response.json())
+        }
+        try:
+            async with session.get('https://api.open-meteo.com/v1/forecast', params=params,
+                                   timeout=aiohttp.ClientTimeout(total=8)) as response:
+                response.raise_for_status()
+                return parse_daily_weather(await response.json())
+        except (aiohttp.ClientError, TimeoutError):
+            # Same daily forecast through our bounded Vercel cache. Shared
+            # hosting IPs may exhaust the provider quota independently of us.
+            # Date, units and values are validated again before calculation.
+            async with session.get('https://frontend-2-mauve.vercel.app/api/weather',
+                                   params={'latitude': lat_f, 'longitude': lon_f},
+                                   timeout=aiohttp.ClientTimeout(total=8)) as response:
+                response.raise_for_status()
+                weather = parse_daily_weather(await response.json())
+                logger.info('Daily weather recovered through application cache')
+                return weather
