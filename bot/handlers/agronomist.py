@@ -14,7 +14,8 @@ from aiogram.types import (CallbackQuery, Message, ReplyKeyboardMarkup, ReplyKey
                           WebAppInfo, InlineKeyboardButton, InlineKeyboardMarkup)
 
 from bot.ai_i18n import AI_STRINGS, ai_text
-from bot.config import GEMINI_API_KEY, GEMINI_MODEL, GEMINI_DEEP_MODEL
+from bot.config import (AI_USER_DAILY_LIMIT, GEMINI_API_KEY, GEMINI_MODEL,
+                        GEMINI_DEEP_MODEL)
 from bot.bot_setup import webapp_url, configure_user_menu
 from bot.i18n import t
 from bot.keyboards.reply import get_main_reply_keyboard
@@ -28,6 +29,7 @@ agronomist_router = Router(name="agronomist")
 agronomist_router.message.filter(F.chat.type == "private")
 agronomist_router.callback_query.filter(F.message.chat.type == "private")
 assistant = AgronomistService(GeminiClient(GEMINI_API_KEY, GEMINI_MODEL),
+                             user_daily_limit=AI_USER_DAILY_LIMIT,
                              deep_client=GeminiClient(GEMINI_API_KEY, GEMINI_DEEP_MODEL, "MEDIUM"),
                              store=SQLAIHistory())
 logger = logging.getLogger(__name__)

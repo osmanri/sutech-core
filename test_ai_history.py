@@ -121,14 +121,29 @@ class HistoryTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(error.exception.code, "quota")
         self.lite.generate.assert_not_called()
 
-    async def test_deep_retry_stops_when_user_quota_is_exhausted(self):
-        self.deep.generate.side_effect = AIError("unavailable", retryable=True)
+    async def test_deep_retry_counts_as_one_user_question(self):
+        self.deep.generate.side_effect = [AIError("unavailable", retryable=True), "Retried answer"]
         with patch("bot.services.agronomist.asyncio.sleep", new_callable=AsyncMock):
-            with self.assertRaises(AIError) as error:
-                await self.service(user_daily_limit=1).reply(1, "Irrigation question", "en", deep=True)
+            answer = await self.service(user_daily_limit=1).reply(
+                1, "Irrigation question", "en", deep=True)
+        self.assertEqual(str(answer), "Retried answer")
+        self.assertEqual(self.deep.generate.await_count, 2)
+        with self.assertRaises(AIError) as error:
+            await self.service(user_daily_limit=1).reply(
+                1, "Another irrigation question", "en", deep=True)
         self.assertEqual(error.exception.code, "daily_limit")
-        self.deep.generate.assert_awaited_once()
+        self.assertEqual(self.deep.generate.await_count, 2)
         self.lite.generate.assert_not_called()
+
+    async def test_deep_fallback_counts_as_one_user_question(self):
+        self.deep.generate.side_effect = AIError("quota")
+        service = self.service(user_daily_limit=1)
+        answer = await service.reply(1, "Irrigation question", "en", deep=True)
+        self.assertTrue(answer.fallback)
+        self.lite.generate.assert_awaited_once()
+        with self.assertRaises(AIError) as error:
+            await service.reply(1, "Another irrigation question", "en")
+        self.assertEqual(error.exception.code, "daily_limit")
 
     async def test_full_deep_quota_falls_back_without_spending_provider_request(self):
         for _ in range(18):
@@ -183,6 +198,13 @@ class HistoryTests(unittest.IsolatedAsyncioTestCase):
         with self.assertRaises(HistoryError) as error:
             self.store.reserve(1, "deep", 20, 100, 5, 3)
         self.assertEqual(error.exception.code, "cooldown")
+
+    def test_internal_provider_attempts_do_not_use_user_question_quota(self):
+        self.store.reserve(1, "deep", 18, 1, 100, 0)
+        self.store.reserve(1, "deep", 18, 1, 100, 0, count_user=False)
+        with self.assertRaises(HistoryError) as error:
+            self.store.reserve(1, "lite", 450, 1, 100, 0)
+        self.assertEqual(error.exception.code, "daily_limit")
 
     def test_archive_bound_and_pagination_retain_latest_full_answers(self):
         for index in range(MAX_EXCHANGES + 3):

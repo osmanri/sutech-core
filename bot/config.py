@@ -16,6 +16,8 @@ WEBAPP_URL: str = os.getenv("WEBAPP_URL", "https://frontend-2-mauve.vercel.app")
 GEMINI_API_KEY: str = os.getenv("GEMINI_API_KEY", "").strip()
 GEMINI_MODEL: str = os.getenv("GEMINI_MODEL", "gemini-3.5-flash-lite").strip()
 GEMINI_DEEP_MODEL: str = os.getenv("GEMINI_DEEP_MODEL", "gemini-3.7-flash").strip()
+# Per-user questions can be tuned downward for testing, never above the product cap.
+AI_USER_DAILY_LIMIT: int = min(20, max(1, int(os.getenv("AI_USER_DAILY_LIMIT", "20"))))
 
 DATABASE_URL: str = os.getenv("DATABASE_URL", "").strip()
 if DATABASE_URL.startswith("postgres://"):

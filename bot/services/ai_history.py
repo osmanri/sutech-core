@@ -41,7 +41,8 @@ def init_ai_tables(conn):
             ON ai_exchanges (user_id, created_at DESC, id DESC)""",
         """CREATE TABLE IF NOT EXISTS ai_usage (
             id TEXT PRIMARY KEY, user_id BIGINT NOT NULL,
-            model TEXT NOT NULL, created_at BIGINT NOT NULL
+            model TEXT NOT NULL, created_at BIGINT NOT NULL,
+            counted_question INTEGER NOT NULL DEFAULT 1
         )""",
         """CREATE INDEX IF NOT EXISTS idx_ai_usage_model_time
             ON ai_usage (model, created_at)""",
@@ -51,6 +52,7 @@ def init_ai_tables(conn):
         db.execute_query(conn, statement)
     ensure = db._ensure_columns_postgres if db.is_postgres() else db._ensure_columns_sqlite
     ensure(conn.cursor(), "ai_conversations", {"active": "INTEGER NOT NULL DEFAULT 0"})
+    ensure(conn.cursor(), "ai_usage", {"counted_question": "INTEGER NOT NULL DEFAULT 1"})
     conn.commit()
 
 
@@ -110,7 +112,8 @@ class SQLAIHistory:
                 LIMIT 1 OFFSET ?""", (user_id, offset)).fetchone()
             return {"total": total, "offset": offset, "entry": dict(row) if row else None}
 
-    def reserve(self, user_id, model, daily_limit, user_daily_limit, rpm, cooldown):
+    def reserve(self, user_id, model, daily_limit, user_daily_limit, rpm, cooldown,
+                count_user=True):
         """Serialize only the short quota check, across workers and restarts."""
         now = int(time.time() * 1000)
         with closing(db.get_connection()) as conn, conn:
@@ -119,17 +122,19 @@ class SQLAIHistory:
             else:
                 db.begin_immediate(conn)
             db.execute_query(conn, "DELETE FROM ai_usage WHERE created_at < ?", (now - 86_400_000,))
-            own = db.execute_query(conn, """SELECT COUNT(*), MAX(created_at)
+            own = db.execute_query(conn, """SELECT COALESCE(SUM(counted_question), 0), MAX(created_at)
                 FROM ai_usage WHERE user_id = ?""", (user_id,)).fetchone()
             model_count = db.execute_query(conn, """SELECT COUNT(*) FROM ai_usage
                 WHERE model = ?""", (model,)).fetchone()[0]
             minute_count = db.execute_query(conn, """SELECT COUNT(*) FROM ai_usage
                 WHERE model = ? AND created_at > ?""", (model, now - 60_000)).fetchone()[0]
-            if own[0] >= user_daily_limit or model_count >= daily_limit:
+            if (count_user and own[0] >= user_daily_limit) or model_count >= daily_limit:
                 raise HistoryError("daily_limit")
             if minute_count >= rpm:
                 raise HistoryError("rate_limit")
             if own[1] is not None and now - own[1] < cooldown * 1000:
                 raise HistoryError("cooldown")
-            db.execute_query(conn, """INSERT INTO ai_usage (id, user_id, model, created_at)
-                VALUES (?, ?, ?, ?)""", (uuid.uuid4().hex, user_id, model, now))
+            db.execute_query(conn, """INSERT INTO ai_usage
+                (id, user_id, model, created_at, counted_question)
+                VALUES (?, ?, ?, ?, ?)""",
+                (uuid.uuid4().hex, user_id, model, now, int(count_user)))

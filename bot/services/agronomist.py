@@ -218,8 +218,9 @@ class AgronomistService:
         self.store = store
         self.deep_client = deep_client
         self.sessions: OrderedDict[int, Conversation] = OrderedDict()
-        # One bounded global log also supplies per-user limits, including reset.
+        # API attempts and logical user questions have separate rolling windows.
         self.requests: deque[tuple[float, int]] = deque()
+        self.user_questions: deque[tuple[float, int]] = deque()
 
     def clear(self, user_id: int) -> None:
         """Cancel an in-flight reply and drop RAM cache; retain saved history."""
@@ -306,6 +307,7 @@ class AgronomistService:
             model = getattr(client, "model", "test-model")
             fallback = False
             db_version = 0
+            user_question_reserved = False
             if self.store:
                 saved = await self._db("load", user_id)
                 db_version = saved["version"]
@@ -328,16 +330,22 @@ class AgronomistService:
                     model = client.model
                     await self._db("reserve", user_id, model, self.daily_limit,
                                    self.user_daily_limit, 12, self.cooldown)
+                    user_question_reserved = True
+                else:
+                    user_question_reserved = True
             else:
                 now = time.monotonic()
                 while self.requests and now - self.requests[0][0] >= 86400:
                     self.requests.popleft()
-                own = [stamp for stamp, uid in self.requests if uid == user_id]
+                while self.user_questions and now - self.user_questions[0][0] >= 86400:
+                    self.user_questions.popleft()
+                own = [stamp for stamp, uid in self.user_questions if uid == user_id]
                 if len(own) >= self.user_daily_limit or len(self.requests) >= self.daily_limit:
                     raise AIError("daily_limit")
                 if own and now - own[-1] < self.cooldown:
                     raise AIError("cooldown")
                 self.requests.append((now, user_id))
+                self.user_questions.append((now, user_id))
             if version != session.version:
                 raise AIError("cancelled")
             history = [] if image is not None else self._history_for_model(
@@ -355,10 +363,9 @@ class AgronomistService:
                         raise AIError("cancelled")
                     if self.store:
                         await self._db("reserve", user_id, model, 18,
-                                       self.user_daily_limit, 4, 0)
+                                       self.user_daily_limit, 4, 0, False)
                     else:
-                        own = sum(uid == user_id for _, uid in self.requests)
-                        if own >= self.user_daily_limit or len(self.requests) >= self.daily_limit:
+                        if len(self.requests) >= self.daily_limit:
                             raise AIError("daily_limit")
                         self.requests.append((time.monotonic(), user_id))
                     result = await client.generate(history, text, lang, image)
@@ -370,7 +377,13 @@ class AgronomistService:
                 model = client.model
                 if self.store:
                     await self._db("reserve", user_id, model, self.daily_limit,
-                                   self.user_daily_limit, 12, 0)
+                                   self.user_daily_limit, 12, 0,
+                                   not user_question_reserved)
+                    user_question_reserved = True
+                else:
+                    if len(self.requests) >= self.daily_limit:
+                        raise AIError("daily_limit")
+                    self.requests.append((time.monotonic(), user_id))
                 history = [] if image is not None else self._history_for_model(
                     session.history, session.model, model)
                 result = await client.generate(history, text, lang, image)
