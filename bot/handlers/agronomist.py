@@ -26,7 +26,7 @@ agronomist_router = Router(name="agronomist")
 agronomist_router.message.filter(F.chat.type == "private")
 agronomist_router.callback_query.filter(F.message.chat.type == "private")
 assistant = AgronomistService(GeminiClient(GEMINI_API_KEY, GEMINI_MODEL),
-                             deep_client=GeminiClient(GEMINI_API_KEY, GEMINI_DEEP_MODEL, "HIGH"),
+                             deep_client=GeminiClient(GEMINI_API_KEY, GEMINI_DEEP_MODEL, "MEDIUM"),
                              store=SQLAIHistory())
 logger = logging.getLogger(__name__)
 request_slots = asyncio.Semaphore(4)

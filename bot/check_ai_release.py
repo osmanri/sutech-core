@@ -46,7 +46,7 @@ async def check():
     # Telegram private user IDs are positive; no real farmer's data is touched.
     user_id = -(uuid.uuid4().int % (2**62) + 1)
     service = AgronomistService(GeminiClient(GEMINI_API_KEY, GEMINI_MODEL),
-        deep_client=GeminiClient(GEMINI_API_KEY, GEMINI_DEEP_MODEL, "HIGH"),
+        deep_client=GeminiClient(GEMINI_API_KEY, GEMINI_DEEP_MODEL, "MEDIUM"),
         store=store, cooldown=0)
     try:
         result = await service.reply(user_id,
@@ -57,7 +57,7 @@ async def check():
         print("AI_RELEASE_LITE_PHOTO_OK", result.model, flush=True)
         # A new service represents a restart; the follow-up loads SQL context.
         restarted = AgronomistService(GeminiClient(GEMINI_API_KEY, GEMINI_MODEL),
-            deep_client=GeminiClient(GEMINI_API_KEY, GEMINI_DEEP_MODEL, "HIGH"),
+            deep_client=GeminiClient(GEMINI_API_KEY, GEMINI_DEEP_MODEL, "MEDIUM"),
             store=store, cooldown=0)
         try:
             result = await restarted.reply(user_id, "А как отличить перелив от нехватки воды?",
