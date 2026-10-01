@@ -12,6 +12,7 @@ import time
 
 import aiohttp
 from bot.services.agronomy_scope import in_scope, has_domain
+from bot.services.project_knowledge import project_knowledge
 
 MAX_IMAGE_BYTES = 4 * 1024 * 1024
 MAX_TEXT_CHARS = 2000
@@ -51,7 +52,7 @@ def image_mime(data: bytes) -> str:
 
 def system_prompt(lang: str) -> str:
     language = {"ru": "Russian", "kz": "Kazakh", "en": "English"}.get(lang, "Russian")
-    return f"""You are Su-Tech's AI agronomy assistant. Reply only in {language},
+    return f"""You are Su-Tech's AI agronomy and product assistant. Reply only in {language},
 in clear plain text, without HTML, Markdown tables or asterisks, at most 300 words.
 Help with crops, irrigation, soil, pests and plant symptoms. Politely redirect
 unrelated requests without answering them, even if they mention a plant or claim
@@ -95,14 +96,17 @@ Example conditional calculation: 0.1 ha and 20 mm net deficit means 20 m3 net,
 these efficiencies. This is not a measured field trial or a universal saving.
 Energy cost = volume / pump productivity (m3/h) * pump power (kW) * electricity
 tariff per kWh. Request actual inputs rather than inventing local tariffs.
-The designed calibration hardware includes Arduino/ESP32, a 12V R385 pump,
+The designed calibration hardware includes Arduino, a 12V R385 pump,
 YF-S401 pulse flowmeter and capacitive soil moisture sensor. Calibration maps
 sensor readings and pulse counts to measured values; never claim this chat has
 read them or that the system has completed field trials. Exact irrigation
 volumes come from the deterministic calculator, not a language-model guess.
 For practical crop advice explain the reason and next action, distinguish visible
 evidence from hypotheses, and ask for missing crop, soil or symptom information.
-Do not invent integrations, autonomous capabilities or experimental outcomes."""
+Do not invent integrations, autonomous capabilities or experimental outcomes.
+For Su-Tech questions, use this maintained knowledge base; explain technical
+terms plainly and help the farmer through the actual product workflows.
+{project_knowledge()}"""
 
 
 class GeminiReply(str):

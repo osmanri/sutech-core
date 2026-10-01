@@ -33,6 +33,16 @@ DOMAIN_ROOTS = (
     "rain", "evap", "drip", "furrow", "pump", "sensor", "flowmeter",
     "arduino", "esp32", "r385", "yf", "fao", "et0", "etc", "taw", "raw",
     "sutech", "su-tech", "сутех",
+    "open-meteo", "gemini", "vercel", "postgresql", "neon", "fao-56",
+    "монетизац", "бизнес-модел", "доклад", "архитектур", "формул",
+)
+
+PRODUCT_QUESTION = re.compile(
+    r"(?:о проекте|об этом проекте|наш проект|наш сервис|нашего проекта|"
+    r"что (?:ты )?умеешь|какие функции|чем (?:su-tech|проект|сервис|вы) отлич|"
+    r"бизнес модель|жоба туралы|жобаның|не істей аласың|"
+    r"about (?:this |the )?project|business model|what can you do|project features)",
+    re.IGNORECASE,
 )
 
 OFF_TOPIC = re.compile(
@@ -61,7 +71,8 @@ def normalized(text: str) -> str:
 
 def has_domain(text: str) -> bool:
     words = re.findall(r"[\w-]+", normalized(text))
-    return (bool(re.search(r"\bsu[\s-]+tech\b|\bсу[\s-]+тех\b", normalized(text)))
+    return (bool(PRODUCT_QUESTION.search(normalized(text)))
+            or bool(re.search(r"\bsu[\s-]+tech\b|\bсу[\s-]+тех\b", normalized(text)))
             or any(word.startswith(root) for word in words for root in DOMAIN_ROOTS))
 
 

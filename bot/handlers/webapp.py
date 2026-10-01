@@ -300,6 +300,14 @@ async def handle_webapp_data(message: Message, state: FSMContext) -> None:
     except (ValueError, TypeError):
         await message.answer(t(lang, 'err_format'))
         return
+    await handle_field_payload(message, state, data)
+
+
+async def handle_field_payload(message: Message, state: FSMContext, data: dict) -> None:
+    """Shared validated calculation path for Mini App and Telegram planner."""
+    await state.clear()
+    user_id = message.from_user.id
+    lang = get_lang(user_id)
     if data.get('lang') in ('ru', 'kz', 'en'):
         lang = data['lang']
         try:

@@ -189,3 +189,11 @@ for language, message in {
 
 def ai_text(lang: str, key: str) -> str:
     return AI_STRINGS.get(lang, AI_STRINGS["ru"])[key]
+
+
+for language, extra in {
+    'ru':'\n\nЗнаю устройство Su-Tech, формулы, оборудование и доклад проекта. Для расчёта прямо в чате выберите «Расчёт без сайта» или /plan.',
+    'kz':'\n\nSu-Tech құрылымын, формулаларын, жабдығын және жоба баяндамасын білемін. Чатта есептеу үшін «Сайтсыз есептеу» немесе /plan таңдаңыз.',
+    'en':'\n\nI can explain Su-Tech, its formulas, hardware and project report. Choose Plan in chat or /plan to calculate without the website.',
+}.items():
+    AI_STRINGS[language]['intro'] += extra

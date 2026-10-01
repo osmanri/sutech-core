@@ -21,6 +21,7 @@ from bot.services.agronomist import (AIError, AgronomistService, GeminiClient,
                                     LimitedImageBuffer, MAX_IMAGE_BYTES, MAX_TEXT_CHARS)
 from bot.user_state import get_lang, set_lang
 from bot.services.ai_history import SQLAIHistory
+from bot.handlers.chat_planner import PLAN_BUTTON, register_chat_planner
 
 agronomist_router = Router(name="agronomist")
 agronomist_router.message.filter(F.chat.type == "private")
@@ -30,6 +31,7 @@ assistant = AgronomistService(GeminiClient(GEMINI_API_KEY, GEMINI_MODEL),
                              store=SQLAIHistory())
 logger = logging.getLogger(__name__)
 request_slots = asyncio.Semaphore(4)
+register_chat_planner(agronomist_router)
 
 
 class AgronomistChat(StatesGroup):
@@ -42,7 +44,8 @@ def chat_keyboard(lang: str) -> ReplyKeyboardMarkup:
         [KeyboardButton(text=ai_text(lang, "water_button")),
          KeyboardButton(text=ai_text(lang, "care_button"))],
         [KeyboardButton(text=ai_text(lang, "calculate_button"),
-                        web_app=WebAppInfo(url=webapp_url(lang)))],
+                        web_app=WebAppInfo(url=webapp_url(lang))),
+         KeyboardButton(text=PLAN_BUTTON.get(lang, PLAN_BUTTON['ru']))],
         [KeyboardButton(text=ai_text(lang, "history_button")),
          KeyboardButton(text=ai_text(lang, "new_button"))],
         [KeyboardButton(text=ai_text(lang, "exit_button"))],
