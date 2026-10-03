@@ -1,11 +1,9 @@
-from aiogram.types import KeyboardButton, ReplyKeyboardMarkup, WebAppInfo
+from aiogram.types import KeyboardButton, ReplyKeyboardMarkup
 from bot.ai_i18n import ai_text
 
 try:
-    from config import WEBAPP_URL
     from i18n import t
 except ImportError:
-    from bot.config import WEBAPP_URL
     from bot.i18n import t
 
 
@@ -13,15 +11,12 @@ def get_main_reply_keyboard(lang: str = "ru") -> ReplyKeyboardMarkup:
     """
     Короткое главное меню: только действия, которыми фермер пользуется чаще всего.
     """
-    url_with_lang = f"{WEBAPP_URL}{'&' if '?' in WEBAPP_URL else '?'}lang={lang}"
-
     return ReplyKeyboardMarkup(
         keyboard=[
-            # Ряд 1 (на всю ширину): WebApp кнопка
+            # Request an inline launcher: reply Web Apps have no signed initData.
             [
                 KeyboardButton(
                     text=t(lang, "btn_webapp"),
-                    web_app=WebAppInfo(url=url_with_lang),
                 )
             ],
             [KeyboardButton(text=ai_text(lang, "button"), style="success")],

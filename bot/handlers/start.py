@@ -55,7 +55,7 @@ async def cmd_start(message: Message) -> None:
         except Exception as exc:
             logger.warning("Could not update localized app menu (%s)", type(exc).__name__)
         await message.answer(t(lang, "app_prompt"),
-                             reply_markup=get_main_reply_keyboard(lang))
+                             reply_markup=get_launch_keyboard(lang))
         return
     lang = get_lang(message.from_user.id)
     await message.answer(
@@ -275,8 +275,11 @@ async def return_to_main_menu(message: Message) -> None:
 
 # ─── 🌿 Открытие Mini App ───────────────────────────────────────────────────
 @start_router.message(Command("app"))
-async def open_app(message: Message) -> None:
+@start_router.message(F.text.in_({t(lang,'btn_webapp') for lang in ('ru','kz','en')}))
+async def open_app(message: Message, state: FSMContext | None = None) -> None:
     """Show a native Web App button from the command menu."""
+    if state is not None:
+        await state.clear()
     lang = get_lang(message.from_user.id)
     await message.answer(
         text=t(lang, "app_prompt"),

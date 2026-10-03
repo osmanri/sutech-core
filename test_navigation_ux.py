@@ -37,6 +37,8 @@ class NavigationUXTests(unittest.TestCase):
             self.assertIn(t(lang, "btn_more"), texts)
             self.assertNotIn(t(lang, "btn_help"), texts)
             self.assertNotIn(t(lang, "btn_about"), texts)
+            self.assertFalse(any(button.web_app for row in markup.keyboard for button in row),
+                             'Reply-keyboard launches cannot authenticate the daily dashboard')
 
     def test_more_menu_has_back_and_infrequent_actions(self):
         for lang in ("ru", "kz", "en"):
@@ -149,9 +151,19 @@ class NavigationRoutingTests(unittest.IsolatedAsyncioTestCase):
             messages = await self.send(f"/start app_{lang}")
             self.assertEqual(self.lang, lang)
             self.assertEqual(messages[-1].text, t(lang, "app_prompt"))
-            app = next(button.web_app for row in messages[-1].reply_markup.keyboard
+            app = next(button.web_app for row in messages[-1].reply_markup.inline_keyboard
                        for button in row if button.web_app)
             self.assertIn(f"lang={lang}", app.url)
+
+    async def test_main_app_button_leaves_ai_and_uses_signed_inline_launcher(self):
+        for lang in ('ru','kz','en'):
+            self.lang=lang
+            await self.send('/ai')
+            messages=await self.send(t(lang,'btn_webapp'))
+            self.assertIsNone(await self.state.get_state())
+            app=next(button.web_app for row in messages[-1].reply_markup.inline_keyboard for button in row if button.web_app)
+            self.assertIn(f'lang={lang}',app.url)
+        self.client.generate.assert_not_awaited()
 
 
 if __name__ == "__main__":
