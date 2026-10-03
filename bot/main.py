@@ -23,6 +23,7 @@ from aiogram.enums import ParseMode
 from aiogram.webhook.aiohttp_server import SimpleRequestHandler, setup_application
 from bot.handlers.agronomist import agronomist_router, assistant
 from bot.handlers.pilot import pilot_router
+from bot.chat_screens import ChatScreenMiddleware, ScreenSuperseded, screens
 
 try:
     from bot_setup import configure_bot_profile
@@ -143,7 +144,10 @@ async def analyze_webapp(request: web.Request) -> web.Response:
     )
     state = SimpleNamespace(clear=lambda: asyncio.sleep(0))
     try:
-        await handle_webapp_data(message, state)
+        async with screens.screen(auth.user.id, navigation=True):
+            await handle_webapp_data(message, state)
+    except ScreenSuperseded:
+        return web.json_response({'ok':False,'superseded':True},status=409)
     except Exception:
         logger.exception("Mini App analysis delivery failed")
         if not bot_replied:
@@ -210,6 +214,7 @@ async def handle_bot_error(event: ErrorEvent) -> bool:
 
 def create_dispatcher() -> Dispatcher:
     dp = Dispatcher()
+    dp.update.outer_middleware(ChatScreenMiddleware())
     dp.errors.register(handle_bot_error)
     dp.include_router(agronomist_router)
     dp.include_router(pilot_router)
@@ -255,6 +260,7 @@ async def main() -> None:
         token=BOT_TOKEN,
         default=DefaultBotProperties(parse_mode=ParseMode.HTML),
     )
+    screens.install(bot)
     dp = create_dispatcher()
     runner = await start_http_server(bot, dp)
 

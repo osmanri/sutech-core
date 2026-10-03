@@ -133,7 +133,9 @@ async def show_step(message, state, lang):
     # One editable prompt holds all wizard controls, rather than a new card per click.
     if data.get('prompt_id'):
         try:
-            await message.bot.edit_message_text(text,chat_id=message.chat.id,message_id=data['prompt_id'],parse_mode=None,reply_markup=markup)
+            edited = await message.bot.edit_message_text(text,chat_id=message.chat.id,message_id=data['prompt_id'],parse_mode=None,reply_markup=markup)
+            if isinstance(edited,Message):
+                await state.update_data(prompt_id=edited.message_id)
             return
         except Exception:
             pass
@@ -213,7 +215,6 @@ async def plan_callback(callback: CallbackQuery, state: FSMContext):
     if data.get('prompt_id'):
         try: await msg.bot.delete_message(chat_id=msg.chat.id,message_id=data['prompt_id'])
         except Exception: pass
-    await msg.answer('/ai · /plan',parse_mode=None,reply_markup=get_main_reply_keyboard(lang))
 
 
 async def plan_input(message: Message, state: FSMContext):

@@ -143,6 +143,8 @@ def init_db():
         init_ai_tables(conn)
         from bot.pilot_store import init_pilot_tables
         init_pilot_tables(conn)
+        from bot.chat_screen_store import init_chat_screen_table
+        init_chat_screen_table(conn)
         logger.info("Database initialized successfully on %s.", "PostgreSQL" if is_postgres() else "SQLite")
     except Exception as e:
         logger.exception("Error initializing database: %s", e)

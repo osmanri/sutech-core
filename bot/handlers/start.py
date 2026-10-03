@@ -3,6 +3,7 @@ import logging
 
 from aiogram import F, Router
 from aiogram.filters import Command, CommandStart
+from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, Message
 
 try:
@@ -22,6 +23,20 @@ except ImportError:
 
 start_router = Router()
 logger = logging.getLogger(__name__)
+
+
+@start_router.callback_query(F.data == 'ui:home')
+async def screen_home(callback: CallbackQuery, state: FSMContext) -> None:
+    """A plain explanation or exported file always has a route back to the menu."""
+    if not isinstance(callback.message,Message) or callback.message.chat.type != 'private' or callback.message.chat.id != callback.from_user.id:
+        await callback.answer()
+        return
+    await state.clear()
+    lang=get_lang(callback.from_user.id)
+    await callback.answer()
+    await callback.message.answer(
+        {'ru':'Главное меню:','kz':'Басты мәзір:','en':'Main menu:'}[lang],
+        reply_markup=get_main_reply_keyboard(lang))
 
 
 # ─── /start ──────────────────────────────────────────────────────────────────

@@ -8,7 +8,7 @@ import unittest
 from unittest.mock import AsyncMock, patch
 
 from aiogram import Bot
-from aiogram.types import Chat, Message, PhotoSize, Update, User, WebAppData
+from aiogram.types import Chat, InlineKeyboardMarkup, Message, PhotoSize, Update, User, WebAppData
 
 from bot.ai_i18n import AI_STRINGS, ai_text
 from bot.handlers import agronomist as handler
@@ -244,6 +244,19 @@ class TelegramAITests(unittest.IsolatedAsyncioTestCase):
         await self.bot.session.close()
 
     async def send(self, **kwargs):
+        # Return actual Telegram message models so edits use Bot methods too.
+        # An AsyncMock message hides edits inside unobserved mock attributes.
+        transport=self.bot.__call__
+        if isinstance(transport,AsyncMock) and transport.side_effect is None:
+            async def response(method,**options):
+                if type(method).__name__.startswith(('Send','EditMessage')):
+                    return Message(message_id=getattr(method,'message_id',None) or 50,
+                        date=datetime.now(timezone.utc),chat=self.chat,
+                        from_user=User(id=self.bot.id,is_bot=True,first_name='Su-Tech'),
+                        text=getattr(method,'text',None),
+                        reply_markup=(method.reply_markup if isinstance(getattr(method,'reply_markup',None),InlineKeyboardMarkup) else None)).as_(self.bot)
+                return True
+            transport.side_effect=response
         message = Message(message_id=1, date=datetime.now(timezone.utc),
                           chat=self.chat, from_user=self.user, **kwargs)
         await self.dp.feed_update(self.bot, Update(update_id=801, message=message))
@@ -260,7 +273,7 @@ class TelegramAITests(unittest.IsolatedAsyncioTestCase):
             await self.send(text="Как поливать?")
             self.assertEqual(self.client.generate.await_count, 1)
             answers = [call.args[0] for call in transport.await_args_list
-                       if type(call.args[0]).__name__ == "SendMessage"]
+                       if type(call.args[0]).__name__ in ("SendMessage","EditMessageText")]
             response = next(answer for answer in answers if answer.text == "<b>Ответ</b>")
             self.assertIsNone(response.parse_mode)
             await self.send(photo=[PhotoSize(file_id="photo", file_unique_id="p", width=500,
@@ -307,7 +320,8 @@ class TelegramAITests(unittest.IsolatedAsyncioTestCase):
         with patch.object(Bot, "__call__", new_callable=AsyncMock) as transport:
             await self.send(text="/start ai")
         self.assertEqual(await self.state.get_state(), handler.AgronomistChat.active.state)
-        self.assertEqual(transport.await_args.args[0].text, ai_text("ru", "intro"))
+        sent=[call.args[0] for call in transport.await_args_list if type(call.args[0]).__name__=='SendMessage']
+        self.assertEqual(sent[-1].text,ai_text('ru','intro'))
 
     async def test_water_button_cannot_disguise_off_topic_text_or_consume_deep_mode(self):
         with patch.object(Bot, "__call__", new_callable=AsyncMock) as transport:
@@ -318,7 +332,7 @@ class TelegramAITests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(len(self.service.requests), 0)
         self.assertTrue((await self.state.get_data())["ai_deep"])
         messages = [call.args[0].text for call in transport.await_args_list
-                    if type(call.args[0]).__name__ == "SendMessage"]
+                    if type(call.args[0]).__name__ in ("SendMessage","EditMessageText")]
         self.assertIn(ai_text("ru", "off_topic"), messages)
 
     async def test_deep_button_is_one_request_mode_and_history_does_not_spend_quota(self):
@@ -343,20 +357,22 @@ class TelegramAITests(unittest.IsolatedAsyncioTestCase):
                       "answer": "<answer>" * 400, "has_image": 1}})
         with patch.object(Bot, "__call__", new_callable=AsyncMock) as transport:
             await self.send(text="/aihistory")
+            await handler.send_history(Message(message_id=50,date=datetime.now(timezone.utc),chat=self.chat).as_(self.bot),812,'ru',edit=True,part=1)
         answers = [call.args[0] for call in transport.await_args_list
-                   if type(call.args[0]).__name__ == "SendMessage"]
-        self.assertEqual(len(answers), 2)
-        self.assertIn("<crop>" * 300, answers[0].text)
-        self.assertIn("<answer>" * 400, answers[1].text)
+                   if type(call.args[0]).__name__ == "EditMessageText"]
+        self.assertEqual(len(answers),2)
+        self.assertIn('<crop>'*300,''.join(a.text for a in answers))
+        self.assertIn('<answer>'*400,''.join(a.text for a in answers))
         self.assertTrue(all(len(answer.text) <= 4096 and answer.parse_mode is None for answer in answers))
-        self.service.history_page.assert_awaited_once_with(812, 0)
+        self.assertEqual(self.service.history_page.await_count,2)
+        self.assertEqual(self.service.history_page.await_args.args,(812,0))
 
-    def test_chat_keyboard_has_photo_topics_calculator_and_placeholder(self):
+    def test_chat_keyboard_has_photo_topics_calculator_and_exit(self):
         for lang in ("ru", "kz", "en"):
             keyboard = handler.chat_keyboard(lang)
-            self.assertEqual(keyboard.input_field_placeholder, ai_text(lang, "placeholder"))
-            buttons = [button for row in keyboard.keyboard for button in row]
+            buttons = [button for row in keyboard.inline_keyboard for button in row]
             self.assertIn(ai_text(lang, "photo_button"), [button.text for button in buttons])
+            self.assertIn(ai_text(lang,'exit_button'),[button.text for button in buttons])
             app = next(button for button in buttons if button.web_app)
             self.assertIn("lang=" + lang, app.web_app.url)
 

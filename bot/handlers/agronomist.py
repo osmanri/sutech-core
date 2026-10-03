@@ -86,13 +86,20 @@ async def animate_status(bot, chat_id: int, message_id: int, lang: str,
             continue
 
 
-def history_keyboard(lang: str, index: int, total: int) -> InlineKeyboardMarkup:
+def history_keyboard(lang: str, index: int, total: int, part=0, parts=1) -> InlineKeyboardMarkup:
     buttons = []
     if index > 0:
         buttons.append(InlineKeyboardButton(text="←", callback_data=f"ai_history:{index - 1}"))
     if index + 1 < total:
         buttons.append(InlineKeyboardButton(text="→", callback_data=f"ai_history:{index + 1}"))
     rows = [buttons] if buttons else []
+    if parts > 1:
+        part_buttons=[]
+        if part > 0:
+            part_buttons.append(InlineKeyboardButton(text=f'← {part} / {parts}',callback_data=f'ai_history:{index}:{part-1}'))
+        if part+1 < parts:
+            part_buttons.append(InlineKeyboardButton(text=f'{part+2} / {parts} →',callback_data=f'ai_history:{index}:{part+1}'))
+        rows.append(part_buttons)
     rows.append([InlineKeyboardButton(text=ai_text(lang, "menu_button"), callback_data="ai_nav:menu"),
                  InlineKeyboardButton(text=ai_text(lang, "history_delete"), callback_data="ai_delete_prompt")])
     return InlineKeyboardMarkup(inline_keyboard=rows)
@@ -238,7 +245,7 @@ async def choose_deep(message: Message, state: FSMContext) -> None:
 
 
 async def send_history(message: Message, user_id: int, lang: str, offset=0,
-                       edit: bool = False, state: FSMContext | None = None) -> None:
+                       edit: bool = False, state: FSMContext | None = None, part=0) -> None:
     page = await assistant.history_page(user_id, offset)
     if not page["entry"]:
         if state is not None and not edit:
@@ -253,10 +260,13 @@ async def send_history(message: Message, user_id: int, lang: str, offset=0,
     entry, index, total = page["entry"], page["offset"], page["total"]
     date = datetime.fromtimestamp(entry["created_at"] / 1000, timezone.utc).strftime("%d.%m.%Y %H:%M UTC")
     card = (ai_text(lang, "history_title").format(page=index + 1, total=total) + " · " + date
-            + "\n\n" + ai_text(lang, "history_question") + ":\n" + entry["question"][:1000]
+            + "\n\n" + ai_text(lang, "history_question") + ":\n" + entry["question"]
             + ("\n" + ai_text(lang, "history_photo") if entry["has_image"] else "")
-            + "\n\n" + ai_text(lang, "history_answer") + ":\n" + entry["answer"][:2700])
-    markup = history_keyboard(lang, index, total)
+            + "\n\n" + ai_text(lang, "history_answer") + ":\n" + entry["answer"])
+    chunks=[card[i:i+3800] for i in range(0,len(card),3800)]
+    part=max(0,min(part,len(chunks)-1))
+    card=chunks[part]
+    markup = history_keyboard(lang, index, total,part,len(chunks))
     if edit:
         await message.edit_text(card, parse_mode=None, reply_markup=markup)
     elif state is not None:
@@ -283,9 +293,11 @@ async def ai_history_page(callback: CallbackQuery) -> None:
     stop_visible_request(callback.from_user.id)
     lang = get_lang(callback.from_user.id)
     try:
-        offset = int(callback.data.split(":")[1])
+        values=callback.data.split(':')
+        offset = int(values[1])
+        part = int(values[2]) if len(values)>2 else 0
         if callback.message:
-            await send_history(callback.message, callback.from_user.id, lang, offset, edit=True)
+            await send_history(callback.message, callback.from_user.id, lang, offset, edit=True,part=part)
     except (ValueError, AIError) as exc:
         if callback.message:
             await callback.message.answer(ai_text(lang, getattr(exc, "code", "history_empty")), parse_mode=None)
@@ -501,8 +513,9 @@ async def ask_ai(message: Message, state: FSMContext) -> None:
     except Exception as exc:
         # Do not log photos, questions, Telegram file URLs or provider secrets.
         logger.warning("Agronomist request failed (%s)", type(exc).__name__)
+        show_failure = not stop_animation.is_set() and await state.get_state() == AgronomistChat.active.state
         await stop_loading_animation()
-        if not stop_animation.is_set():
+        if show_failure:
             await status.edit_text(ai_text(lang, "unavailable"), parse_mode=None)
             await state.update_data(ai_ui_message_id=status.message_id)
     finally:

@@ -10,6 +10,7 @@ from bot.pilot_i18n import pilot_text
 from bot.pilot_store import join_pilot, leave_pilot, pilot_status, save_feedback
 from bot.keyboards.inline import get_launch_keyboard
 from bot.user_state import get_lang, set_lang
+from bot.i18n import t
 
 pilot_router = Router(name='pilot')
 logger = logging.getLogger(__name__)
@@ -19,6 +20,7 @@ def pilot_keyboard(lang, joined=False):
     rows = list(get_launch_keyboard(lang).inline_keyboard)
     rows.insert(0, [InlineKeyboardButton(text=pilot_text(lang,'leave' if joined else 'join'),
                                        callback_data='pilot:leave' if joined else 'pilot:join')])
+    rows.append([InlineKeyboardButton(text=t(lang,'btn_back'),callback_data='ui:home')])
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
