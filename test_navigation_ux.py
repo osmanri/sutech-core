@@ -20,7 +20,10 @@ from test_bot_platform import shared_test_dispatcher
 class NavigationUXTests(unittest.TestCase):
     @staticmethod
     def texts(markup):
-        return [button.text for row in markup.keyboard for button in row]
+        rows = getattr(markup, 'keyboard', None) or getattr(markup, 'inline_keyboard', None)
+        if rows is None:
+            raise AssertionError('Expected a visible keyboard')
+        return [button.text for row in rows for button in row]
 
     def test_main_menu_has_only_daily_actions(self):
         for lang in ("ru", "kz", "en"):
@@ -43,13 +46,13 @@ class NavigationUXTests(unittest.TestCase):
             self.assertIn(t(lang, "btn_help"), texts)
             self.assertIn(t(lang, "btn_about"), texts)
 
-    def test_ai_chat_has_one_back_button_and_no_deep_mode_clutter(self):
+    def test_ai_detail_screen_has_one_back_button_and_no_deep_mode_clutter(self):
         for lang in ("ru", "kz", "en"):
-            texts = self.texts(chat_keyboard(lang))
-            self.assertIn(ai_text(lang, "photo_button"), texts)
-            self.assertIn(ai_text(lang, "water_button"), texts)
-            self.assertIn(ai_text(lang, "care_button"), texts)
-            self.assertIn(ai_text(lang, "calculate_button"), texts)
+            main = self.texts(chat_keyboard(lang))
+            for key in ('photo_button', 'water_button', 'care_button', 'calculate_button'):
+                self.assertIn(ai_text(lang, key), main)
+            texts = self.texts(chat_keyboard(lang, screen='detail'))
+            self.assertEqual(texts.count(ai_text(lang, "menu_button")), 1)
             self.assertIn(ai_text(lang, "history_button"), texts)
             self.assertIn(ai_text(lang, "new_button"), texts)
             self.assertIn(ai_text(lang, "exit_button"), texts)
@@ -107,8 +110,11 @@ class NavigationRoutingTests(unittest.IsolatedAsyncioTestCase):
                 messages = await self.send(f"/start ai_{lang}")
                 self.assertEqual(self.lang, lang)
                 self.assertEqual(messages[-1].text, ai_text(lang, "intro"))
+                edits = [call.args[0] for call in self.transport.await_args_list
+                         if type(call.args[0]).__name__ == 'EditMessageReplyMarkup']
+                self.assertTrue(edits, 'AI menu must attach its inline keyboard')
                 self.assertIn(ai_text(lang, "exit_button"),
-                              NavigationUXTests.texts(messages[-1].reply_markup))
+                              NavigationUXTests.texts(edits[-1].reply_markup))
                 await self.send("Томаттағы дақтар / tomato leaf spots / пятна на томате")
                 self.assertEqual(self.client.generate.await_args.args[2], lang)
                 messages = await self.send(ai_text(lang, "exit_button"))

@@ -1,4 +1,5 @@
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup, WebAppInfo
+from bot.pilot_i18n import pilot_text
 
 try:
     from config import WEBAPP_URL
@@ -74,6 +75,13 @@ def get_report_inline_keyboard(lang: str = "ru", report_id: str | None = None,
     row3.append(InlineKeyboardButton(text=t(lang, "btn_history"),
                                      callback_data="show_history_inline"))
     rows.append(row3)
+    if report_id:
+        rows.append([
+            InlineKeyboardButton(text='👍 ' + pilot_text(lang, 'useful'),
+                                 callback_data=f'pilot:vote:y:{report_id}'),
+            InlineKeyboardButton(text='👎 ' + pilot_text(lang, 'unhelpful'),
+                                 callback_data=f'pilot:vote:n:{report_id}'),
+        ])
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
