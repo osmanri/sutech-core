@@ -29,7 +29,7 @@ try:
         save_daily_balance,
         upsert_managed_field,
     )
-    from water_balance import BalanceInputError, CALCULATION_VERSION, calculate_balance, parse_field
+    from water_balance import BalanceInputError, CALCULATION_VERSION, calculate_balance, calculate_economics, parse_field
 except ImportError:
     from bot.balance_weather import fetch_daily_weather
     from bot.field_state import (
@@ -40,7 +40,7 @@ except ImportError:
         save_daily_balance,
         upsert_managed_field,
     )
-    from bot.water_balance import BalanceInputError, CALCULATION_VERSION, calculate_balance, parse_field
+    from bot.water_balance import BalanceInputError, CALCULATION_VERSION, calculate_balance, calculate_economics, parse_field
 
 
 def _result_snapshot(result: dict[str, Any]) -> dict[str, Any]:
@@ -122,7 +122,15 @@ async def calculate_saved_field(field_id: int, user_id: int):
         field = await asyncio.to_thread(field_input_from_record, record, on_date=balance_date)
         field = replace(field, yesterday=float(stored["deficit_before"]))
         stored_tz = str(stored.get("timezone") or weather["timezone"])
-        return field, stored["result"], {
+        result = dict(stored["result"])
+        if result.get("calculation_version") == "fao56.4":
+            # This release changes only the cost baseline. Preserve the water
+            # snapshot and journal; do not apply today's ET/rain a second time.
+            result.update(calculate_economics(result["gross_m3"], result["deficit"],
+                field.area_ha, field.power_price, field.pump_power_kw,
+                field.pump_productivity_m3h))
+            result["economics_version"] = CALCULATION_VERSION
+        return field, result, {
             "date": stored["balance_date"], "timezone": stored_tz,
             "et0": stored["et0"], "rain": stored["rain"],
         }, False

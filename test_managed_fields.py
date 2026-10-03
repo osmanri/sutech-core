@@ -7,7 +7,7 @@ from unittest.mock import AsyncMock, patch
 
 from bot import db
 from bot.field_service import calculate_saved_field, persist_webapp_field
-from bot.field_state import get_field, list_daily_balances
+from bot.field_state import get_field, list_daily_balances, save_daily_balance
 from bot.water_balance import calculate_balance, parse_field
 from bot.daily_monitor import update_all_fields_once
 from test_water_balance import payload
@@ -75,6 +75,34 @@ class ManagedFieldServiceTests(unittest.IsolatedAsyncioTestCase):
             {"date": date.today().isoformat(), "timezone": "Asia/Qyzylorda"},
         )
         self.assertIsNone(field_id)
+
+    async def test_old_same_day_economics_refresh_preserves_water_and_journal(self):
+        data = payload(area=.1, moisture_condition='normal', power_price=25,
+                       pump_power_kw=22, pump_productivity_m3h=60)
+        field = parse_field(data)
+        weather = {'et0': 5, 'rain': 0, 'date': date.today().isoformat(),
+                   'timezone': 'Asia/Qyzylorda'}
+        result = calculate_balance(field, 5, 0)
+        field_id = await persist_webapp_field(42, data, field, 44.85, 65.49, result, weather)
+        old = {**result, 'calculation_version': 'fao56.4',
+               'traditional_m3': result['traditional_m3'] * 1.35,
+               'traditional_cost': result['traditional_cost'] * 1.35}
+        save_daily_balance(field_id, user_id=42, balance_date=weather['date'],
+            timezone=weather['timezone'], result=old, deficit_before=field.yesterday, replace=True)
+        journal = list_daily_balances(field_id, user_id=42)
+        accumulated = get_field(field_id)['accumulated_deficit']
+        with patch('bot.field_service.fetch_daily_weather', AsyncMock(return_value={**weather, 'et0': 50})):
+            for _ in range(2):
+                _, refreshed, _, created = await calculate_saved_field(field_id, 42)
+                self.assertFalse(created)
+                self.assertEqual(refreshed['traditional_m3'], result['traditional_m3'])
+                self.assertEqual(refreshed['cost'], result['cost'])
+                self.assertEqual(refreshed['savings'], result['savings'])
+                self.assertEqual(refreshed['deficit'], result['deficit'])
+                self.assertEqual(refreshed['gross_m3'], result['gross_m3'])
+                self.assertEqual(refreshed['economics_version'], 'fao56.5')
+        self.assertEqual(list_daily_balances(field_id, user_id=42), journal)
+        self.assertEqual(get_field(field_id)['accumulated_deficit'], accumulated)
 
     async def test_monitor_updates_next_day_once_and_notifies_when_irrigation_is_due(self):
         data = payload(crop="wheat", day_of_growth=60, moisture_condition="dry",
