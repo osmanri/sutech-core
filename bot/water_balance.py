@@ -7,7 +7,7 @@ No recommendation is treated as evidence that irrigation actually occurred.
 import math
 from dataclasses import dataclass
 
-CALCULATION_VERSION = 'fao56.4'
+CALCULATION_VERSION = 'fao56.5'
 
 # Default screening model for a film-covered greenhouse when no calibrated
 # indoor ET0 measurement is available. The farmer can still supply a measured
@@ -161,7 +161,9 @@ def calculate_economics(ai_gross_volume, current_deficit_mm, area_ha,
     ai_gross_volume = number(ai_gross_volume, 'ai_gross_volume', 0, math.inf)
     current_deficit_mm = number(current_deficit_mm, 'current_deficit_mm', 0, 3000)
     area_ha = number(area_ha, 'area_ha', .00000001, 50000)
-    trad_gross_volume = (current_deficit_mm * 10 * area_ha) * (1.35 / .5)
+    # Furrow baseline: the same net deficit at the configured 50% efficiency.
+    # Method efficiency already includes delivery losses; no extra overwatering.
+    trad_gross_volume = (current_deficit_mm * 10 * area_ha) / METHODS['furrow'][1]
     if any(v is None for v in (power_price, pump_power_kw, pump_productivity_m3h)):
         return dict(traditional_m3=trad_gross_volume, ai_time_hours=None,
                     traditional_time_hours=None, cost=None, traditional_cost=None,

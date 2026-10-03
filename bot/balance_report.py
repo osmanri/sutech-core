@@ -18,17 +18,24 @@ def fmt_area(value):
 
 
 def economics(lang, field, result):
+    if result['status'] == 'deferred':
+        # Zero pumping today is a postponed expense, not a method/season saving.
+        text = t(lang, 'balance_econ_deferred')
+        if result['cost'] is not None:
+            text += '\n' + t(lang, 'balance_econ_today', ai=f"{result['cost']:.2f}")
+        return text
+    text = t(lang, 'balance_water_comparison',
+             traditional=fmt(result['traditional_m3']), volume=fmt(result['gross_m3']),
+             efficiency=fmt(result['efficiency'] * 100))
     if result['cost'] is None:
-        return t(lang, 'balance_econ_missing')
-    text = t(
+        return text + '\n' + t(lang, 'balance_econ_missing')
+    text += '\n' + t(
         lang, 'balance_econ_comparison',
         traditional=f"{result['traditional_cost']:.2f}",
         ai=f"{result['cost']:.2f}",
         savings=f"{result['savings']:.2f}",
         kwh=f"{result['saved_kwh']:.2f}",
     )
-    if result['status'] == 'deferred':
-        text += '\n' + t(lang, 'balance_econ_deferred')
     return text
 
 

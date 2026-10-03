@@ -74,9 +74,10 @@ Case in report: 0.1 ha, net deficit 20mm -> net20m3; drip20/0.9=22.22m3,
 furrow20/0.5=40m3; difference17.78m3, 44.4% less gross water under these assumptions.
 This is not a measured field trial or a universal saving. Separate the effect
 of changing irrigation equipment from Su-Tech's scheduling decisions.
-Current application comparison also assumes traditional over-application1.35:
-baseline m3 = deficit * 10 * hectares * (1.35/0.5). Thus that baseline is 54m3
-for the same case, not the report's40m3. Explain the assumptions if asked.
+The application and report use the same furrow baseline:
+baseline m3 = deficit * 10 * hectares / 0.5. For this case it is 40m3.
+Delivery losses are accounted for by efficiency, without an extra excess factor.
+With the same 50% efficiency and deficit, the water/cost difference is zero.
 Electricity kWh = gross m3 / pump productivity(m3/h) * power(kW).
 Cost = kWh * actual tariff. Missing inputs leave cost uncalculated; postponed
 irrigation is postponed spending, not proven whole-season savings.

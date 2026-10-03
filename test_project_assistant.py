@@ -21,9 +21,9 @@ class ProjectKnowledgeTests(unittest.TestCase):
         for lang, expected in [('ru','Russian'),('kz','Kazakh'),('en','English')]:
             prompt = system_prompt(lang)
             for value in [expected,'### 7. Бизнес-модель','### Источники','CALCULATION',
-                          '/plan','R385','YF-S401','Arduino','0.70','54m3','100farms/5000ha',
+                          '/plan','R385','YF-S401','Arduino','0.70','40m3','100farms/5000ha',
                           'not a measured field trial','cannot operate a pump']:
-                if value == 'CALCULATION': value = 'fao56.4'
+                if value == 'CALCULATION': value = 'fao56.5'
                 self.assertIn(value,prompt)
             self.assertLess(len(prompt),32000,'Keep complete knowledge within bounded request size')
 
@@ -146,7 +146,13 @@ class ChatPlannerTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual((await self.state.get_data())['values']['latitude'],43)
         await self.send('/plan');await self.choose('wheat',token=old['token'],step=0)
         self.assertEqual((await self.state.get_data())['step'],0)
-        await self.send('/cancel');self.assertIsNone(await self.state.get_state())
+        prompt_id = (await self.state.get_data())['prompt_id']
+        await self.send('/cancel')
+        self.assertEqual(await self.state.get_state(), agronomist.AgronomistChat.active.state)
+        self.assertEqual((await self.state.get_data())['ai_ui_message_id'], prompt_id)
+        self.assertEqual(type(self.sent[-1]).__name__, 'EditMessageText')
+        self.assertEqual(self.sent[-1].message_id, prompt_id)
+        self.assertEqual(self.sent[-1].reply_markup.inline_keyboard[0][0].callback_data, 'ai_nav:menu')
         self.fetch.assert_not_awaited();self.history.assert_not_called();self.service.reply.assert_not_awaited()
 
     async def test_weather_failure_does_not_save_a_fake_calculation(self):

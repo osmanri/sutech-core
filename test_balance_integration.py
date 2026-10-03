@@ -111,8 +111,9 @@ class HandlerTests(unittest.IsolatedAsyncioTestCase):
             report = message.answer.call_args.args[0]
             self.assertIn(t(lang, 'balance_status_' + expected['status']), report)
             shown_money = re.findall(r'(-?\d+\.\d{2}) ₸', report)
-            self.assertEqual(len(shown_money), 3)
-            for shown, key in zip(shown_money, ('traditional_cost', 'cost', 'savings')):
+            keys = ('cost',) if expected['status'] == 'deferred' else ('traditional_cost', 'cost', 'savings')
+            self.assertEqual(len(shown_money), len(keys))
+            for shown, key in zip(shown_money, keys):
                 # A rational value exactly halfway between cents may land on
                 # either adjacent cent after binary floating-point arithmetic.
                 # Require correct currency precision and <= half-cent error;

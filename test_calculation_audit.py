@@ -75,7 +75,7 @@ def reference_balance(data, et0, rain):
     # Independent dimensional route: mm * m² = litres, then litres / 1000 = m³.
     required_m3 = deficit * (area * 10000) / 1000
     gross = F(0) if status == 'deferred' else required_m3 / efficiency
-    trad = required_m3 * F('2.7')
+    trad = required_m3 / F('0.5')
     power, flow, tariff = [F(str(data[k]).replace(',', '.')) for k in
                            ('pump_power_kw', 'pump_productivity_m3h', 'power_price')]
     cost = gross * power * tariff / flow
@@ -170,7 +170,7 @@ class CalculationAudit(unittest.TestCase):
             deficit = F(p) * 1000 * SOIL_STORAGE[soil] * F(root)
             net = deficit * 10 * F(area) / (100 if unit == 'sotka' else 1)
             ai = net / APPLICATION[method][1] * F(power) * F(tariff) / F(flow)
-            trad = net * F('2.7') * F(power) * F(tariff) / F(flow)
+            trad = net / F('0.5') * F(power) * F(tariff) / F(flow)
             for key, expected in [('cost', ai), ('traditional_cost', trad), ('savings', trad-ai)]:
                 self.assertTrue(math.isfinite(result[key]))
                 self.assertGreaterEqual(result[key], 0)

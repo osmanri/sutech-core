@@ -572,17 +572,19 @@ STRINGS['ru'].update({
         '<i>Прогноз баланса на конец {date}, {timezone}. Суточные ET₀ и осадки: Open-Meteo.</i>'
     ),
     'balance_econ_missing': 'Стоимость не рассчитана: укажите тариф (₸/кВт·ч), мощность насоса (кВт) и производительность (м³/ч).',
-    'balance_econ_comparison': 'Традиционный полив стоил бы {traditional} ₸. Полив по Su-Tech стоит {ai} ₸. Экономия: {savings} ₸ ({kwh} кВт·ч).',
+    'balance_water_comparison': 'При одинаковом дефиците: борозды (КПД 50%) — {traditional} м³; выбранный способ (КПД {efficiency}%) — {volume} м³. КПД — условия расчёта.',
+    'balance_econ_today': 'Затраты на насос сегодня: {ai} ₸.',
+    'balance_econ_comparison': 'Расчёт затрат на насос: борозды — {traditional} ₸; выбранный способ — {ai} ₸. Разница: {savings} ₸ ({kwh} кВт·ч) при одинаковых параметрах насоса.',
     'balance_econ_deferred': 'Сейчас насос не нужен: это перенос затрат. Экономию за весь период оценивают с учётом последующих поливов.',
     'balance_pump_breakdown': (
         '<b>Расчёт насоса:</b> {power} кВт, {flow} м³/ч, тариф {tariff} ₸/кВт·ч.\n'
         'Для сравнения берём тот же дефицит {deficit} мм и площадь {area} га.\n'
-        'Традиционный объём = дефицит × 10 × площадь × 1,35 ÷ 0,50 = {traditional_volume} м³. '
-        '35% перерасхода и КПД 50% — допущения сравнительной модели.\n'
+        'Объём для борозд = дефицит × 10 × площадь ÷ 0,50 = {traditional_volume} м³. '
+        'КПД 50% — условие сравнения; потери уже учтены в КПД.\n'
         'Su-Tech: {ai_volume} м³ ÷ {flow} = {ai_hours} ч. '
         'Традиционный: {traditional_volume} м³ ÷ {flow} = {traditional_hours} ч.\n'
         'Стоимость каждого варианта = часы × мощность × тариф. '
-        'Экономия = традиционный вариант − Su-Tech. Округляется только отображение.'
+        'Разница затрат = борозды − выбранный способ. Округляется только отображение.'
     ),
     'balance_moisture_recent': 'недавно полито / был дождь',
     'balance_moisture_normal': 'нормальная влажность',
@@ -682,17 +684,19 @@ STRINGS['kz'].update({
         '<i>{date} күнінің соңына болжам, {timezone}. Тәуліктік ET₀ мен жауын-шашын: Open-Meteo.</i>'
     ),
     'balance_econ_missing': 'Құн есептелмеді: тарифті (₸/кВт·сағ), сорғы қуатын (кВт) және өнімділігін (м³/сағ) енгізіңіз.',
-    'balance_econ_comparison': 'Дәстүрлі суару {traditional} ₸ тұрар еді. Su-Tech бойынша суару — {ai} ₸. Үнем: {savings} ₸ ({kwh} кВт·сағ).',
+    'balance_water_comparison': 'Бірдей тапшылық үшін: бороздалық суару (ПӘК 50%) — {traditional} м³; таңдалған әдіс (ПӘК {efficiency}%) — {volume} м³. ПӘК — есептің шарттары.',
+    'balance_econ_today': 'Бүгінгі сорғы шығыны: {ai} ₸.',
+    'balance_econ_comparison': 'Сорғы шығынының есебі: бороздалық суару — {traditional} ₸; таңдалған әдіс — {ai} ₸. Айырма: {savings} ₸ ({kwh} кВт·сағ), сорғы параметрлері бірдей.',
     'balance_econ_deferred': 'Қазір сорғы қажет емес: бұл шығынды кейінге қалдыру. Жалпы кезеңдегі үнем кейінгі суаруларды ескеріп бағаланады.',
     'balance_pump_breakdown': (
         '<b>Сорғы есебі:</b> {power} кВт, {flow} м³/сағ, тариф {tariff} ₸/кВт·сағ.\n'
         'Екі нұсқа үшін бірдей {deficit} мм тапшылық пен {area} га аудан алынады.\n'
-        'Дәстүрлі көлем = тапшылық × 10 × аудан × 1,35 ÷ 0,50 = {traditional_volume} м³. '
-        '35% артық су мен 50% ПӘК — салыстыру моделінің болжамдары.\n'
+        'Бороздалық суару көлемі = тапшылық × 10 × аудан ÷ 0,50 = {traditional_volume} м³. '
+        '50% ПӘК — салыстыру шарты; су шығыны ПӘК ішінде ескерілген.\n'
         'Su-Tech: {ai_volume} м³ ÷ {flow} = {ai_hours} сағ. '
         'Дәстүрлі: {traditional_volume} м³ ÷ {flow} = {traditional_hours} сағ.\n'
         'Әр нұсқаның құны = сағат × қуат × тариф. '
-        'Үнем = дәстүрлі нұсқа − Su-Tech. Тек көрсетілетін сандар дөңгелектенеді.'
+        'Шығын айырмасы = бороздалық суару − таңдалған әдіс. Тек көрсетілетін сандар дөңгелектенеді.'
     ),
     'balance_moisture_recent': 'жақында суарылды / жаңбыр',
     'balance_moisture_normal': 'қалыпты ылғалдылық',
@@ -805,13 +809,15 @@ STRINGS['en'] = {**STRINGS['ru'], **{
         '<i>Estimated balance at the end of {date}, {timezone}. Daily ET₀ and rainfall: Open-Meteo.</i>'
     ),
     'balance_econ_missing': 'Pump cost unavailable. Enter the tariff (₸/kWh), pump power (kW) and flow rate (m³/h).',
-    'balance_econ_comparison': 'Modelled conventional irrigation: {traditional} ₸. Su-Tech plan: {ai} ₸. Difference: {savings} ₸ ({kwh} kWh).',
+    'balance_water_comparison': 'For the same deficit: furrow (50% efficiency) — {traditional} m³; selected method ({efficiency}% efficiency) — {volume} m³. Efficiencies are calculation assumptions.',
+    'balance_econ_today': 'Pump cost today: {ai} ₸.',
+    'balance_econ_comparison': 'Calculated pump cost: furrow — {traditional} ₸; selected method — {ai} ₸. Difference: {savings} ₸ ({kwh} kWh), using the same pump parameters.',
     'balance_econ_deferred': 'The pump is not needed now. This postpones the cost; season-long savings also depend on later irrigation.',
     'balance_pump_breakdown': (
         '<b>Pump calculation:</b> {power} kW, {flow} m³/h, tariff {tariff} ₸/kWh.\n'
         'For comparison, both plans use a {deficit} mm deficit on {area} ha.\n'
-        'Conventional volume = deficit × 10 × area × 1.35 ÷ 0.50 = {traditional_volume} m³. '
-        'The 35% excess and 50% efficiency are comparison assumptions.\n'
+        'Furrow volume = deficit × 10 × area ÷ 0.50 = {traditional_volume} m³. '
+        '50% efficiency is a comparison assumption; it already accounts for delivery losses.\n'
         'Su-Tech: {ai_volume} m³ ÷ {flow} = {ai_hours} h. '
         'Conventional: {traditional_volume} m³ ÷ {flow} = {traditional_hours} h.\n'
         'Cost = hours × power × tariff. Difference = conventional − Su-Tech. Only the display is rounded.'

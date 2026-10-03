@@ -35,13 +35,15 @@ algorithm is not used by the live route.
 - Pump inputs are power in kW (form default 22) and productivity in m³/h
   (default 60). Electricity cost = gross m³ / productivity × power × tariff.
   Both systems cover the same current deficit; the traditional baseline is
-  `current deficit × 10 × hectares × (1.35 / 0.5)`. Reports show the two costs
+  `current deficit × 10 × hectares / 0.5`. Reports show the two costs
   and their difference in tenge and kWh, rounded to two decimal places only
   at display time. Missing pump inputs produce an explicit “not calculated”.
 - The explanation shows both gross volumes, pump inputs and pumping hours.
   Deferred irrigation is described as postponed spending rather than confirmed
-  whole-season savings. The 35% over-application and 50% efficiency baseline is
-  explicitly identified as a comparison assumption.
+  whole-season savings. The 50% furrow efficiency baseline is explicitly
+  identified as a comparison assumption; losses are not counted twice.
+  The report case (0.1 ha, 20 mm) gives 40 m³ at 50% and 22.22 m³ at 90%:
+  a calculated method-efficiency difference of 44.4%, not measured software savings.
 - A recommendation never confirms irrigation. Persistent multi-field state and
   an owner-checked irrigation reset are implemented in `bot/field_state.py`.
 

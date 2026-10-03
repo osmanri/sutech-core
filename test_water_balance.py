@@ -33,7 +33,7 @@ class BalanceTests(unittest.TestCase):
         self.assertAlmostEqual(r['deficit'], field.yesterday + 5 * field.kc - 6)
         self.assertAlmostEqual(r['gross_m3'], r['deficit'] * 10 * 6.7 / .9)
         self.assertAlmostEqual(r['cost'], r['gross_m3'] / 60 * 22 * 25)
-        self.assertAlmostEqual(r['traditional_m3'], r['deficit'] * 10 * 6.7 * (1.35 / .5))
+        self.assertAlmostEqual(r['traditional_m3'], r['deficit'] * 10 * 6.7 / .5)
         self.assertAlmostEqual(r['savings'], r['traditional_cost'] - r['cost'])
         self.assertAlmostEqual(r['saved_kwh'], (r['traditional_m3'] - r['gross_m3']) / 60 * 22)
 
@@ -126,24 +126,51 @@ class BalanceTests(unittest.TestCase):
         weather={'date':'2026-09-19','timezone':'Asia/Almaty'}
         f=parse_field(payload(moisture_condition='recent', power_price=25,
                              pump_power_kw=22, pump_productivity_m3h=60))
-        r=calculate_balance(f,5,0)
-        for lang, labels in [('ru', ('Традиционный', 'Экономия')), ('kz', ('Дәстүрлі', 'Үнем'))]:
+        r=calculate_balance(f,20,0)
+        for lang, labels in [('ru', ('борозды', 'Разница')), ('kz', ('бороздалық', 'Айырма')), ('en', ('furrow', 'Difference'))]:
             report=format_balance_report(lang,f,r,weather)
             self.assertIn(labels[0], report)
             self.assertIn(labels[1], report)
-            self.assertIn('кВт', report)
+            self.assertIn('kWh' if lang == 'en' else 'кВт', report)
 
 
     def test_pumping_reference_example(self):
-        # 100 m³ net deficit. AI delivers 200 m³; baseline delivers 270 m³.
+        # 100 m³ net deficit. Both furrow plans deliver 200 m³ at 50% efficiency.
         result = calculate_economics(200, 10, 1, 25, 22, 60)
-        self.assertEqual(result['traditional_m3'], 270)
+        self.assertEqual(result['traditional_m3'], 200)
         self.assertAlmostEqual(result['ai_time_hours'], 10 / 3)
-        self.assertEqual(result['traditional_time_hours'], 4.5)
-        self.assertEqual(result['traditional_cost'], 2475)
+        self.assertAlmostEqual(result['traditional_time_hours'], 10 / 3)
+        self.assertAlmostEqual(result['traditional_cost'], result['cost'])
         self.assertEqual(round(result['cost'], 2), 1833.33)
-        self.assertEqual(round(result['savings'], 2), 641.67)
-        self.assertEqual(round(result['saved_kwh'], 2), 25.67)
+        self.assertEqual(result['savings'], 0)
+        self.assertEqual(result['saved_kwh'], 0)
+
+    def test_jury_case_matches_live_calculation_and_localized_reports(self):
+        field = replace(parse_field(payload(area=.1, power_price=25,
+            pump_power_kw=22, pump_productivity_m3h=60)), yesterday=20)
+        result = calculate_balance(field, 0, 0)
+        self.assertEqual(result['net_m3'], 20)
+        self.assertEqual(result['traditional_m3'], 40)
+        self.assertAlmostEqual(result['gross_m3'], 20 / .9)
+        self.assertAlmostEqual(100 * (1 - result['gross_m3'] / result['traditional_m3']), 44.4444444444)
+        self.assertAlmostEqual(result['savings'], (40 - 20 / .9) / 60 * 22 * 25)
+        weather = {'date': '2026-10-03', 'timezone': 'Asia/Almaty'}
+        for lang in ('ru', 'kz', 'en'):
+            for value in (result, {**result, 'cost': None}):
+                report = format_balance_report(lang, field, value, weather)
+                self.assertIn('40', report)
+                self.assertIn('22.22', report)
+                self.assertIn('50%', report)
+                self.assertIn('90%', report)
+                self.assertNotIn('54', report)
+                self.assertNotIn('{', report)
+
+    def test_rice_has_no_artificial_method_advantage(self):
+        result = calculate_balance(parse_field(payload(crop='rice', power_price=25,
+            pump_power_kw=22, pump_productivity_m3h=60)), 5, 0)
+        self.assertEqual(result['traditional_m3'], result['gross_m3'])
+        self.assertEqual(result['savings'], 0)
+        self.assertEqual(result['saved_kwh'], 0)
 
     def test_baseline_covers_existing_deficit_even_with_zero_daily_et(self):
         for method in METHODS:
@@ -151,9 +178,11 @@ class BalanceTests(unittest.TestCase):
                                         power_price=25, pump_power_kw=22, pump_productivity_m3h=60))
             result = calculate_balance(field, 0, 0)
             self.assertEqual(result['etc'], 0)
-            self.assertGreater(result['traditional_cost'], result['cost'])
-            self.assertGreater(result['savings'], 0)
-            self.assertAlmostEqual(result['traditional_m3'], result['deficit'] * 27)
+            self.assertGreaterEqual(result['traditional_cost'], result['cost'])
+            self.assertGreaterEqual(result['savings'], 0)
+            if method == 'furrow':
+                self.assertEqual(result['savings'], 0)
+            self.assertAlmostEqual(result['traditional_m3'], result['deficit'] * 20)
         # Rain replenishing all moisture means zero volume/cost for both systems.
         result = calculate_balance(field, 0, 3000)
         for key in ('gross_m3', 'traditional_m3', 'cost', 'traditional_cost', 'savings', 'saved_kwh'):
@@ -173,7 +202,7 @@ class BalanceTests(unittest.TestCase):
             del values[missing]
             self.assertIsNone(calculate_balance(parse_field(payload(**values)), 5, 0)['cost'])
         # A free tariff still has a real energy saving and zero money saving.
-        free = calculate_economics(200, 10, 1, 0)
+        free = calculate_economics(100 / .9, 10, 1, 0)
         self.assertEqual(free['savings'], 0)
         self.assertGreater(free['saved_kwh'], 0)
 
@@ -201,13 +230,13 @@ class BalanceTests(unittest.TestCase):
         for lang in ('ru', 'kz'):
             text = format_balance_explanation(lang, field, result, weather)
             self.assertIn('200', text)
-            self.assertIn('270', text)
             self.assertIn('22', text)
             self.assertIn('60', text)
             self.assertIn('25', text)
             self.assertIn('3.33', text)
-            self.assertIn('4.5', text)
-            self.assertIn('641.67', text)
+            self.assertIn('0.00', text)
+            self.assertNotIn('1,35', text)
+            self.assertNotIn('35%', text)
             self.assertLess(len(text), 4096)
 
     def test_deferred_report_distinguishes_postponement_from_actual_savings(self):
@@ -219,6 +248,8 @@ class BalanceTests(unittest.TestCase):
             text = format_balance_report(lang, field, result, weather)
             self.assertIn(phrase, text)
             self.assertIn('0.00', text)
+            self.assertNotIn('Разница:', text)
+            self.assertNotIn('Айырма:', text)
 
 
 if __name__ == '__main__': unittest.main()
