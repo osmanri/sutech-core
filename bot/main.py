@@ -24,6 +24,7 @@ from aiogram.webhook.aiohttp_server import SimpleRequestHandler, setup_applicati
 from bot.handlers.agronomist import agronomist_router, assistant
 from bot.handlers.pilot import pilot_router
 from bot.chat_screens import ChatScreenMiddleware, ScreenSuperseded, screens
+from bot.webapp_fields import fields_today, water_field
 
 try:
     from bot_setup import configure_bot_profile
@@ -76,7 +77,7 @@ WEBAPP_ORIGINS = {
 
 @web.middleware
 async def webapp_cors(request: web.Request, handler):
-    if request.path != "/api/analyze":
+    if request.path not in {"/api/analyze", "/api/fields/today", "/api/fields/water"}:
         return await handler(request)
     origin = request.headers.get("Origin")
     if origin and origin not in WEBAPP_ORIGINS:
@@ -233,6 +234,10 @@ async def start_http_server(bot: Bot, dp: Dispatcher) -> web.AppRunner:
     app.router.add_get("/ping", ping_check)
     app.router.add_route("OPTIONS", "/api/analyze", analyze_webapp)
     app.router.add_post("/api/analyze", analyze_webapp)
+    app.router.add_post("/api/fields/today", fields_today)
+    app.router.add_post("/api/fields/water", water_field)
+    app.router.add_route("OPTIONS", "/api/fields/today", fields_today)
+    app.router.add_route("OPTIONS", "/api/fields/water", water_field)
 
     webhook_handler = SimpleRequestHandler(
         dispatcher=dp,

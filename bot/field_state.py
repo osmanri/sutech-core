@@ -44,6 +44,10 @@ class FieldNotFoundError(FieldStateError):
     """Raised when the requested field does not exist or belongs to another user."""
 
 
+class IrrigationConflictError(FieldStateError):
+    """The balance changed since the farmer opened the confirmation card."""
+
+
 class InvalidFieldDataError(ValueError, FieldStateError):
     """Raised when input cannot safely be stored or used in a calculation."""
 
@@ -515,11 +519,12 @@ def list_irrigation_events(field_id: int, *, user_id: int,
 
 
 def record_irrigation(field_id: int, *, user_id: int, applied_m3: float | None = None,
-                      source: str = "telegram") -> dict[str, float]:
+                      source: str = "telegram", expected_deficit: float | None = None) -> dict[str, float]:
     """Record confirmed irrigation and reduce deficit by effective applied water."""
     field_key = _positive_int(field_id, "field_id")
     owner = _positive_int(user_id, "user_id")
     volume = None if applied_m3 is None else _non_negative_number(applied_m3, "applied_m3")
+    expected = None if expected_deficit is None else _non_negative_number(expected_deficit, "expected_deficit")
     try:
         from water_balance import METHODS
     except ImportError:
@@ -529,11 +534,14 @@ def record_irrigation(field_id: int, *, user_id: int, applied_m3: float | None =
             database.begin_immediate(conn)
             row = database.execute_query(
                 conn,
-                "SELECT * FROM fields WHERE id=? AND user_id=?", (field_key, owner)
+                "SELECT * FROM fields WHERE id=? AND user_id=?" +
+                (" FOR UPDATE" if database.is_postgres() else ""), (field_key, owner)
             ).fetchone()
             if row is None:
                 raise FieldNotFoundError(f"Field {field_key} was not found")
             before = float(row["accumulated_deficit"])
+            if expected is not None and (before <= 0 or not math.isclose(before,expected,rel_tol=0,abs_tol=1e-6)):
+                raise IrrigationConflictError("Field balance changed; refresh the recommendation")
             if volume is None:
                 after = 0.0
             else:
