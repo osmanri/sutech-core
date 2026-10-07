@@ -197,9 +197,48 @@ def ai_text(lang: str, key: str) -> str:
     return AI_STRINGS.get(lang, AI_STRINGS["ru"])[key]
 
 
-for language, extra in {
-    'ru':'\n\nЗнаю устройство Su-Tech, формулы, оборудование и доклад проекта. Для расчёта прямо в чате выберите «Расчёт без сайта» или /plan.',
-    'kz':'\n\nSu-Tech құрылымын, формулаларын, жабдығын және жоба баяндамасын білемін. Чатта есептеу үшін «Сайтсыз есептеу» немесе /plan таңдаңыз.',
-    'en':'\n\nI can explain Su-Tech, its formulas, hardware and project report. Choose Plan in chat or /plan to calculate without the website.',
-}.items():
-    AI_STRINGS[language]['intro'] += extra
+# Short, task-oriented copy for the normal farmer workflow. Advanced /deep
+# and /plan commands remain available without crowding the everyday menu.
+FARMER_COPY = {
+    'ru': {
+        'intro': '🌿 Помощь с растениями\n\nПришлите фото растения или напишите вопрос о поливе, почве или уходе. Назовите культуру и что вас беспокоит.\n\nФото и вопросы передаются Google Gemini. Оценка по фото предварительная. Ответы сохраняются в истории; фото не сохраняются.',
+        'exit_button': '🏠 Главное меню',
+        'menu_button': '← К действиям',
+        'care_button': '🌱 Вопрос об уходе',
+        'cancel_button': 'Отменить ответ',
+        'thinking': 'Готовлю ответ на ваш вопрос…',
+        'still_working': 'Ответ ещё готовится. Можно подождать или отменить запрос кнопкой ниже.',
+        'timeout': 'ИИ не успел ответить. Попробуйте повторить вопрос чуть позже. Расчёт полива доступен в главном меню.',
+        'photo_hint': '📷 Пришлите чёткое фото повреждённого листа при дневном свете. В подписи напишите культуру и когда заметили изменения.\n\nНапример: «Томат, листья желтеют третий день».',
+        'water_hint': '💧 Напишите культуру и вопрос о поливе.\n\nНапример: «Как понять, что томату не хватает воды?»\n\nДля расчёта объёма воды выберите «Расчёт полива» в меню действий.',
+        'care_hint': '🌱 Напишите, что происходит с растением и как давно. Можно приложить фото.\n\nНапример: «У картофеля скручиваются листья. Что проверить?»',
+    },
+    'kz': {
+        'intro': '🌿 Өсімдіктерге көмек\n\nӨсімдік фотосын жіберіңіз немесе суару, топырақ, күтім туралы сұрақ қойыңыз. Дақылды және не мазалайтынын жазыңыз.\n\nФото мен сұрақ Google Gemini қызметіне жіберіледі. Фото бойынша бағалау алдын ала жасалады. Жауаптар тарихта сақталады; фотолар сақталмайды.',
+        'exit_button': '🏠 Басты мәзір',
+        'menu_button': '← Әрекеттерге',
+        'care_button': '🌱 Күтім туралы сұрақ',
+        'cancel_button': 'Сұрауды тоқтату',
+        'thinking': 'Сұрағыңызға жауап дайындап жатырмын…',
+        'still_working': 'Жауап әлі дайындалып жатыр. Күте тұрыңыз немесе төмендегі батырмамен сұрауды тоқтатыңыз.',
+        'timeout': 'ЖИ жауап беріп үлгермеді. Сұрақты сәл кейін қайталаңыз. Суару есебі басты мәзірде қолжетімді.',
+        'photo_hint': '📷 Зақымдалған жапырақтың анық фотосын күндізгі жарықта жіберіңіз. Дақылды және өзгерісті қашан байқағаныңызды жазыңыз.\n\nМысалы: «Қызанақ, жапырағы үш күннен бері сарғайып жатыр».',
+        'water_hint': '💧 Дақылды және суару туралы сұрағыңызды жазыңыз.\n\nМысалы: «Қызанаққа су жетпейтінін қалай білемін?»\n\nСу көлемін есептеу үшін әрекеттер мәзірінде «Суару есебі» таңдаңыз.',
+        'care_hint': '🌱 Өсімдікте не өзгергенін және қанша күн байқалғанын жазыңыз. Фото қосуға болады.\n\nМысалы: «Картоп жапырағы бұралып жатыр. Нені тексерейін?»',
+    },
+    'en': {
+        'intro': '🌿 Help with plants\n\nSend a plant photo or ask about irrigation, soil or care. Name the crop and describe your concern.\n\nPhotos and questions are sent to Google Gemini. Photo assessments are preliminary. Answers are saved in history; photos are not stored.',
+        'exit_button': '🏠 Main menu',
+        'menu_button': '← Actions',
+        'care_button': '🌱 Plant care question',
+        'cancel_button': 'Cancel request',
+        'thinking': 'Preparing an answer to your question…',
+        'still_working': 'Your answer is still being prepared. You can wait or cancel using the button below.',
+        'timeout': 'AI did not respond in time. Try your question again shortly. Irrigation calculation is available in the main menu.',
+        'photo_hint': '📷 Send a clear photo of the damaged leaf in daylight. Add the crop name and when you noticed the changes.\n\nExample: “Tomato, leaves have been yellowing for three days.”',
+        'water_hint': '💧 Name the crop and ask your irrigation question.\n\nExample: “How can I tell if my tomato needs water?”\n\nFor a water volume, choose Irrigation calculation in the actions menu.',
+        'care_hint': '🌱 Describe what changed and how long it has been happening. You can add a photo.\n\nExample: “Potato leaves are curling. What should I check?”',
+    },
+}
+for language, copy in FARMER_COPY.items():
+    AI_STRINGS[language].update(copy)

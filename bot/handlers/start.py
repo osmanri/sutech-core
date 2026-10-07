@@ -1,3 +1,4 @@
+import asyncio
 import html
 import logging
 
@@ -142,7 +143,7 @@ async def show_history(message: Message) -> None:
     """
     user_id = message.from_user.id
     lang = get_lang(user_id)
-    history = get_user_history(user_id)
+    history = await asyncio.to_thread(get_user_history, user_id)
 
     if not history:
         await message.answer(
@@ -168,7 +169,7 @@ async def show_history_inline(callback: CallbackQuery) -> None:
     """Обработчик инлайн-кнопки истории (когда обычная кнопка WebApp заблокирована)."""
     user_id = callback.from_user.id
     lang = get_lang(user_id)
-    history = get_user_history(user_id)
+    history = await asyncio.to_thread(get_user_history, user_id)
 
     if not history:
         await callback.answer(t(lang, "history_empty"), show_alert=True)
@@ -191,7 +192,7 @@ async def handle_history_page(callback: CallbackQuery) -> None:
     """Плавное переключение страниц карусели истории через edit_text."""
     user_id = callback.from_user.id
     lang = get_lang(user_id)
-    history = get_user_history(user_id)
+    history = await asyncio.to_thread(get_user_history, user_id)
 
     if not history:
         await callback.answer(t(lang, "history_empty"), show_alert=True)
@@ -336,5 +337,5 @@ async def unknown_text(message: Message) -> None:
     lang = get_lang(message.from_user.id)
     await message.answer(
         text=t(lang, "unknown_message"),
-        reply_markup=get_launch_keyboard(lang),
+        reply_markup=get_main_reply_keyboard(lang),
     )

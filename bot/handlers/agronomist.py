@@ -35,6 +35,8 @@ assistant = AgronomistService(GeminiClient(GEMINI_API_KEY, GEMINI_MODEL),
 logger = logging.getLogger(__name__)
 request_slots = asyncio.Semaphore(4)
 active_status_events: dict[int, asyncio.Event] = {}
+active_request_tasks: dict[int, asyncio.Task] = {}
+AI_REQUEST_TIMEOUT = 40
 register_chat_planner(agronomist_router)
 
 
@@ -67,23 +69,18 @@ async def replace_ui_message(message: Message, state: FSMContext, text: str,
 async def animate_status(bot, chat_id: int, message_id: int, lang: str,
                          stop: asyncio.Event) -> None:
     """Animate one Telegram status bubble; no extra messages are created."""
-    frames = AI_STRINGS.get(lang, AI_STRINGS["ru"]).get("loading_frames", ())
-    if not frames:
+    # One honest delayed hint, rather than repeated edits/fictitious progress.
+    try:
+        await asyncio.wait_for(stop.wait(), timeout=8)
         return
-    index = 0
-    while not stop.is_set():
-        try:
-            await asyncio.wait_for(stop.wait(), timeout=1.1)
-            break
-        except asyncio.TimeoutError:
-            pass
-        try:
-            await bot.edit_message_text(chat_id=chat_id, message_id=message_id,
-                                        text=frames[index % len(frames)], parse_mode=None)
-            index += 1
-        except TelegramBadRequest:
-            # Keep the request running even if Telegram rejects a redundant edit.
-            continue
+    except asyncio.TimeoutError:
+        pass
+    try:
+        await bot.edit_message_text(chat_id=chat_id, message_id=message_id,
+            text=ai_text(lang, "still_working"), parse_mode=None,
+            reply_markup=chat_keyboard(lang, screen="loading"))
+    except Exception as exc:
+        logger.debug("Loading hint unavailable (%s)", type(exc).__name__)
 
 
 def history_keyboard(lang: str, index: int, total: int, part=0, parts=1) -> InlineKeyboardMarkup:
@@ -109,6 +106,9 @@ def stop_visible_request(user_id: int) -> None:
     event = active_status_events.get(user_id)
     if event:
         event.set()
+    task = active_request_tasks.get(user_id)
+    if task and not task.done() and task is not asyncio.current_task():
+        task.cancel()
 
 
 def chat_keyboard(lang: str, screen: str = "menu") -> InlineKeyboardMarkup:
@@ -116,16 +116,15 @@ def chat_keyboard(lang: str, screen: str = "menu") -> InlineKeyboardMarkup:
         rows = [
             [InlineKeyboardButton(text=ai_text(lang, "photo_button"), callback_data="ai_nav:photo"),
              InlineKeyboardButton(text=ai_text(lang, "water_button"), callback_data="ai_nav:water")],
-            [InlineKeyboardButton(text=ai_text(lang, "care_button"), callback_data="ai_nav:care"),
-             InlineKeyboardButton(text=ai_text(lang, "deep_button"), callback_data="ai_nav:deep")],
+            [InlineKeyboardButton(text=ai_text(lang, "care_button"), callback_data="ai_nav:care")],
             [InlineKeyboardButton(text=ai_text(lang, "calculate_button"),
                                   web_app=WebAppInfo(url=webapp_url(lang))),
-             InlineKeyboardButton(text=PLAN_BUTTON.get(lang, PLAN_BUTTON["ru"]),
-                                  callback_data="ai_nav:plan")],
-            [InlineKeyboardButton(text=ai_text(lang, "history_button"), callback_data="ai_nav:history"),
-             InlineKeyboardButton(text=ai_text(lang, "new_button"), callback_data="ai_nav:new")],
+             InlineKeyboardButton(text=ai_text(lang, "history_button"), callback_data="ai_nav:history")],
             [InlineKeyboardButton(text=ai_text(lang, "exit_button"), callback_data="ai_nav:exit")],
         ]
+    elif screen == "loading":
+        rows = [[InlineKeyboardButton(text=ai_text(lang, "cancel_button"), callback_data="ai_nav:menu"),
+                 InlineKeyboardButton(text=ai_text(lang, "exit_button"), callback_data="ai_nav:exit")]]
     else:
         rows = [
             [InlineKeyboardButton(text=ai_text(lang, "menu_button"), callback_data="ai_nav:menu"),
@@ -164,6 +163,7 @@ async def open_ai_menu(message: Message, state: FSMContext, lang: str, text: str
 @agronomist_router.message(CommandStart(deep_link=True, magic=F.args.in_({"ai", "ai_ru", "ai_kz", "ai_en"})))
 @agronomist_router.message(F.text.in_({copy["button"] for copy in AI_STRINGS.values()}))
 async def start_ai(message: Message, state: FSMContext) -> None:
+    stop_visible_request(message.from_user.id)
     payload = (message.text or "").split(maxsplit=1)
     requested_lang = None
     if len(payload) == 2 and payload[1] in {"ai_ru", "ai_kz", "ai_en"}:
@@ -199,6 +199,7 @@ async def start_ai(message: Message, state: FSMContext) -> None:
 @agronomist_router.message(Command("newchat"))
 @agronomist_router.message(F.text.in_({copy["new_button"] for copy in AI_STRINGS.values()}))
 async def new_chat(message: Message, state: FSMContext) -> None:
+    stop_visible_request(message.from_user.id)
     if not assistant.client.configured:
         await start_ai(message, state)
         return
@@ -219,6 +220,7 @@ async def new_chat(message: Message, state: FSMContext) -> None:
 @agronomist_router.message(Command("exit"))
 @agronomist_router.message(F.text.in_({copy["exit_button"] for copy in AI_STRINGS.values()}))
 async def exit_ai(message: Message, state: FSMContext) -> None:
+    stop_visible_request(message.from_user.id)
     lang = get_lang(message.from_user.id)
     try:
         await assistant.set_active(message.from_user.id, False)
@@ -235,6 +237,7 @@ ACTION_BUTTONS = {copy[key] for copy in AI_STRINGS.values()
 @agronomist_router.message(Command("deep"))
 @agronomist_router.message(F.text.in_({copy["deep_button"] for copy in AI_STRINGS.values()}))
 async def choose_deep(message: Message, state: FSMContext) -> None:
+    stop_visible_request(message.from_user.id)
     lang = get_lang(message.from_user.id)
     if not assistant.client.configured:
         await start_ai(message, state)
@@ -333,6 +336,7 @@ async def delete_ai_history(callback: CallbackQuery, state: FSMContext) -> None:
 @agronomist_router.message(F.text.in_(ACTION_BUTTONS - {
     copy[key] for copy in AI_STRINGS.values() for key in ("deep_button", "history_button")}))
 async def choose_topic(message: Message, state: FSMContext) -> None:
+    stop_visible_request(message.from_user.id)
     lang = get_lang(message.from_user.id)
     if not assistant.client.configured:
         await start_ai(message, state)
@@ -341,7 +345,7 @@ async def choose_topic(message: Message, state: FSMContext) -> None:
                  if any(copy[key] == message.text for copy in AI_STRINGS.values()))
     # Choosing an action shows guidance; it must never spend an AI request.
     await state.set_state(AgronomistChat.active)
-    await state.update_data(ai_topic=topic)
+    await state.update_data(ai_topic=topic, ai_deep=False)
     await open_ai_menu(message, state, lang, ai_text(lang, topic + "_hint"))
 
 
@@ -401,7 +405,7 @@ async def ai_navigation(callback: CallbackQuery, state: FSMContext) -> None:
                                  reply_markup=chat_keyboard(lang, screen="detail"))
         return
     if action in {"photo", "water", "care"}:
-        await state.update_data(ai_topic=action)
+        await state.update_data(ai_topic=action, ai_deep=False)
         await replace_ui_message(message, state, ai_text(lang, action + "_hint"),
                                  reply_markup=chat_keyboard(lang, screen="detail"))
 
@@ -414,6 +418,7 @@ MENU_TEXTS = {t(lang, key) for lang in ("ru", "kz", "en")
 @agronomist_router.message(AgronomistChat.active,
                            F.text.startswith("/") | F.text.in_(MENU_TEXTS))
 async def leave_for_menu(message: Message, state: FSMContext) -> None:
+    stop_visible_request(message.from_user.id)
     try:
         await assistant.set_active(message.from_user.id, False)
     except AIError:
@@ -424,6 +429,7 @@ async def leave_for_menu(message: Message, state: FSMContext) -> None:
 
 @agronomist_router.callback_query(AgronomistChat.active)
 async def leave_for_callback(callback: CallbackQuery, state: FSMContext) -> None:
+    stop_visible_request(callback.from_user.id)
     try:
         await assistant.set_active(callback.from_user.id, False)
     except AIError:
@@ -436,6 +442,28 @@ async def leave_for_callback(callback: CallbackQuery, state: FSMContext) -> None
 @agronomist_router.message(StateFilter(None, AgronomistChat.active), F.text,
                            ~F.text.startswith("/"), ~F.text.in_(MENU_TEXTS | ACTION_BUTTONS))
 async def ask_ai(message: Message, state: FSMContext) -> None:
+    """Reserve one visible request before any await can admit a duplicate."""
+    user_id = message.from_user.id
+    previous = active_request_tasks.get(user_id)
+    if previous and not previous.done():
+        return  # Keep the existing status and its Cancel button intact.
+    stop = asyncio.Event()
+    task = asyncio.create_task(_run_ai_request(message, state, stop))
+    active_status_events[user_id] = stop
+    active_request_tasks[user_id] = task
+    try:
+        await task
+    except asyncio.CancelledError:
+        if not stop.is_set():
+            raise  # Application shutdown/task cancellation must propagate.
+    finally:
+        if active_request_tasks.get(user_id) is task:
+            active_request_tasks.pop(user_id, None)
+        if active_status_events.get(user_id) is stop:
+            active_status_events.pop(user_id, None)
+
+
+async def _run_ai_request(message: Message, state: FSMContext, stop_animation: asyncio.Event) -> None:
     user_id = message.from_user.id
     lang = get_lang(user_id)
     if not (message.photo or message.document) and await state.get_state() is None:
@@ -453,21 +481,27 @@ async def ask_ai(message: Message, state: FSMContext) -> None:
         return
     has_image = bool(message.photo or message.document)
     text = (message.caption if has_image else message.text) or ai_text(lang, "photo_prompt")
+    async def input_error(key):
+        if await state.get_state() is None:
+            await state.set_state(AgronomistChat.active)
+        await replace_ui_message(message, state, ai_text(lang, key),
+                                 reply_markup=chat_keyboard(lang, screen="detail"))
     if len(text) > MAX_TEXT_CHARS:
-        await message.answer(ai_text(lang, "long_text"))
+        await input_error("long_text")
         return
     file = message.photo[-1] if message.photo else message.document
     if file and (file.file_size or 0) > MAX_IMAGE_BYTES:
-        await message.answer(ai_text(lang, "large_image"))
+        await input_error("large_image")
         return
     if message.document and message.document.mime_type not in {"image/jpeg", "image/png"}:
-        await message.answer(ai_text(lang, "bad_image"))
+        await input_error("bad_image")
         return
     chat_data = await state.get_data()
     topic = chat_data.get("ai_topic")
     deep = bool(chat_data.get("ai_deep"))
     if topic == "photo" and not has_image:
-        await message.answer(ai_text(lang, "photo_pending"), reply_markup=chat_keyboard(lang))
+        await replace_ui_message(message, state, ai_text(lang, "photo_pending"),
+                                 reply_markup=chat_keyboard(lang, screen="detail"))
         return
     # Do not prepend a crop-care topic to arbitrary text: it could make an
     # unrelated question appear relevant to the local quota-saving filter.
@@ -479,9 +513,8 @@ async def ask_ai(message: Message, state: FSMContext) -> None:
         await replace_ui_message(message, state, ai_text(lang, "intro"),
                                  reply_markup=chat_keyboard(lang))
     status = await replace_ui_message(
-        message, state, ai_text(lang, "working" if has_image else "thinking"))
-    stop_animation = asyncio.Event()
-    active_status_events[user_id] = stop_animation
+        message, state, ai_text(lang, "working" if has_image else "thinking"),
+        reply_markup=chat_keyboard(lang, screen="loading"))
     animation = asyncio.create_task(animate_status(
         message.bot, message.chat.id, status.message_id, lang, stop_animation))
 
@@ -491,7 +524,7 @@ async def ask_ai(message: Message, state: FSMContext) -> None:
         await asyncio.gather(animation, return_exceptions=True)
 
     try:
-        async with request_slots:
+        async with asyncio.timeout(AI_REQUEST_TIMEOUT), request_slots:
             image = None
             if file:
                 with LimitedImageBuffer() as buffer:
@@ -503,28 +536,36 @@ async def ask_ai(message: Message, state: FSMContext) -> None:
             if getattr(result, "fallback", False):
                 result = f"{result}\n\n{ai_text(lang, 'deep_fallback')}"
             await stop_loading_animation()
-            await status.edit_text(result, parse_mode=None)
+            await status.edit_text(result, parse_mode=None,
+                                   reply_markup=chat_keyboard(lang, screen="detail"))
             await state.update_data(ai_ui_message_id=status.message_id)
     except AIError as exc:
         if exc.code != "cancelled" and not stop_animation.is_set():
             await stop_loading_animation()
-            await status.edit_text(ai_text(lang, exc.code), parse_mode=None)
+            await status.edit_text(ai_text(lang, exc.code), parse_mode=None,
+                                   reply_markup=chat_keyboard(lang, screen="detail"))
             await state.update_data(ai_ui_message_id=status.message_id)
+    except asyncio.TimeoutError:
+        show_failure = not stop_animation.is_set() and await state.get_state() == AgronomistChat.active.state
+        await stop_loading_animation()
+        if show_failure:
+            await status.edit_text(ai_text(lang, "timeout"), parse_mode=None,
+                                   reply_markup=chat_keyboard(lang, screen="detail"))
     except Exception as exc:
         # Do not log photos, questions, Telegram file URLs or provider secrets.
         logger.warning("Agronomist request failed (%s)", type(exc).__name__)
         show_failure = not stop_animation.is_set() and await state.get_state() == AgronomistChat.active.state
         await stop_loading_animation()
         if show_failure:
-            await status.edit_text(ai_text(lang, "unavailable"), parse_mode=None)
+            await status.edit_text(ai_text(lang, "unavailable"), parse_mode=None,
+                                   reply_markup=chat_keyboard(lang, screen="detail"))
             await state.update_data(ai_ui_message_id=status.message_id)
     finally:
         await stop_loading_animation()
-        if active_status_events.get(user_id) is stop_animation:
-            active_status_events.pop(user_id, None)
 
 
 @agronomist_router.message(AgronomistChat.active, ~F.web_app_data,
                            ~F.text, ~F.photo, ~F.document)
 async def unsupported_ai_message(message: Message) -> None:
-    await message.answer(ai_text(get_lang(message.from_user.id), "unsupported"))
+    await message.answer(ai_text(get_lang(message.from_user.id), "unsupported"),
+                         reply_markup=chat_keyboard(get_lang(message.from_user.id), screen="detail"))

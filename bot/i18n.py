@@ -878,6 +878,28 @@ STRINGS['en'] = {**STRINGS['ru'], **{
 }}
 
 # History contains both older savings estimates and new electricity costs.
+for language, copy in {
+    'ru': {
+        'welcome': 'Здравствуйте, <b>{name}</b>!\n\nЯ помогу рассчитать полив и разобраться с растениями.\n\n<b>Открыть Su-Tech</b> — выбрать поле и получить объём воды.\n<b>ИИ-агроном</b> — задать вопрос или отправить фото растения.\n<b>Мои поля</b> — посмотреть сохранённые участки.',
+        'app_prompt': '<b>Рассчитайте полив своего поля</b>\n\nНа карте выберите участок, затем укажите культуру, площадь и состояние почвы. Нажмите расчёт — результат придёт в этот чат.',
+        'unknown_message': 'Для вопроса о растениях или фото выберите «ИИ-агроном». Для объёма воды — «Открыть Su-Tech». Кнопки находятся под полем ввода.',
+        'help_text': '<b>С чего начать</b>\n\n<b>Нужен полив?</b> Откройте Su-Tech, выберите участок и заполните параметры. Результат придёт сюда.\n\n<b>Проблема с растением?</b> Выберите «ИИ-агроном», напишите культуру и вопрос или отправьте фото.\n\n<b>Где прошлые результаты?</b> «История» — расчёты полива. История ИИ находится внутри ИИ-агронома.\n\nКнопка «Главное меню» возвращает к основным действиям. Расчёт можно выполнить и без сайта командой /plan.',
+    },
+    'kz': {
+        'welcome': 'Сәлеметсіз бе, <b>{name}</b>!\n\nСуаруды есептеуге және өсімдік мәселесін түсінуге көмектесемін.\n\n<b>Su-Tech ашу</b> — алқапты таңдап, су көлемін есептеу.\n<b>ЖИ-агроном</b> — сұрақ қою немесе өсімдік фотосын жіберу.\n<b>Менің алқаптарым</b> — сақталған учаскелерді көру.',
+        'app_prompt': '<b>Алқабыңызға суару есебі</b>\n\nКартада учаскені таңдаңыз, дақылды, ауданды және топырақ күйін көрсетіңіз. Есептеу батырмасын басыңыз — нәтиже осы чатқа келеді.',
+        'unknown_message': 'Өсімдік туралы сұрақ немесе фото үшін «ЖИ-агроном» таңдаңыз. Су көлемі үшін «Su-Tech ашу» басыңыз. Батырмалар мәтін енгізу жолының астында.',
+        'help_text': '<b>Қалай бастау керек</b>\n\n<b>Суару керек пе?</b> Su-Tech ашып, учаскені таңдап, параметрлерді толтырыңыз. Нәтиже осында келеді.\n\n<b>Өсімдікте мәселе бар ма?</b> «ЖИ-агроном» таңдап, дақыл мен сұрақты жазыңыз немесе фото жіберіңіз.\n\n<b>Бұрынғы нәтижелер қайда?</b> «Тарих» — суару есептері. ЖИ тарихы ЖИ-агроном ішінде.\n\n«Басты мәзір» негізгі әрекеттерге қайтарады. Сайтсыз есептеу үшін /plan қолданыңыз.',
+    },
+    'en': {
+        'welcome': 'Hello, <b>{name}</b>!\n\nI can help plan irrigation and understand plant problems.\n\n<b>Open Su-Tech</b> — select a field and calculate water volume.\n<b>AI agronomist</b> — ask a question or send a plant photo.\n<b>My fields</b> — view saved plots.',
+        'app_prompt': '<b>Calculate irrigation for your field</b>\n\nSelect the plot on the map, then enter the crop, area and soil condition. Run the calculation — the result will arrive in this chat.',
+        'unknown_message': 'For plant questions or photos, choose AI agronomist. For a water volume, choose Open Su-Tech. The buttons are below the message input.',
+        'help_text': '<b>Getting started</b>\n\n<b>Need irrigation?</b> Open Su-Tech, select your plot and enter its details. The result will arrive here.\n\n<b>A plant problem?</b> Choose AI agronomist, name the crop and ask a question or send a photo.\n\n<b>Previous results?</b> History contains irrigation calculations. AI history is inside the agronomist.\n\nMain menu returns to the everyday actions. Use /plan to calculate without the website.',
+    },
+}.items():
+    STRINGS[language].update(copy)
+
 STRINGS['ru']['history_carousel_card'] = STRINGS['ru']['history_carousel_card'].replace('Сэкономлено:', 'Экономика:')
 STRINGS['kz']['history_carousel_card'] = STRINGS['kz']['history_carousel_card'].replace('Үнемделді:', 'Экономика:')
 
