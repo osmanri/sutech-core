@@ -904,6 +904,65 @@ STRINGS['ru']['history_carousel_card'] = STRINGS['ru']['history_carousel_card'].
 STRINGS['kz']['history_carousel_card'] = STRINGS['kz']['history_carousel_card'].replace('Үнемделді:', 'Экономика:')
 
 
+for language, copy in {
+    'ru': {
+        'btn_explain': '💡 Почему такой результат?',
+        'decision_card': '<b>{decision}</b>\n{crop} · {area} {unit} · {method}\n\n<b>Объём воды:</b> <b>{volume}</b>\n<b>Почему:</b> {reason}\n\n<b>Расчёт на:</b> {date} · {timezone}\n<i>По прогнозу погоды Open-Meteo.</i>',
+        'decision_deferred': '🟢 Полив пока не нужен',
+        'decision_irrigate': '💧 Полив нужен',
+        'decision_critical': '🔴 Полив нужен — возможен водный стресс',
+        'decision_rice': '💧 Нужно пополнить воду в рисовом чеке',
+        'decision_rice_deferred': '🟢 Пополнение рисового чека пока не нужно',
+        'decision_rice_method': 'Рисовый чек',
+        'decision_reason_deferred': 'По расчёту, запас влаги ещё не достиг порога полива.',
+        'decision_reason_irrigate': 'По расчёту, почве нужно восполнить запас влаги.',
+        'decision_reason_critical': 'Расчётный недостаток влаги выше допустимого для культуры. Проверьте состояние растений и почвы.',
+        'decision_reason_rain': 'Ожидаемые осадки уменьшают потребность в воде; расчётный запас влаги достаточен.',
+        'decision_reason_rice': 'Нужно восполнить расчётные потери воды через испарение и просачивание с учётом ожидаемых осадков.',
+        'decision_reason_rice_deferred': 'Ожидаемые осадки покрывают расчётные потери воды.',
+        'decision_saline': 'Солёная почва: вода для промывки рассчитывается отдельно.',
+        'decision_greenhouse': 'Теплица: наружный дождь не учитывается в расчёте.',
+    },
+    'kz': {
+        'btn_explain': '💡 Неге осындай нәтиже?',
+        'decision_card': '<b>{decision}</b>\n{crop} · {area} {unit} · {method}\n\n<b>Су көлемі:</b> <b>{volume}</b>\n<b>Себебі:</b> {reason}\n\n<b>Есеп күні:</b> {date} · {timezone}\n<i>Open-Meteo ауа райы болжамы бойынша.</i>',
+        'decision_deferred': '🟢 Әзірге суару қажет емес',
+        'decision_irrigate': '💧 Суару қажет',
+        'decision_critical': '🔴 Суару қажет — су тапшылығы қаупі бар',
+        'decision_rice': '💧 Күріш атызындағы суды толықтыру қажет',
+        'decision_rice_deferred': '🟢 Күріш атызындағы суды әзірге толықтыру қажет емес',
+        'decision_rice_method': 'Күріш атызы',
+        'decision_reason_deferred': 'Есеп бойынша, ылғал қоры суару шегіне әлі жеткен жоқ.',
+        'decision_reason_irrigate': 'Есеп бойынша, топырақтағы ылғал қорын толықтыру қажет.',
+        'decision_reason_critical': 'Есептелген ылғал тапшылығы дақылға рұқсат етілген шектен жоғары. Өсімдік пен топырақ күйін тексеріңіз.',
+        'decision_reason_rain': 'Күтілетін жауын су қажеттілігін азайтады; есеп бойынша ылғал жеткілікті.',
+        'decision_reason_rice': 'Күтілетін жауынды ескере отырып, булану мен топыраққа сіңуден болатын су шығынын толықтыру қажет.',
+        'decision_reason_rice_deferred': 'Күтілетін жауын есептелген су шығынын өтейді.',
+        'decision_saline': 'Тұзды топырақ: тұз шаюға қажет су бөлек есептеледі.',
+        'decision_greenhouse': 'Жылыжай: сырттағы жауын есепке алынбайды.',
+    },
+    'en': {
+        'btn_explain': '💡 Why this recommendation?',
+        'decision_card': '<b>{decision}</b>\n{crop} · {area} {unit} · {method}\n\n<b>Water volume:</b> <b>{volume}</b>\n<b>Why:</b> {reason}\n\n<b>Calculation for:</b> {date} · {timezone}\n<i>Based on the Open-Meteo weather forecast.</i>',
+        'decision_deferred': '🟢 No irrigation needed yet',
+        'decision_irrigate': '💧 Irrigation needed',
+        'decision_critical': '🔴 Irrigation needed — possible water stress',
+        'decision_rice': '💧 Replenish the rice plot water',
+        'decision_rice_deferred': '🟢 No rice plot replenishment needed yet',
+        'decision_rice_method': 'Flooded rice plot',
+        'decision_reason_deferred': 'The calculated water deficit has not reached the irrigation threshold.',
+        'decision_reason_irrigate': 'The calculation shows the soil water reserve needs replenishing.',
+        'decision_reason_critical': 'The calculated water deficit exceeds the allowable level for this crop. Check plants and soil.',
+        'decision_reason_rain': 'Forecast rainfall reduces water demand; the calculated moisture reserve is sufficient.',
+        'decision_reason_rice': 'Replenish calculated evaporation and seepage losses, accounting for forecast rainfall.',
+        'decision_reason_rice_deferred': 'Forecast rainfall covers the calculated water losses.',
+        'decision_saline': 'Saline soil: leaching water needs a separate assessment.',
+        'decision_greenhouse': 'Greenhouse: outdoor rainfall is excluded from this calculation.',
+    },
+}.items():
+    STRINGS[language].update(copy)
+
+
 def t(lang: str, key: str, **kwargs) -> str:
     """
     Возвращает локализованную строку для заданного языка и ключа.

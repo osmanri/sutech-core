@@ -41,7 +41,8 @@ def get_launch_keyboard(lang: str = "ru") -> InlineKeyboardMarkup:
 
 
 def get_report_inline_keyboard(lang: str = "ru", report_id: str | None = None,
-                               field_id: int | None = None) -> InlineKeyboardMarkup:
+                               field_id: int | None = None, *,
+                               needs_irrigation: bool = True) -> InlineKeyboardMarkup:
     """
     Возвращает компактные инлайн-кнопки под итоговым агро-отчетом (3 ряда):
       Ряд 1: [ 💡 Почему так? ] + [ 💧 Отметить полив ] (если поле сохранено)
@@ -54,7 +55,7 @@ def get_report_inline_keyboard(lang: str = "ru", report_id: str | None = None,
     # Ряд 1: Главные действия по отчету
     row1 = [InlineKeyboardButton(text=t(lang, "btn_explain"),
                                  callback_data=f"explain:{report_id or 'unavailable'}")]
-    if field_id is not None:
+    if field_id is not None and needs_irrigation:
         row1.append(InlineKeyboardButton(text=t(lang, "btn_field_watered"),
                                          callback_data=f"field:watered:{field_id}"))
     rows.append(row1)

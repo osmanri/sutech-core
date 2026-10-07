@@ -90,9 +90,9 @@ class BotPlatformTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(bot.send_message.await_args.kwargs['chat_id'], 10)
         self.assertIsNotNone(bot.send_message.await_args.kwargs['reply_markup'])
         report = bot.send_message.await_args.kwargs['text']
-        self.assertIn('<b>Культура:</b> Кукуруза', report)
+        self.assertIn('Кукуруза · 1 га · Капельный полив', report)
         self.assertNotIn('Хлопок', report)
-        self.assertIn('1 га · Суглинок · день 30 · нормальная влажность · Капельный полив', report)
+        self.assertIn('1 га · Суглинок · день 30 · нормальная влажность · Капельный полив', snapshot.call_args.args[1])
         self.assertEqual(history.call_args.kwargs['area_text'], '1 га')
         self.assertEqual(history.call_args.kwargs['irrigation_text'], t('ru', 'report_irrig_drip'))
 
@@ -101,7 +101,7 @@ class BotPlatformTests(unittest.IsolatedAsyncioTestCase):
         from bot.main import analyze_webapp, handle_webapp_data
         from bot.i18n import t
         from bot.water_balance import CROPS, parse_field, calculate_balance
-        from bot.balance_report import fmt
+        from bot.balance_report import fmt, display_volume
         bot = SimpleNamespace(send_message=AsyncMock())
         base = {
             'balance_version': 2, 'soil_type': 'clay',
@@ -133,15 +133,16 @@ class BotPlatformTests(unittest.IsolatedAsyncioTestCase):
                         self.assertEqual(response.status, 200)
                         report = bot.send_message.await_args.kwargs['text']
                         expected = calculate_balance(parse_field(payload), weather['et0'], weather['rain'])
+                        self.assertIn(t(lang, f'report_crop_{crop}'), report)
+                        explanation = handle_webapp_data.__globals__['save_report_explanation'].call_args.args[1]
                         self.assertIn(t(lang, 'balance_crop_header',
-                                        crop=t(lang, f'report_crop_{crop}')), report)
+                                        crop=t(lang, f'report_crop_{crop}')), explanation)
                         area_unit = 'ha' if lang == 'en' else 'га'
                         self.assertIn(f'0.067 {area_unit}', report)
-                        self.assertIn(f"{fmt(expected['gross_m3'])} м³" if lang != 'en'
-                                      else f"{fmt(expected['gross_m3'])} m³", report)
+                        self.assertIn(display_volume(lang, expected['gross_m3']), report)
                         if crop != 'rice':
-                            self.assertIn(t(lang, f'balance_soil_clay'), report)
-                            self.assertIn(t(lang, 'balance_moisture_dry'), report)
+                            self.assertIn(t(lang, f'balance_soil_clay'), explanation)
+                            self.assertIn(t(lang, 'balance_moisture_dry'), explanation)
                             self.assertIn(t(lang, 'report_irrig_sprinkler'), report)
                             self.assertEqual(expected['et0'], 2.6)
                             self.assertEqual(expected['rain'], 0.0)

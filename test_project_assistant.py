@@ -11,7 +11,7 @@ from bot.handlers import agronomist, chat_planner, webapp
 from bot.services.agronomist import system_prompt
 from bot.services.agronomy_scope import in_scope
 from bot.water_balance import parse_field, calculate_balance
-from bot.balance_report import fmt
+from bot.balance_report import fmt, display_volume
 from bot.i18n import t
 from test_bot_platform import shared_test_dispatcher
 
@@ -112,7 +112,7 @@ class ChatPlannerTests(unittest.IsolatedAsyncioTestCase):
                 self.assertTrue(reports,(lang,crop,[getattr(m,'text','') for m in self.sent]))
                 report=reports[-1]
                 self.assertIn(t(lang,'report_crop_'+crop),report)
-                self.assertIn(fmt(expected['gross_m3']),report)
+                self.assertIn(display_volume(lang, expected['gross_m3']),report)
                 self.fetch.assert_awaited_once_with(44.85,65.5)
                 self.history.assert_called_once()
                 self.assertEqual(self.history.call_args.kwargs['user_id'],self.uid)

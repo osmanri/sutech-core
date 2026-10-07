@@ -358,4 +358,5 @@ async def handle_field_payload(message: Message, state: FSMContext, data: dict) 
     )
     report_id = save_report_explanation(user_id, explanation)
     await message.answer(final_message, parse_mode='HTML',
-                         reply_markup=get_report_inline_keyboard(lang, report_id, field_id))
+                         reply_markup=get_report_inline_keyboard(lang, report_id, field_id,
+                             needs_irrigation=result['gross_m3'] > 0))

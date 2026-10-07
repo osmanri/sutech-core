@@ -128,7 +128,7 @@ class BalanceTests(unittest.TestCase):
                              pump_power_kw=22, pump_productivity_m3h=60))
         r=calculate_balance(f,20,0)
         for lang, labels in [('ru', ('борозды', 'Разница')), ('kz', ('бороздалық', 'Айырма')), ('en', ('furrow', 'Difference'))]:
-            report=format_balance_report(lang,f,r,weather)
+            report=format_balance_explanation(lang,f,r,weather)
             self.assertIn(labels[0], report)
             self.assertIn(labels[1], report)
             self.assertIn('kWh' if lang == 'en' else 'кВт', report)
@@ -157,7 +157,7 @@ class BalanceTests(unittest.TestCase):
         weather = {'date': '2026-10-03', 'timezone': 'Asia/Almaty'}
         for lang in ('ru', 'kz', 'en'):
             for value in (result, {**result, 'cost': None}):
-                report = format_balance_report(lang, field, value, weather)
+                report = format_balance_explanation(lang, field, value, weather)
                 self.assertIn('40', report)
                 self.assertIn('22.22', report)
                 self.assertIn('50%', report)
@@ -218,7 +218,8 @@ class BalanceTests(unittest.TestCase):
         for lang in ('ru', 'kz'):
             for text in (format_balance_report(lang, field, result, weather),
                          format_balance_explanation(lang, field, result, weather)):
-                self.assertNotRegex(text, r'\d+[.,]\d{3,}')
+                # A localized date has a four-digit year, not a water precision.
+                self.assertNotRegex(text.replace('19.09.2026', ''), r'\d+[.,]\d{3,}')
 
     def test_explanation_shows_same_deficit_volumes_and_pump_inputs(self):
         field = parse_field(payload(crop='other', custom_p=.5, custom_root_depth=.2,
@@ -245,7 +246,7 @@ class BalanceTests(unittest.TestCase):
         weather = {'date': '2026-09-19', 'timezone': 'Asia/Almaty'}
         self.assertEqual(result['status'], 'deferred')
         for lang, phrase in [('ru', 'перенос затрат'), ('kz', 'шығынды кейінге қалдыру')]:
-            text = format_balance_report(lang, field, result, weather)
+            text = format_balance_explanation(lang, field, result, weather)
             self.assertIn(phrase, text)
             self.assertIn('0.00', text)
             self.assertNotIn('Разница:', text)

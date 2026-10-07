@@ -1,5 +1,6 @@
 """Report and immutable explanation for the daily water balance."""
 from html import escape
+from datetime import date
 try:
     from i18n import t
 except ImportError:
@@ -39,44 +40,62 @@ def economics(lang, field, result):
     return text
 
 
+def display_volume(lang, cubic_metres):
+    """Small positive quantities remain visible rather than rounding to zero m³."""
+    unit = 'm³' if lang == 'en' else 'м³'
+    value = cubic_metres
+    if 0 < value < 1:
+        value *= 1000
+        unit = 'L' if lang == 'en' else 'л'
+        number = '<0.01' if value < .01 else fmt(value)
+    else:
+        number = fmt(value)
+    if lang in ('ru', 'kz'):
+        number = number.replace('.', ',')
+    return escape(f'{number} {unit}')
+
+
 def format_balance_report(lang, field, result, weather):
-    crop_header = t(lang, 'balance_crop_header', crop=escape(t(lang, f'report_crop_{field.crop}')))
-    if result['status'] == 'rice':
-        input_line = t(lang, 'balance_rice_inputs', area=fmt_area(field.area_ha),
-                       soil=escape(t(lang, f'balance_soil_{field.soil}')))
-        return crop_header + '\n' + input_line + '\n' + t(lang, 'balance_rice',
-            water_layer=result.get('water_layer_cm', 12),
-            seepage=fmt(result.get('seepage', 6.0)),
-            etc=fmt(result.get('etc', 0.0)),
-            volume=fmt(result.get('gross_m3', 0.0)),
-            economics=economics(lang, field, result),
-            date=escape(weather.get('date', '')),
-            timezone=escape(weather.get('timezone', '')),
-        )
-    text = t(lang, 'balance_report',
-        status=t(lang, f"balance_status_{result['status']}"),
-        raw=fmt(result['raw']), deficit=fmt(result['deficit']), threshold=fmt(result['threshold']),
-        irrigation=t(lang, f'report_irrig_{field.method}'),
-        volume=fmt(result['gross_m3']), efficiency=round(result['efficiency']*100),
-        economics=economics(lang, field, result),
-        date=escape(weather['date']), timezone=escape(weather['timezone']),
+    """One decision card; formulas and economics live in its saved explanation."""
+    status = result['status']
+    if status == 'rice':
+        decision = 'rice' if result['gross_m3'] > 0 else 'rice_deferred'
+    else:
+        decision = status
+    reason = decision
+    if status == 'deferred' and result.get('peff', 0) > 0:
+        reason = 'rain'
+    raw_date = str(weather.get('date', ''))
+    try:
+        report_date = date.fromisoformat(raw_date).strftime('%d.%m.%Y')
+    except ValueError:
+        report_date = raw_date or '—'
+    text = t(lang, 'decision_card',
+        decision=t(lang, f'decision_{decision}'),
+        crop=escape(t(lang, f'report_crop_{field.crop}')),
+        area=fmt_area(field.area_ha),
+        unit='ha' if lang == 'en' else 'га',
+        method=escape(t(lang, 'decision_rice_method' if status == 'rice' else f'report_irrig_{field.method}')),
+        volume=display_volume(lang, result['gross_m3']),
+        reason=t(lang, f'decision_reason_{reason}'),
+        date=escape(report_date),
+        timezone=escape(str(weather.get('timezone', ''))),
     )
-    if result['overflow'] > 0:
-        text += '\n' + t(lang, 'balance_overflow')
     if field.saline:
-        text += '\n' + t(lang, 'balance_salinity')
+        text += '\n\n' + t(lang, 'decision_saline')
     if field.field_type == 'greenhouse':
-        text += '\n' + t(lang, 'balance_greenhouse')
-    input_line = t(lang, 'balance_inputs',
-                   area=fmt_area(field.area_ha),
-                   soil=escape(t(lang, f'balance_soil_{field.soil}')),
-                   day=field.day,
-                   moisture=escape(t(lang, f'balance_moisture_{field.moisture_condition}')),
-                   irrigation=escape(t(lang, f'report_irrig_{field.method}')))
-    return crop_header + '\n' + input_line + '\n' + text
+        text += '\n\n' + t(lang, 'decision_greenhouse')
+    return text
 
 
 def format_balance_explanation(lang, field, result, weather):
+    inputs = t(lang, 'balance_rice_inputs', area=fmt_area(field.area_ha),
+               soil=escape(t(lang, f'balance_soil_{field.soil}'))) if result['status'] == 'rice' else t(
+        lang, 'balance_inputs', area=fmt_area(field.area_ha),
+        soil=escape(t(lang, f'balance_soil_{field.soil}')), day=field.day,
+        moisture=escape(t(lang, f'balance_moisture_{field.moisture_condition}')),
+        irrigation=escape(t(lang, f'report_irrig_{field.method}')))
+    input_header = t(lang, 'balance_crop_header', crop=escape(t(lang, f'report_crop_{field.crop}'))) + '\n' + inputs + '\n\n'
     if result['status'] == 'rice':
         text = t(lang, 'balance_rice_explanation',
             area=fmt_area(field.area_ha),
@@ -97,7 +116,11 @@ def format_balance_explanation(lang, field, result, weather):
                 ai_hours=fmt(result['ai_time_hours']),
                 traditional_hours=fmt(result['traditional_time_hours']),
                 deficit=fmt(result['deficit']), area=fmt_area(field.area_ha))
-        return text + '\n\n' + economics(lang, field, result)
+        if field.saline:
+            text += '\n' + t(lang, 'balance_salinity')
+        if field.field_type == 'greenhouse':
+            text += '\n' + t(lang, 'balance_greenhouse')
+        return input_header + text + '\n\n' + economics(lang, field, result)
     from_values = dict(
         crop=t(lang, f'report_crop_{field.crop}'), day=field.day,
         soil=t(lang, f'balance_soil_{field.soil}'), area=fmt_area(field.area_ha),
@@ -113,6 +136,12 @@ def format_balance_explanation(lang, field, result, weather):
         status=t(lang, f"balance_status_{result['status']}"),
     )
     text = t(lang, 'balance_explanation', **from_values)
+    if result.get('overflow', 0) > 0:
+        text += '\n' + t(lang, 'balance_overflow')
+    if field.saline:
+        text += '\n' + t(lang, 'balance_salinity')
+    if field.field_type == 'greenhouse':
+        text += '\n' + t(lang, 'balance_greenhouse')
     if field.crop == 'other':
         text += '\n' + t(lang, 'balance_custom')
     else:
@@ -125,4 +154,4 @@ def format_balance_explanation(lang, field, result, weather):
             ai_hours=fmt(result['ai_time_hours']),
             traditional_hours=fmt(result['traditional_time_hours']),
             deficit=fmt(result['deficit']), area=fmt_area(field.area_ha))
-    return text + '\n\n' + economics(lang, field, result)
+    return input_header + text + '\n\n' + economics(lang, field, result)
