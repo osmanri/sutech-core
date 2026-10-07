@@ -160,7 +160,9 @@ class ChatPlannerTests(unittest.IsolatedAsyncioTestCase):
         self.fetch.side_effect=aiohttp.ClientError('offline')
         await self.complete()
         self.history.assert_not_called();self.persist.assert_not_awaited()
-        self.assertTrue(any(getattr(m,'text',None)==t('ru','err_weather') for m in self.sent))
+        from bot.calculation_recovery import CalculationRecovery, phrase
+        self.assertTrue(any(getattr(m,'text',None)==phrase('ru','error') for m in self.sent))
+        self.assertEqual(await self.state.get_state(), CalculationRecovery.ready.state)
 
     async def test_existing_menu_exit_is_not_consumed_as_wizard_input(self):
         # Use /help, whose real handler is independent of the AI provider.

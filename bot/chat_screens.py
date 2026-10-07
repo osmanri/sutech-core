@@ -59,6 +59,8 @@ class ChatScreens:
             stop_visible_request(chat_id)
             from bot.handlers.fields import stop_field_refresh
             stop_field_refresh(chat_id)
+            from bot.calculation_recovery import stop_calculation
+            stop_calculation(chat_id)
         generation = self.generations.get(chat_id,0)
         previous = dict(self.memory.get(chat_id,{}))
         if navigation:
@@ -219,6 +221,11 @@ class ChatScreenMiddleware(BaseMiddleware):
         bot = data['bot']
         self.controller.install(bot)
         if callback:
+            from bot.calculation_recovery import retry_is_duplicate, phrase as recovery_phrase
+            if retry_is_duplicate(user.id, callback.data):
+                from bot.user_state import get_lang
+                await callback.answer(recovery_phrase(get_lang(user.id), 'busy'))
+                return None
             from bot.handlers.fields import field_refresh_is_duplicate, field_refresh_busy_text
             if field_refresh_is_duplicate(user.id, callback.data):
                 from bot.user_state import get_lang

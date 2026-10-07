@@ -16,6 +16,9 @@ if __package__ in (None, ""):
 
 from aiohttp import web
 from aiogram import Bot, Dispatcher
+from aiogram.fsm.context import FSMContext
+from aiogram.fsm.storage.base import StorageKey, BaseStorage
+from aiogram.fsm.storage.memory import MemoryStorage
 from aiogram.types import ErrorEvent
 from aiogram.utils.web_app import safe_parse_webapp_init_data
 from aiogram.client.default import DefaultBotProperties
@@ -67,6 +70,8 @@ logging.getLogger("aiogram").setLevel(logging.INFO)
 logging.getLogger("aiohttp.access").setLevel(logging.WARNING)
 logger = logging.getLogger(__name__)
 BOT_APP_KEY = web.AppKey("su_tech_bot", Bot)
+FSM_STORAGE_KEY = web.AppKey("su_tech_fsm_storage", BaseStorage)
+analysis_storage = MemoryStorage()
 
 WEBAPP_ORIGINS = {
     "https://frontend-2-mauve.vercel.app",
@@ -133,20 +138,22 @@ async def analyze_webapp(request: web.Request) -> web.Response:
     report_sent = False
 
     async def answer(text: str, **kwargs):
-        nonlocal bot_replied, report_sent
-        await bot.send_message(chat_id=auth.user.id, text=text, **kwargs)
+        nonlocal bot_replied
+        sent = await bot.send_message(chat_id=auth.user.id, text=text, **kwargs)
         bot_replied = True
-        report_sent = kwargs.get("reply_markup") is not None
+        return sent
 
     message = SimpleNamespace(
         from_user=SimpleNamespace(id=auth.user.id),
         web_app_data=SimpleNamespace(data=json.dumps(payload, ensure_ascii=False)),
         answer=answer,
     )
-    state = SimpleNamespace(clear=lambda: asyncio.sleep(0))
+    state = FSMContext(storage=request.app.get(FSM_STORAGE_KEY, analysis_storage),
+        key=StorageKey(bot_id=int(BOT_TOKEN.split(':', 1)[0]),
+                       chat_id=auth.user.id, user_id=auth.user.id))
     try:
         async with screens.screen(auth.user.id, navigation=True):
-            await handle_webapp_data(message, state)
+            report_sent = await handle_webapp_data(message, state) is True
     except ScreenSuperseded:
         return web.json_response({'ok':False,'superseded':True},status=409)
     except Exception:
@@ -157,7 +164,12 @@ async def analyze_webapp(request: web.Request) -> web.Response:
                 await answer(t(lang, "err_internal"))
             except Exception:
                 raise web.HTTPBadGateway(text="Could not deliver Telegram report") from None
-    return web.json_response({"ok": report_sent, "bot_replied": bot_replied},
+    from bot.calculation_recovery import CalculationRecovery
+    recoverable = await state.get_state() == CalculationRecovery.ready.state
+    result = {"ok": report_sent, "bot_replied": bot_replied}
+    if recoverable:
+        result['recoverable'] = True
+    return web.json_response(result,
                              status=200 if bot_replied else 422)
 
 
@@ -229,6 +241,7 @@ async def start_http_server(bot: Bot, dp: Dispatcher) -> web.AppRunner:
     """Open the health and Telegram webhook routes before external API calls."""
     app = web.Application(middlewares=[webapp_cors])
     app[BOT_APP_KEY] = bot
+    app[FSM_STORAGE_KEY] = dp.storage
     app.router.add_get("/", health_check)
     app.router.add_get("/health", health_check)
     app.router.add_get("/ping", ping_check)

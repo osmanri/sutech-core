@@ -40,6 +40,7 @@ from bot.balance_report import format_balance_report, format_balance_explanation
 from bot.db import save_report_explanation
 from bot.water_balance import BalanceInputError
 from bot.field_state import FieldNotFoundError
+from bot.calculation_recovery import previous_snapshot, format_previous
 
 logger = logging.getLogger(__name__)
 fields_router = Router(name="fields_router")
@@ -245,17 +246,41 @@ async def callback_update_field(callback: CallbackQuery, state: FSMContext) -> N
         if isinstance(exc, ScreenSuperseded):
             raise
         logger.exception("Ошибка обновления поля %s: %s", field_id, exc)
+        previous = None
+        try:
+            previous = await previous_snapshot(field_id, user_id)
+        except Exception:
+            logger.warning('Previous result unavailable for field %s', field_id)
         await callback.message.edit_text(_phrase(lang,
             "⚠️ <b>Не удалось обновить рекомендацию</b>\n\nПараметры поля сохранены. Нажмите «Обновить рекомендацию», чтобы повторить.",
             "⚠️ <b>Ұсыным жаңартылмады</b>\n\nАлқап параметрлері сақталған. Қайталау үшін «Ұсынымды жаңарту» түймесін басыңыз.",
             "⚠️ <b>Could not update recommendation</b>\n\nYour field settings are saved. Tap “Refresh recommendation” to retry."),
-            parse_mode="HTML", reply_markup=get_field_recommendation_keyboard(field_id, lang))
+            parse_mode="HTML", reply_markup=get_field_recommendation_keyboard(
+                field_id, lang, previous_available=previous is not None))
     finally:
         if not operation.done():
             operation.cancel()
         await asyncio.gather(operation, return_exceptions=True)
         if active_field_refreshes.get(user_id, (None, None))[1] is operation:
             active_field_refreshes.pop(user_id, None)
+
+
+@fields_router.callback_query(FieldCallback.filter(F.action == "last"))
+async def callback_previous_result(callback: CallbackQuery, state: FSMContext) -> None:
+    if not isinstance(callback.message, Message):
+        return
+    await state.clear()
+    user_id = callback.from_user.id
+    lang = get_lang(user_id)
+    try:
+        field_id = int(str(callback.data).rsplit(':', 1)[-1])
+        snapshot = await previous_snapshot(field_id, user_id)
+    except (FieldNotFoundError, ValueError):
+        await callback.answer(_phrase(lang, 'Поле не найдено', 'Алқап табылмады', 'Field not found'), show_alert=True)
+        return
+    await callback.answer()
+    await callback.message.edit_text(format_previous(lang, snapshot), parse_mode='HTML',
+        reply_markup=get_field_recommendation_keyboard(field_id, lang))
 
 
 # ─── 5. Полив: запрос подтверждения и фиксация факта ──────────────────────────

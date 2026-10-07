@@ -3,12 +3,16 @@ import asyncio
 import json
 import logging
 import math
+import secrets
+import time
 
 import aiohttp
 from aiogram import F, Router
 from aiogram.types import Message, CallbackQuery
 from bot.field_guidance import growth_estimate_metadata
 from aiogram.fsm.context import FSMContext
+from bot.calculation_recovery import (CalculationRecovery, active_calculations,
+    recovery_keyboard, phrase as recovery_phrase)
 
 try:
     from i18n import t
@@ -33,6 +37,7 @@ except ImportError:
 
 webapp_router = Router()
 logger = logging.getLogger(__name__)
+CALCULATION_TIMEOUT = 25
 
 OPEN_METEO_URL = "https://api.open-meteo.com/v1/forecast"
 
@@ -289,7 +294,7 @@ async def explain_report(callback: CallbackQuery) -> None:
 
 
 @webapp_router.message(F.web_app_data)
-async def handle_webapp_data(message: Message, state: FSMContext) -> None:
+async def handle_webapp_data(message: Message, state: FSMContext) -> bool:
     """The active WebApp route uses only the versioned daily water balance."""
     await state.clear()
     user_id = message.from_user.id
@@ -300,14 +305,19 @@ async def handle_webapp_data(message: Message, state: FSMContext) -> None:
             raise ValueError('payload')
     except (ValueError, TypeError):
         await message.answer(t(lang, 'err_format'))
-        return
-    await handle_field_payload(message, state, data)
+        return False
+    return await handle_field_payload(message, state, data)
 
 
-async def handle_field_payload(message: Message, state: FSMContext, data: dict) -> None:
+async def handle_field_payload(message: Message, state: FSMContext, data: dict,
+                               *, reply_to: Message | None = None) -> bool:
     """Shared validated calculation path for Mini App and Telegram planner."""
     await state.clear()
     user_id = message.from_user.id
+    async def reply(text, **kwargs):
+        if reply_to is not None:
+            return await reply_to.edit_text(text, **kwargs)
+        return await message.answer(text, **kwargs)
     lang = get_lang(user_id)
     if data.get('lang') in ('ru', 'kz', 'en'):
         lang = data['lang']
@@ -319,23 +329,44 @@ async def handle_field_payload(message: Message, state: FSMContext, data: dict) 
         lat = number(data.get('latitude', data.get('lat')), 'latitude', -90, 90)
         lon = number(data.get('longitude', data.get('lon')), 'longitude', -180, 180)
     except BalanceInputError:
-        await message.answer(t(lang, 'err_no_coords'))
-        return
+        await reply(t(lang, 'err_no_coords'))
+        return False
     try:
         field = parse_field(data)
         growth_metadata = growth_estimate_metadata(data, field)
     except BalanceInputError as exc:
         key = {'version': 'balance_old_app', 'season_ended': 'balance_season_ended'}.get(str(exc), 'balance_error')
-        await message.answer(t(lang, key))
-        return
+        await reply(t(lang, key))
+        return False
+    token = secrets.token_hex(8)
+    await state.set_state(CalculationRecovery.calculating)
+    await state.update_data(recovery_payload=dict(data), recovery_token=token,
+                            recovery_created=time.time())
+    operation = asyncio.create_task(fetch_daily_weather(lat, lon))
+    active_calculations[user_id] = operation
     try:
-        weather = await fetch_daily_weather(lat, lon)
+        weather = await asyncio.wait_for(operation, CALCULATION_TIMEOUT)
         result = calculate_balance(field, weather['et0'], weather['rain'])
         result.update(growth_metadata)
+    except asyncio.CancelledError:
+        if asyncio.current_task().cancelling():
+            raise
+        return False
     except (aiohttp.ClientError, asyncio.TimeoutError, OSError, ValueError, KeyError, TypeError, IndexError):
         logger.exception('Daily Open-Meteo balance unavailable')
-        await message.answer(t(lang, 'err_weather'))
-        return
+        await state.set_state(CalculationRecovery.ready)
+        sent = await reply(recovery_phrase(lang, 'error'), parse_mode=None,
+                           reply_markup=recovery_keyboard(lang, token))
+        if isinstance(sent, Message):
+            await state.update_data(recovery_message_id=sent.message_id)
+        return False
+    finally:
+        if not operation.done():
+            operation.cancel()
+        await asyncio.gather(operation, return_exceptions=True)
+        if active_calculations.get(user_id) is operation:
+            active_calculations.pop(user_id, None)
+    await state.clear()
     field_id = None
     if field.crop != 'rice':
         try:
@@ -360,6 +391,30 @@ async def handle_field_payload(message: Message, state: FSMContext, data: dict) 
         lang=lang, created_at=datetime.now().strftime('%d.%m.%Y %H:%M'),
     )
     report_id = save_report_explanation(user_id, explanation)
-    await message.answer(final_message, parse_mode='HTML',
+    await reply(final_message, parse_mode='HTML',
                          reply_markup=get_report_inline_keyboard(lang, report_id, field_id,
                              needs_irrigation=result['gross_m3'] > 0))
+    return True
+
+
+@webapp_router.callback_query(F.data.startswith('calc:retry:'))
+async def retry_calculation(callback: CallbackQuery, state: FSMContext) -> None:
+    if not isinstance(callback.message, Message):
+        return
+    user_id = callback.from_user.id
+    lang = get_lang(user_id)
+    data = await state.get_data()
+    token = str(callback.data).rsplit(':', 1)[-1]
+    if (await state.get_state() != CalculationRecovery.ready.state
+            or token != data.get('recovery_token')
+            or callback.message.message_id != data.get('recovery_message_id')
+            or time.time() - data.get('recovery_created', 0) > 86400):
+        await callback.answer(recovery_phrase(lang, 'expired'), show_alert=True)
+        return
+    await state.set_state(CalculationRecovery.calculating)
+    await callback.answer()
+    await callback.message.edit_text(recovery_phrase(lang, 'working'), parse_mode=None,
+        reply_markup=recovery_keyboard(lang, token, loading=True))
+    msg = callback.message.model_copy(update={'from_user': callback.from_user}).as_(callback.bot)
+    payload = {**data['recovery_payload'], 'lang': lang}
+    await handle_field_payload(msg, state, payload, reply_to=callback.message)
