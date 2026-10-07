@@ -64,6 +64,8 @@ def get_report_inline_keyboard(lang: str = "ru", report_id: str | None = None,
     row2 = []
     if field_id is not None:
         row2.append(InlineKeyboardButton(text=t(lang, "btn_fields"), callback_data="fields:list"))
+        rows.append([InlineKeyboardButton(text=t(lang, "btn_refresh_recommendation"),
+                                         callback_data=f"field:update:{field_id}")])
     row2.append(InlineKeyboardButton(text=t(lang, "btn_recalculate"),
                                      web_app=WebAppInfo(url=url_with_lang)))
     rows.append(row2)

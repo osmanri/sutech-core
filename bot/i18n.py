@@ -907,6 +907,7 @@ STRINGS['kz']['history_carousel_card'] = STRINGS['kz']['history_carousel_card'].
 for language, copy in {
     'ru': {
         'btn_explain': '💡 Почему такой результат?',
+        'btn_refresh_recommendation': '🔄 Обновить рекомендацию',
         'decision_card': '<b>{decision}</b>\n{crop} · {area} {unit} · {method}\n\n<b>Объём воды:</b> <b>{volume}</b>\n<b>Почему:</b> {reason}\n\n<b>Расчёт на:</b> {date} · {timezone}\n<i>По прогнозу погоды Open-Meteo.</i>',
         'decision_deferred': '🟢 Полив пока не нужен',
         'decision_irrigate': '💧 Полив нужен',
@@ -925,6 +926,7 @@ for language, copy in {
     },
     'kz': {
         'btn_explain': '💡 Неге осындай нәтиже?',
+        'btn_refresh_recommendation': '🔄 Ұсынымды жаңарту',
         'decision_card': '<b>{decision}</b>\n{crop} · {area} {unit} · {method}\n\n<b>Су көлемі:</b> <b>{volume}</b>\n<b>Себебі:</b> {reason}\n\n<b>Есеп күні:</b> {date} · {timezone}\n<i>Open-Meteo ауа райы болжамы бойынша.</i>',
         'decision_deferred': '🟢 Әзірге суару қажет емес',
         'decision_irrigate': '💧 Суару қажет',
@@ -943,6 +945,7 @@ for language, copy in {
     },
     'en': {
         'btn_explain': '💡 Why this recommendation?',
+        'btn_refresh_recommendation': '🔄 Refresh recommendation',
         'decision_card': '<b>{decision}</b>\n{crop} · {area} {unit} · {method}\n\n<b>Water volume:</b> <b>{volume}</b>\n<b>Why:</b> {reason}\n\n<b>Calculation for:</b> {date} · {timezone}\n<i>Based on the Open-Meteo weather forecast.</i>',
         'decision_deferred': '🟢 No irrigation needed yet',
         'decision_irrigate': '💧 Irrigation needed',

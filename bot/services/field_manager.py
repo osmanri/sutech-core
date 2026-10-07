@@ -8,6 +8,7 @@ from __future__ import annotations
 import asyncio
 import math
 from datetime import date, datetime
+from dataclasses import replace
 from decimal import Decimal
 from typing import Any, List, Optional, Tuple
 from contextlib import closing
@@ -58,7 +59,7 @@ from bot.services.geo_service import (
     DEFAULT_FALLBACK_LON,
     resolve_timezone_by_coords,
 )
-from bot.water_balance import BalanceInputError, METHODS, root_zone_capacity
+from bot.water_balance import BalanceInputError, METHODS, calculate_balance, root_zone_capacity
 
 
 class FieldService:
@@ -213,6 +214,22 @@ class FieldService:
         if not field_dto:
             raise FieldNotFoundError(f"Field {field_id} not found")
         return field_dto, result
+
+    @classmethod
+    async def recommendation_today(cls, field_id: int, user_id: int):
+        """Reuse saved inputs, while respecting irrigation recorded after the daily snapshot."""
+        field, result, weather, _ = await calculate_saved_field(field_id, user_id)
+        record = await asyncio.to_thread(get_field, field_id, user_id=user_id)
+        current_deficit = float(record["accumulated_deficit"])
+        if not math.isclose(current_deficit, result["deficit"], rel_tol=0, abs_tol=1e-9):
+            # The immutable daily snapshot remains in the journal. A confirmed
+            # irrigation changes the current state; today's weather must not be
+            # applied again when the farmer refreshes the recommendation.
+            field = await asyncio.to_thread(
+                field_input_from_record, record, on_date=date.fromisoformat(weather["date"]))
+            result = calculate_balance(replace(field, greenhouse_et0=0.0), 0, 0)
+            result["state_adjusted"] = True
+        return record.get("name") or f"#{field_id}", field, result, weather
 
     @classmethod
     async def get_journal_records(cls, field_id: int, user_id: int) -> List[UnifiedJournalRecord]:

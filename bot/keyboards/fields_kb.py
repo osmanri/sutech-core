@@ -51,15 +51,15 @@ def get_fields_list_keyboard(fields: List[FieldResponse], lang: str = "ru") -> I
 def get_field_card_keyboard(field_id: int, lang: str = "ru") -> InlineKeyboardMarkup:
     """Клавиатура карточки выбранного поля: удобная сетка 2х2 + возврат."""
     builder = InlineKeyboardBuilder()
+    builder.row(InlineKeyboardButton(
+        text=t(lang, "btn_refresh_recommendation"),
+        callback_data=FieldCallback(action="update", field_id=field_id).pack(),
+    ))
     # 1 ряд: оперативные действия
     builder.row(
         InlineKeyboardButton(
             text=_label(lang, "💧 Отметить полив", "💧 Суаруды белгілеу", "💧 Record irrigation"),
             callback_data=FieldCallback(action="water", field_id=field_id).pack(),
-        ),
-        InlineKeyboardButton(
-            text=_label(lang, "🔄 Обновить статус", "🔄 Мәртебені жаңарту", "🔄 Refresh status"),
-            callback_data=FieldCallback(action="update", field_id=field_id).pack(),
         ),
     )
     # 2 ряд: отчет и удаление
@@ -80,6 +80,33 @@ def get_field_card_keyboard(field_id: int, lang: str = "ru") -> InlineKeyboardMa
             callback_data=FieldCallback(action="list", field_id=0).pack(),
         )
     )
+    return builder.as_markup()
+
+
+def get_field_recommendation_keyboard(field_id: int, lang: str = "ru", *,
+                                      report_id: str | None = None,
+                                      needs_irrigation: bool = False,
+                                      loading: bool = False) -> InlineKeyboardMarkup:
+    """One saved-field screen, with a way to leave even while weather is loading."""
+    builder = InlineKeyboardBuilder()
+    if report_id:
+        builder.row(InlineKeyboardButton(text=t(lang, "btn_explain"), callback_data=f"explain:{report_id}"))
+    if not loading:
+        builder.row(InlineKeyboardButton(
+            text=t(lang, "btn_refresh_recommendation"),
+            callback_data=FieldCallback(action="update", field_id=field_id).pack()))
+        if needs_irrigation:
+            builder.row(InlineKeyboardButton(
+                text=_label(lang, "💧 Отметить полив", "💧 Суаруды белгілеу", "💧 Record irrigation"),
+                callback_data=FieldCallback(action="water", field_id=field_id).pack()))
+    builder.row(InlineKeyboardButton(
+        text=_label(lang, "✕ Отменить", "✕ Болдырмау", "✕ Cancel") if loading else
+             _label(lang, "← К полю", "← Алқапқа", "← Field details"),
+        callback_data=FieldCallback(action="view", field_id=field_id).pack()))
+    builder.row(InlineKeyboardButton(
+        text=_label(lang, "← Мои поля", "← Менің алқаптарым", "← My fields"),
+        callback_data=FieldCallback(action="list", field_id=0).pack()),
+        InlineKeyboardButton(text=t(lang, "btn_back"), callback_data="ui:home"))
     return builder.as_markup()
 
 

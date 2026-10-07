@@ -9,6 +9,7 @@
 from __future__ import annotations
 
 import logging
+import asyncio
 from html import escape
 from typing import Optional
 
@@ -19,6 +20,7 @@ from aiogram.types import CallbackQuery, Message
 
 from bot.keyboards.fields_kb import (
     get_field_card_keyboard,
+    get_field_recommendation_keyboard,
     get_field_delete_confirmation_keyboard,
     get_fields_list_keyboard,
     get_water_confirmation_keyboard,
@@ -34,9 +36,45 @@ from bot.states.field_states import FieldCallback
 from bot.keyboards.inline import get_launch_keyboard
 from bot.user_state import get_lang
 from bot.i18n import t
+from bot.balance_report import format_balance_report, format_balance_explanation
+from bot.db import save_report_explanation
+from bot.water_balance import BalanceInputError
+from bot.field_state import FieldNotFoundError
 
 logger = logging.getLogger(__name__)
 fields_router = Router(name="fields_router")
+FIELD_REFRESH_TIMEOUT = 25
+active_field_refreshes: dict[int, tuple[int, asyncio.Task]] = {}
+
+
+def field_refresh_is_duplicate(user_id: int, data: str | None) -> bool:
+    active = active_field_refreshes.get(user_id)
+    return bool(active and not active[1].done() and data == f"field:update:{active[0]}")
+
+
+def stop_field_refresh(user_id: int) -> None:
+    active = active_field_refreshes.pop(user_id, None)
+    if active and not active[1].done():
+        active[1].cancel()
+
+
+def field_refresh_busy_text(lang: str) -> str:
+    return _phrase(lang, "Рекомендация уже обновляется…", "Ұсыным жаңартылып жатыр…", "Recommendation is already updating…")
+
+
+async def _load_recommendation(field_id: int, user_id: int, lang: str):
+    name, field, result, weather = await FieldService.recommendation_today(field_id, user_id)
+    text = format_balance_report(lang, field, result, weather)
+    explanation = format_balance_explanation(lang, field, result, weather)
+    if result.get("state_adjusted"):
+        note = _phrase(lang,
+            "Учтен отмеченный полив. Погода за эту дату повторно не начисляется.",
+            "Белгіленген суару ескерілді. Осы күннің ауа райы қайта есептелмейді.",
+            "Recorded irrigation is included. Weather for this date is not applied again.")
+        text += '\n\n' + note
+        explanation = note + '\n\n' + explanation
+    report_id = await asyncio.to_thread(save_report_explanation, user_id, explanation)
+    return f"🌱 <b>{escape(name)}</b>\n\n{text}", report_id, result['gross_m3'] > 0
 
 
 def _phrase(lang: str, ru: str, kz: str, en: str) -> str:
@@ -151,37 +189,73 @@ async def callback_view_field(callback: CallbackQuery, callback_data: FieldCallb
 @fields_router.callback_query(FieldCallback.filter(F.action == "update"))
 @fields_router.callback_query(F.data.startswith("field:update:"))
 async def callback_update_field(callback: CallbackQuery, state: FSMContext) -> None:
-    """Принудительный пересчет водного баланса поля по суточной метеомодели."""
-    await state.clear()
+    """Refresh one saved field in place, without repeating the setup form."""
+    user_id = callback.from_user.id
+    lang = get_lang(user_id)
     try:
         if ":" in str(callback.data):
             field_id = int(str(callback.data).rsplit(":", 1)[1])
         else:
             field_id = 0
+        if field_id <= 0:
+            raise ValueError('field ID')
     except (ValueError, IndexError):
         await callback.answer(_phrase(get_lang(callback.from_user.id), "Неверный ID поля", "Алқап нөмірі қате", "Invalid field ID"), show_alert=True)
         return
 
-    lang = get_lang(callback.from_user.id)
-    await callback.answer(_phrase(lang, "Запрос свежих данных Open-Meteo...", "Open-Meteo деректері сұралуда...", "Getting current Open-Meteo data..."))
-    try:
-        updated_field, _ = await FieldService.update_balance_today(field_id, callback.from_user.id)
-    except Exception as exc:
-        logger.exception("Ошибка обновления поля %s: %s", field_id, exc)
-        if isinstance(callback.message, Message):
-            await callback.message.answer(_phrase(lang, "⚠️ Не удалось обновить поле. Проверьте соединение и попробуйте позже.",
-                                                   "⚠️ Алқап жаңартылмады. Байланысты тексеріп, кейін қайталаңыз.",
-                                                   "⚠️ Could not update the field. Check your connection and try later."))
+    if field_refresh_is_duplicate(user_id, callback.data):
+        await callback.answer(field_refresh_busy_text(lang))
         return
-
-    locality = await get_field_location_name(float(updated_field.latitude), float(updated_field.longitude))
-    card_text = _render_field_card(updated_field, locality_name=locality, lang=lang)
-    if isinstance(callback.message, Message):
+    if not isinstance(callback.message, Message):
+        await callback.answer()
+        return
+    stop_field_refresh(user_id)
+    operation = asyncio.create_task(_load_recommendation(field_id, user_id, lang))
+    active_field_refreshes[user_id] = (field_id, operation)
+    try:
+        await state.clear()
+        await callback.answer()
         await callback.message.edit_text(
-            text=card_text,
-            parse_mode="HTML",
-            reply_markup=get_field_card_keyboard(updated_field.id, lang),
-        )
+            _phrase(lang,
+                "⏳ <b>Обновляю рекомендацию</b>\n\nИспользую сохраненные параметры поля. Повторно заполнять форму не нужно.",
+                "⏳ <b>Ұсынымды жаңартып жатырмын</b>\n\nАлқаптың сақталған параметрлерін қолданамын. Нысанды қайта толтыру қажет емес.",
+                "⏳ <b>Updating recommendation</b>\n\nUsing your saved field settings. No need to fill in the form again."),
+            parse_mode="HTML", reply_markup=get_field_recommendation_keyboard(field_id, lang, loading=True))
+        text, report_id, needs_irrigation = await asyncio.wait_for(operation, FIELD_REFRESH_TIMEOUT)
+        await callback.message.edit_text(text, parse_mode="HTML",
+            reply_markup=get_field_recommendation_keyboard(field_id, lang,
+                report_id=report_id, needs_irrigation=needs_irrigation))
+    except asyncio.CancelledError:
+        if asyncio.current_task().cancelling():
+            raise
+        return  # Navigation cancelled the inner request; leave the new screen alone.
+    except FieldNotFoundError:
+        await callback.message.edit_text(
+            _phrase(lang, "Поле не найдено. Откройте список ваших полей.",
+                "Алқап табылмады. Алқаптарыңыздың тізімін ашыңыз.",
+                "Field not found. Open your field list."),
+            reply_markup=get_field_recommendation_keyboard(field_id, lang))
+    except BalanceInputError as exc:
+        key = {'season_ended': 'balance_season_ended',
+               'field_location_missing': 'err_no_coords'}.get(str(exc), 'balance_error')
+        await callback.message.edit_text(t(lang, key),
+            reply_markup=get_field_recommendation_keyboard(field_id, lang))
+    except Exception as exc:
+        from bot.chat_screens import ScreenSuperseded
+        if isinstance(exc, ScreenSuperseded):
+            raise
+        logger.exception("Ошибка обновления поля %s: %s", field_id, exc)
+        await callback.message.edit_text(_phrase(lang,
+            "⚠️ <b>Не удалось обновить рекомендацию</b>\n\nПараметры поля сохранены. Нажмите «Обновить рекомендацию», чтобы повторить.",
+            "⚠️ <b>Ұсыным жаңартылмады</b>\n\nАлқап параметрлері сақталған. Қайталау үшін «Ұсынымды жаңарту» түймесін басыңыз.",
+            "⚠️ <b>Could not update recommendation</b>\n\nYour field settings are saved. Tap “Refresh recommendation” to retry."),
+            parse_mode="HTML", reply_markup=get_field_recommendation_keyboard(field_id, lang))
+    finally:
+        if not operation.done():
+            operation.cancel()
+        await asyncio.gather(operation, return_exceptions=True)
+        if active_field_refreshes.get(user_id, (None, None))[1] is operation:
+            active_field_refreshes.pop(user_id, None)
 
 
 # ─── 5. Полив: запрос подтверждения и фиксация факта ──────────────────────────

@@ -57,6 +57,8 @@ class ChatScreens:
             self.generations[chat_id] = self.generations.get(chat_id,0) + 1
             from bot.handlers.agronomist import stop_visible_request
             stop_visible_request(chat_id)
+            from bot.handlers.fields import stop_field_refresh
+            stop_field_refresh(chat_id)
         generation = self.generations.get(chat_id,0)
         previous = dict(self.memory.get(chat_id,{}))
         if navigation:
@@ -216,6 +218,12 @@ class ChatScreenMiddleware(BaseMiddleware):
             return await handler(update,data)
         bot = data['bot']
         self.controller.install(bot)
+        if callback:
+            from bot.handlers.fields import field_refresh_is_duplicate, field_refresh_busy_text
+            if field_refresh_is_duplicate(user.id, callback.data):
+                from bot.user_state import get_lang
+                await callback.answer(field_refresh_busy_text(get_lang(user.id)))
+                return None  # Keep the first request's screen generation and loading card.
         await self.controller.remember(user.id,target.message_id,
             'user' if message else 'bot',int(target.date.timestamp()))
         navigation = bool(callback) or is_navigation(target,data.get('raw_state'))
