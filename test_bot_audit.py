@@ -75,11 +75,16 @@ class BotAuditTests(unittest.IsolatedAsyncioTestCase):
         weather = {"date": date.today().isoformat(), "timezone": "Asia/Qyzylorda"}
         report = format_balance_report("en", field, result, weather)
         explanation = format_balance_explanation("en", field, result, weather)
-        self.assertIn("<b>STATUS:</b>", report)
+        self.assertIn('Irrigation needed', report)
+        self.assertIn(date.today().strftime('%d.%m.%Y'), report)
         self.assertIn("How was this calculated?", explanation)
         buttons = get_report_inline_keyboard("en", "abc", 7).inline_keyboard
-        self.assertIn("Why this result?", buttons[0][0].text)
-        self.assertIn("lang=en", buttons[1][-1].web_app.url)
+        self.assertIn('Why', buttons[0][0].text)
+        for row in buttons:
+            for button in row:
+                self.assertNotRegex(button.text, r'[\u0400-\u04ff]')
+        launch = next(button for row in buttons for button in row if button.web_app)
+        self.assertIn('lang=en', launch.web_app.url)
         self.assertEqual(get_fields_list_keyboard([], "en").inline_keyboard[0][0].text,
                          "➕ Add field")
 

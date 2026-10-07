@@ -11,6 +11,7 @@ from __future__ import annotations
 import logging
 import asyncio
 from html import escape
+from datetime import date
 from typing import Optional
 
 from aiogram import F, Router
@@ -82,6 +83,28 @@ def _phrase(lang: str, ru: str, kz: str, en: str) -> str:
     return {"ru": ru, "kz": kz, "en": en}.get(lang, ru)
 
 
+async def _render_field_overview(field: FieldResponse, lang: str) -> str:
+    text = (f"🌱 <b>{escape(field.name)}</b>\n"
+            f"{t(lang, f'report_crop_{field.crop_type.value}')} · {field.area_ha.normalize():f} {'ha' if lang == 'en' else 'га'}\n"
+            f"{t(lang, f'report_irrig_{field.irrigation_method.value}')}\n\n")
+    try:
+        snapshot = await previous_snapshot(field.id, field.user_id)
+        if snapshot:
+            stamp = date.fromisoformat(snapshot['date']).strftime('%d.%m.%Y')
+            text += _phrase(lang, 'Последний расчёт: ', 'Соңғы есеп: ', 'Last calculation: ') + stamp + '\n\n'
+        else:
+            text += _phrase(lang, 'Поле сохранено. Первый расчёт ещё не выполнен.\n\n',
+                'Алқап сақталған. Алғашқы есеп әлі орындалмады.\n\n',
+                'Field saved. No calculation yet.\n\n')
+    except Exception:
+        logger.warning('Could not read calculation date for field %s', field.id)
+    text += _phrase(lang,
+        'Чтобы узнать, нужен ли полив сегодня, нажмите «Обновить рекомендацию». Если уже полили — «Отметить полив».',
+        'Бүгін суару керек пе білу үшін «Ұсынымды жаңарту» басыңыз. Суарып қойсаңыз — «Суаруды белгілеу».',
+        'Tap “Refresh recommendation” to check irrigation for today. If you have already watered, tap “Record irrigation”.')
+    return text
+
+
 # ─── Вспомогательные функции форматирования ──────────────────────────────────
 def _render_field_card(field: FieldResponse, locality_name: Optional[str] = None,
                        lang: str = "ru") -> str:
@@ -109,7 +132,7 @@ def _render_field_card(field: FieldResponse, locality_name: Optional[str] = None
         f"📊 <b>{_phrase(lang, 'Водный баланс', 'Су балансы', 'Water balance')} (FAO-56):</b>\n"
         f"• {_phrase(lang, 'Накопленный дефицит', 'Жиналған тапшылық', 'Accumulated deficit')}: <b>{field.accumulated_deficit_mm:.2f} {'mm' if lang == 'en' else 'мм'}</b>\n"
         f"• {_phrase(lang, 'Статус полива', 'Суару мәртебесі', 'Irrigation status')}: <b>{status_text}</b>\n"
-        f"• {_phrase(lang, 'Рекомендуемый объем', 'Ұсынылған көлем', 'Recommended volume')}: <b>{field.recommended_volume_m3:.2f} м³</b>\n"
+        f"• {_phrase(lang, 'Оценка по сохранённому запасу', 'Сақталған қор бойынша баға', 'Stored reserve estimate')}: <b>{field.recommended_volume_m3:.2f} {'m³' if lang == 'en' else 'м³'}</b>\n"
     )
 
 
@@ -136,9 +159,9 @@ async def show_fields_menu(message: Message, state: FSMContext) -> None:
         return
 
     await message.answer(
-        _phrase(lang, "🌱 <b>Ваши поля (FAO-56):</b>\n\nВыберите поле или добавьте новое:",
-                "🌱 <b>Алқаптарыңыз (FAO-56):</b>\n\nАлқапты таңдаңыз немесе жаңасын қосыңыз:",
-                "🌱 <b>Your fields (FAO-56):</b>\n\nChoose a field or add a new one:"),
+        _phrase(lang, "🌱 <b>Ваши поля:</b>\n\nВыберите поле, чтобы обновить рекомендацию или отметить полив:",
+                "🌱 <b>Алқаптарыңыз:</b>\n\nҰсынымды жаңарту немесе суаруды белгілеу үшін алқапты таңдаңыз:",
+                "🌱 <b>Your fields:</b>\n\nChoose a field to refresh its recommendation or record irrigation:"),
         parse_mode="HTML",
         reply_markup=get_fields_list_keyboard(fields, lang),
     )
@@ -166,6 +189,7 @@ async def callback_show_list(callback: CallbackQuery, state: FSMContext) -> None
 
 # ─── 3. Карточка поля (Просмотр) ──────────────────────────────────────────────
 @fields_router.callback_query(FieldCallback.filter(F.action == "view"))
+@fields_router.callback_query(FieldCallback.filter(F.action == "details"))
 async def callback_view_field(callback: CallbackQuery, callback_data: FieldCallback, state: FSMContext) -> None:
     """Отображение карточки конкретного поля."""
     await state.clear()
@@ -174,14 +198,22 @@ async def callback_view_field(callback: CallbackQuery, callback_data: FieldCallb
         await callback.answer(_phrase(get_lang(callback.from_user.id), "Поле не найдено", "Алқап табылмады", "Field not found"), show_alert=True)
         return
 
-    locality = await get_field_location_name(float(field.latitude), float(field.longitude))
     lang = get_lang(callback.from_user.id)
-    card_text = _render_field_card(field, locality_name=locality, lang=lang)
+    expanded = callback_data.action == 'details'
+    if expanded:
+        locality = await get_field_location_name(float(field.latitude), float(field.longitude))
+        card_text = _render_field_card(field, locality_name=locality, lang=lang)
+        card_text += '\n' + _phrase(lang,
+            'Это сохранённые данные. Для рекомендации на сегодня обновите расчёт.',
+            'Бұл сақталған деректер. Бүгінгі ұсыным үшін есепті жаңартыңыз.',
+            'These are saved data. Refresh the calculation for today’s recommendation.')
+    else:
+        card_text = await _render_field_overview(field, lang)
     if isinstance(callback.message, Message):
         await callback.message.edit_text(
             text=card_text,
             parse_mode="HTML",
-            reply_markup=get_field_card_keyboard(field.id, lang),
+            reply_markup=get_field_card_keyboard(field.id, lang, expanded=expanded),
         )
     await callback.answer()
 
@@ -303,19 +335,13 @@ async def callback_ask_water(callback: CallbackQuery, state: FSMContext) -> None
     lang = get_lang(callback.from_user.id)
     if lang == "kz":
         text = (f"💧 <b>Суаруды растау</b>\n\nАлқап: <b>{escape(field.name)}</b>\n"
-                f"Ағымдағы тапшылық: <b>{field.accumulated_deficit_mm:.2f} мм</b>\n"
-                f"Ұсынылған көлем: <b>{field.recommended_volume_m3:.2f} м³</b>\n\n"
-                "Толық көлемде суардыңыз ба? Бұл тапшылықты нөлге түсіреді.")
+                "Толық көлемде суарып қойдыңыз ба? Тек нақты суарудан кейін растаңыз. Жазба алқаптың су тапшылығын нөлге түсіреді.")
     elif lang == "en":
         text = (f"💧 <b>Confirm irrigation</b>\n\nField: <b>{escape(field.name)}</b>\n"
-                f"Current deficit: <b>{field.accumulated_deficit_mm:.2f} mm</b>\n"
-                f"Recommended volume: <b>{field.recommended_volume_m3:.2f} m³</b>\n\n"
-                "Did you irrigate the full volume? This resets the saved deficit to zero.")
+                "Have you already irrigated the full volume? Confirm only after actual irrigation. This resets the field’s saved water deficit to zero.")
     else:
         text = (f"💧 <b>Подтверждение полива</b>\n\nПоле: <b>{escape(field.name)}</b>\n"
-                f"Текущий дефицит: <b>{field.accumulated_deficit_mm:.2f} мм</b>\n"
-                f"Рекомендуемый объём: <b>{field.recommended_volume_m3:.2f} м³</b>\n\n"
-                "Поливали в полном объёме? Это обнулит накопленный дефицит.")
+                "Уже полили в полном объёме? Подтверждайте только после фактического полива. Запись обнулит накопленный дефицит воды в поле.")
     if isinstance(callback.message, Message):
         await callback.message.edit_text(
             text=text,
@@ -344,7 +370,8 @@ async def callback_confirm_water(callback: CallbackQuery, state: FSMContext) -> 
         return
 
     lang = get_lang(callback.from_user.id)
-    card_text = _render_field_card(updated_field, lang=lang)
+    card_text = _phrase(lang, '✅ Полив записан.\n\n', '✅ Суару тіркелді.\n\n', '✅ Irrigation saved.\n\n')
+    card_text += await _render_field_overview(updated_field, lang)
     if isinstance(callback.message, Message):
         await callback.message.edit_text(
             text=card_text,

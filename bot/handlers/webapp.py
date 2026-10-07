@@ -5,6 +5,7 @@ import logging
 import math
 import secrets
 import time
+from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 
 import aiohttp
 from aiogram import F, Router
@@ -284,13 +285,41 @@ def format_report_explanation(lang, area_m2, moisture, result):
 
 
 @webapp_router.callback_query(F.data.startswith("explain:"))
-async def explain_report(callback: CallbackQuery) -> None:
-    explanation = get_report_explanation(callback.data.split(":", 1)[1], callback.from_user.id)
+async def explain_report(callback: CallbackQuery, state: FSMContext | None = None) -> None:
+    explanation = await asyncio.to_thread(get_report_explanation,
+        callback.data.split(":", 1)[1], callback.from_user.id)
     if not explanation or not isinstance(callback.message, Message):
         await callback.answer(t(get_lang(callback.from_user.id), "explanation_unavailable"), show_alert=True)
         return
     await callback.answer()
-    await callback.message.reply(explanation, parse_mode="HTML")
+    if state is None:
+        await callback.message.reply(explanation, parse_mode="HTML")
+        return
+    lang = get_lang(callback.from_user.id)
+    token = secrets.token_hex(6)
+    await state.clear()
+    await state.update_data(explanation_return={
+        'token': token, 'message_id': callback.message.message_id,
+        'text': callback.message.html_text or '',
+        'markup': callback.message.reply_markup.model_dump(mode='json') if callback.message.reply_markup else None})
+    label = {'ru':'← К результату', 'kz':'← Нәтижеге', 'en':'← Back to result'}[lang]
+    await callback.message.edit_text(explanation, parse_mode='HTML', reply_markup=InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text=label, callback_data=f'explain_back:{token}')],
+        [InlineKeyboardButton(text=t(lang,'btn_back'), callback_data='ui:home')]]))
+
+
+@webapp_router.callback_query(F.data.startswith('explain_back:'))
+async def return_to_result(callback: CallbackQuery, state: FSMContext) -> None:
+    data = (await state.get_data()).get('explanation_return') or {}
+    if (not isinstance(callback.message, Message)
+            or data.get('token') != str(callback.data).split(':',1)[-1]
+            or data.get('message_id') != callback.message.message_id):
+        await callback.answer(recovery_phrase(get_lang(callback.from_user.id),'expired'), show_alert=True)
+        return
+    await callback.answer()
+    markup = InlineKeyboardMarkup.model_validate(data['markup']) if data['markup'] else None
+    await state.clear()
+    await callback.message.edit_text(data['text'], parse_mode='HTML', reply_markup=markup)
 
 
 @webapp_router.message(F.web_app_data)

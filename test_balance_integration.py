@@ -61,9 +61,9 @@ class HandlerTests(unittest.IsolatedAsyncioTestCase):
                 self.assertIn('51.56 + 5',snapshot.call_args.args[1])
                 message.answer.assert_awaited_once()
                 report=message.answer.call_args.args[0]
-                self.assertIn(t(lang,'balance_status_irrigate'),report)
+                self.assertIn(t(lang,'decision_irrigate'),report)
                 self.assertIn('Open-Meteo',report)
-                self.assertNotRegex(report, r'\d+[.,]\d{3,}')
+                self.assertNotRegex(report, r'\d+[.,]\d{3,}\s+(?:м³|л|га)')
                 self.assertNotRegex(history.call_args.kwargs['savings_text'], r'\d+[.,]\d{3,}')
                 keyboard=message.answer.call_args.kwargs['reply_markup']
                 self.assertEqual(keyboard.inline_keyboard[0][0].callback_data,'explain:'+'a'*32)
@@ -77,7 +77,11 @@ class HandlerTests(unittest.IsolatedAsyncioTestCase):
              patch('bot.handlers.webapp.fetch_daily_weather',AsyncMock(side_effect=aiohttp.ClientError('offline'))), \
              patch('bot.db.save_calculation') as history:
             await handle_webapp_data(message,AsyncMock())
-        message.answer.assert_awaited_once_with(t('ru','err_weather'))
+        from bot.calculation_recovery import phrase
+        message.answer.assert_awaited_once()
+        self.assertEqual(message.answer.call_args.args[0], phrase('ru','error'))
+        self.assertTrue(any(b.callback_data.startswith('calc:retry:')
+            for row in message.answer.call_args.kwargs['reply_markup'].inline_keyboard for b in row))
         history.assert_not_called()
 
     async def test_malformed_and_nonfinite_input_does_not_fetch_weather(self):
@@ -109,8 +113,13 @@ class HandlerTests(unittest.IsolatedAsyncioTestCase):
                  patch('bot.db.save_calculation') as history:
                 await handle_webapp_data(message, AsyncMock())
             report = message.answer.call_args.args[0]
-            self.assertIn(t(lang, 'balance_status_' + expected['status']), report)
-            shown_money = re.findall(r'(-?\d+\.\d{2}) ₸', report)
+            self.assertIn(t(lang, 'decision_' + expected['status']), report)
+            shown_volume = re.search(r'([\d.,]+) м³', report)
+            self.assertIsNotNone(shown_volume)
+            self.assertLessEqual(abs(float(shown_volume.group(1).replace(',','.'))
+                - float(expected['gross_m3'])), .005 + 1e-8)
+            self.assertNotIn('₸', report, 'Keep detailed economics behind the explanation button')
+            shown_money = re.findall(r'(-?\d+\.\d{2}) ₸', history.call_args.kwargs['savings_text'])
             keys = ('cost',) if expected['status'] == 'deferred' else ('traditional_cost', 'cost', 'savings')
             self.assertEqual(len(shown_money), len(keys))
             for shown, key in zip(shown_money, keys):
@@ -120,7 +129,7 @@ class HandlerTests(unittest.IsolatedAsyncioTestCase):
                 # the independent core oracle checks unrounded math at 1e-10.
                 self.assertGreaterEqual(float(shown), 0)
                 self.assertLessEqual(abs(float(shown)-float(expected[key])), .005 + 1e-8)
-            self.assertIn(history.call_args.kwargs['savings_text'], report)
+            self.assertIn(history.call_args.kwargs['savings_text'], snapshot.call_args.args[1])
             self.assertLess(len(snapshot.call_args.args[1]), 4096)
             self.assertNotIn('{', snapshot.call_args.args[1])
             message.answer.assert_awaited_once()

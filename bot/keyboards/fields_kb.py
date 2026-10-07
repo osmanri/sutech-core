@@ -22,15 +22,9 @@ def get_fields_list_keyboard(fields: List[FieldResponse], lang: str = "ru") -> I
     """Генерирует список полей со статусными маркерами и кнопкой добавления."""
     builder = InlineKeyboardBuilder()
 
-    status_badges = {
-        IrrigationStatus.NORMAL: "🟢",
-        IrrigationStatus.IRRIGATE: "🟡",
-        IrrigationStatus.CRITICAL: "🔴",
-        IrrigationStatus.RICE: "💧",
-    }
-
     for f in fields[:25]:
-        badge = status_badges.get(f.current_status, "🟢")
+        # An old balance must not imply that a field is safe to leave today.
+        badge = '🌱'
         label = f"{badge} {f.name} ({t(lang, f'report_crop_{f.crop_type.value}')}, {f.area_ha.normalize():f} {'ha' if lang == 'en' else 'га'})"
         builder.row(
             InlineKeyboardButton(
@@ -48,7 +42,7 @@ def get_fields_list_keyboard(fields: List[FieldResponse], lang: str = "ru") -> I
     return builder.as_markup()
 
 
-def get_field_card_keyboard(field_id: int, lang: str = "ru") -> InlineKeyboardMarkup:
+def get_field_card_keyboard(field_id: int, lang: str = "ru", *, expanded: bool = False) -> InlineKeyboardMarkup:
     """Клавиатура карточки выбранного поля: удобная сетка 2х2 + возврат."""
     builder = InlineKeyboardBuilder()
     builder.row(InlineKeyboardButton(
@@ -62,17 +56,24 @@ def get_field_card_keyboard(field_id: int, lang: str = "ru") -> InlineKeyboardMa
             callback_data=FieldCallback(action="water", field_id=field_id).pack(),
         ),
     )
-    # 2 ряд: отчет и удаление
-    builder.row(
-        InlineKeyboardButton(
-            text=_label(lang, "📄 Экспорт CSV", "📄 CSV жүктеу", "📄 Export CSV"),
-            callback_data=FieldCallback(action="export", field_id=field_id).pack(),
-        ),
-        InlineKeyboardButton(
-            text=_label(lang, "❌ Удалить поле", "❌ Алқапты жою", "❌ Delete field"),
-            callback_data=FieldCallback(action="delete", field_id=field_id).pack(),
-        ),
-    )
+    if not expanded:
+        builder.row(InlineKeyboardButton(
+            text=_label(lang, 'Сведения о поле', 'Алқап туралы мәлімет', 'Field details'),
+            callback_data=FieldCallback(action='details', field_id=field_id).pack()))
+    # Export and deletion belong to the field details, not the daily screen.
+    if expanded:
+        builder.row(
+            InlineKeyboardButton(
+                text=_label(lang, "📄 Экспорт CSV", "📄 CSV жүктеу", "📄 Export CSV"),
+                callback_data=FieldCallback(action="export", field_id=field_id).pack(),
+            ),
+            InlineKeyboardButton(
+                text=_label(lang, "❌ Удалить поле", "❌ Алқапты жою", "❌ Delete field"),
+                callback_data=FieldCallback(action="delete", field_id=field_id).pack(),
+            ),
+        )
+        builder.row(InlineKeyboardButton(text=_label(lang, '← К полю', '← Алқапқа', '← Field'),
+            callback_data=FieldCallback(action='view', field_id=field_id).pack()))
     # 3 ряд: навигация
     builder.row(
         InlineKeyboardButton(
