@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import json
 import sys
+from bot.field_guidance import carry_growth_estimate
 from dataclasses import replace
 from datetime import date, timedelta
 from typing import Any
@@ -25,6 +26,7 @@ try:
         get_daily_balance,
         get_day_of_growth,
         get_field,
+        list_daily_balances,
         make_field_key,
         save_daily_balance,
         upsert_managed_field,
@@ -36,6 +38,7 @@ except ImportError:
         get_daily_balance,
         get_day_of_growth,
         get_field,
+        list_daily_balances,
         make_field_key,
         save_daily_balance,
         upsert_managed_field,
@@ -137,6 +140,9 @@ async def calculate_saved_field(field_id: int, user_id: int):
 
     field = await asyncio.to_thread(field_input_from_record, record, on_date=balance_date)
     result = calculate_balance(field, weather["et0"], weather["rain"])
+    previous = await asyncio.to_thread(list_daily_balances, field_id, user_id=user_id, limit=1)
+    if previous:
+        carry_growth_estimate(result, json.loads(previous[0]["result_json"]))
     saved, created = await asyncio.to_thread(
         save_daily_balance, field_id, user_id=user_id, balance_date=weather["date"],
         timezone=weather["timezone"], result=_result_snapshot(result),

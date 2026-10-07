@@ -15,6 +15,7 @@ from bot.water_balance import number, parse_field, BalanceInputError, CROPS
 from bot.keyboards.reply import get_main_reply_keyboard
 from bot.handlers.webapp import handle_field_payload
 from bot.ai_i18n import AI_STRINGS
+from bot.field_guidance import SOIL_HELP, stage_options, estimate_growth_day
 
 
 class ChatPlan(StatesGroup):
@@ -46,6 +47,12 @@ COPY = {
     'calculate': ('Рассчитать', 'Есептеу', 'Calculate'),
     'working': ('Получаю погоду и считаю полив…', 'Ауа райын алып, суаруды есептеймін…', 'Fetching weather and calculating irrigation…'),
     'stale': ('Эта кнопка устарела. Используйте текущий шаг или /plan.', 'Бұл батырма ескірген. Қазіргі қадамды немесе /plan қолданыңыз.', 'This button is outdated. Use the current step or /plan.'),
+    'soil_help': ('Как определить почву?', 'Топырақты қалай анықтауға болады?', 'How do I identify soil?'),
+    'growth_help': ('Не знаю дату посадки', 'Отырғызу күнін білмеймін', 'I do not know the planting date'),
+    'stage_help': ('Выберите стадию по виду растений. Число дней будет приблизительным, по календарю выбранной культуры.',
+                   'Өсімдікке қарап кезеңді таңдаңыз. Күн саны таңдалған дақыл күнтізбесі бойынша шамамен есептеледі.',
+                   'Choose a stage from the plants you see. Days will be estimated using this crop calendar.'),
+    'estimated': ('Возраст по стадии: около {day} дней.', 'Кезең бойынша жас: шамамен {day} күн.', 'Stage-based age: about {day} days.'),
 }
 BASE = ['crop','area','location','day_of_growth','soil_type','moisture_condition','irrigation_type','field_type','is_saline']
 ENUMS = {'crop': [*CROPS, 'rice','other'], 'soil_type':['sand','loam','clay'],
@@ -84,10 +91,14 @@ def accept_input(key, raw, values):
         area = number(raw,'area',.000001,49999.999)
         return {'area':area}
     if key == 'day_of_growth':
+        if isinstance(raw, str) and raw.startswith('stage_'):
+            stage = raw.removeprefix('stage_')
+            return {key: estimate_growth_day(values['crop'], stage),
+                    'growth_day_source': 'stage', 'growth_stage': stage}
         day=number(raw,'day',0,3650)
         if not day.is_integer() or (values['crop'] in CROPS and day > sum(CROPS[values['crop']][4])):
             raise ValueError('day')
-        return {key:int(day)}
+        return {key:int(day), 'growth_day_source': 'days', 'growth_stage': None}
     if key == 'greenhouse_et0': return {key:None if raw == 'skip' else number(raw,key,0,50)}
     if key == 'pump' and raw == 'skip':
         return dict(power_price=None,pump_power_kw=None,pump_productivity_m3h=None)
@@ -105,6 +116,13 @@ def prompt(data, lang):
     flow=steps(data['values']); i=data['step']; key=flow[i]
     prefix=f"Su-Tech · {i+1}/{len(flow)}\n\n"
     text=prefix+phrase(lang,key)
+    guidance = data.get('guidance')
+    if guidance == 'soil' and key == 'soil_type':
+        text += '\n\n' + SOIL_HELP.get(lang, SOIL_HELP['ru'])
+    if guidance == 'growth' and key == 'day_of_growth':
+        text = prefix + phrase(lang, 'stage_help')
+        text += '\n\n' + '\n\n'.join(f'{name}: {description}'
+            for _, name, description in stage_options(data['values']['crop'], lang))
     if key=='confirm':
         v=data['values']
         labels=[option_label(lang,'crop',v['crop']),f"{v['area']:g} ha",
@@ -117,13 +135,22 @@ def prompt(data, lang):
                    'greenhouse_et0':'ET0, mm/day','power_price':'₸/kWh','pump_power_kw':'kW','pump_productivity_m3h':'m³/h'}
             if v.get(name) is not None: labels.append(f"{units[name]}: {v[name]:g}")
         text+='\n\n'+'\n'.join(labels)
+        if v.get('growth_day_source') == 'stage':
+            text += '\n\n' + phrase(lang, 'estimated').format(day=v['day_of_growth'])
     def button(label,value):
         return InlineKeyboardButton(text=label, callback_data=f"plan:{data['token']}:{i}:{value}")
     rows=[[button(option_label(lang,key,value),value)] for value in ENUMS.get(key,[])]
+    if key == 'soil_type' and guidance != 'soil':
+        rows.append([button(phrase(lang, 'soil_help'), 'help_soil')])
+    if key == 'day_of_growth' and data['values'].get('crop') in CROPS:
+        if guidance == 'growth':
+            rows = [[button(name, f'stage_{stage}')] for stage, name, _ in stage_options(data['values']['crop'], lang)]
+        else:
+            rows.append([button(phrase(lang, 'growth_help'), 'help_growth')])
     if key in ('pump','greenhouse_et0'): rows.append([button(phrase(lang,'skip' if key=='pump' else 'estimate'),'skip')])
     if key=='confirm': rows.append([button(phrase(lang,'calculate'),'calculate')])
     nav=[]
-    if i: nav.append(button(phrase(lang,'back'),'back'))
+    if i or guidance: nav.append(button(phrase(lang,'back'),'back'))
     nav.append(button(phrase(lang,'cancel'),'cancel')); rows.append(nav)
     return text,InlineKeyboardMarkup(inline_keyboard=rows)
 
@@ -194,9 +221,13 @@ async def plan_callback(callback: CallbackQuery, state: FSMContext):
         if value=='cancel':
             await callback.answer(); await cancel_plan(msg,state); return
         if value=='back':
-            await state.update_data(step=max(0,data['step']-1))
+            await state.update_data(step=data['step'] if data.get('guidance') else max(0,data['step']-1), guidance=None)
             await callback.answer(); await show_step(msg,state,lang); return
         key=steps(data['values'])[data['step']]
+        if (value == 'help_soil' and key == 'soil_type') or (
+                value == 'help_growth' and key == 'day_of_growth' and data['values'].get('crop') in CROPS):
+            await state.update_data(guidance='soil' if value == 'help_soil' else 'growth')
+            await callback.answer(); await show_step(msg, state, lang); return
         if key=='confirm' and value=='calculate':
             try: parse_field(data['values'])
             except BalanceInputError:
@@ -208,7 +239,7 @@ async def plan_callback(callback: CallbackQuery, state: FSMContext):
             try: updates=accept_input(key,value,data['values'])
             except ValueError:
                 await callback.answer(phrase(lang,'invalid')); return
-            await state.update_data(values={**data['values'],**updates},step=data['step']+1)
+            await state.update_data(values={**data['values'],**updates},step=data['step']+1, guidance=None)
             await callback.answer(); await show_step(msg,state,lang); return
     # Keep the shared handler's owner-scoped report/history/field persistence.
     await handle_field_payload(msg,state,data['values'])
@@ -228,7 +259,7 @@ async def plan_input(message: Message, state: FSMContext):
     try: updates=accept_input(key,raw,data['values'])
     except ValueError:
         await message.answer(phrase(lang,'invalid'),parse_mode=None); return
-    await state.update_data(values={**data['values'],**updates},step=data['step']+1)
+    await state.update_data(values={**data['values'],**updates},step=data['step']+1, guidance=None)
     await show_step(message,state,lang)
 
 

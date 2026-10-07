@@ -85,6 +85,8 @@ def format_balance_report(lang, field, result, weather):
         text += '\n\n' + t(lang, 'decision_saline')
     if field.field_type == 'greenhouse':
         text += '\n\n' + t(lang, 'decision_greenhouse')
+    if result.get('age_estimated'):
+        text += '\n\n' + t(lang, 'decision_age_estimated')
     return text
 
 
@@ -96,6 +98,8 @@ def format_balance_explanation(lang, field, result, weather):
         moisture=escape(t(lang, f'balance_moisture_{field.moisture_condition}')),
         irrigation=escape(t(lang, f'report_irrig_{field.method}')))
     input_header = t(lang, 'balance_crop_header', crop=escape(t(lang, f'report_crop_{field.crop}'))) + '\n' + inputs + '\n\n'
+    if result.get('age_estimated'):
+        input_header += t(lang, 'decision_age_estimated') + '\n\n'
     if result['status'] == 'rice':
         text = t(lang, 'balance_rice_explanation',
             area=fmt_area(field.area_ha),

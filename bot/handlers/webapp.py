@@ -7,6 +7,7 @@ import math
 import aiohttp
 from aiogram import F, Router
 from aiogram.types import Message, CallbackQuery
+from bot.field_guidance import growth_estimate_metadata
 from aiogram.fsm.context import FSMContext
 
 try:
@@ -322,6 +323,7 @@ async def handle_field_payload(message: Message, state: FSMContext, data: dict) 
         return
     try:
         field = parse_field(data)
+        growth_metadata = growth_estimate_metadata(data, field)
     except BalanceInputError as exc:
         key = {'version': 'balance_old_app', 'season_ended': 'balance_season_ended'}.get(str(exc), 'balance_error')
         await message.answer(t(lang, key))
@@ -329,6 +331,7 @@ async def handle_field_payload(message: Message, state: FSMContext, data: dict) 
     try:
         weather = await fetch_daily_weather(lat, lon)
         result = calculate_balance(field, weather['et0'], weather['rain'])
+        result.update(growth_metadata)
     except (aiohttp.ClientError, asyncio.TimeoutError, OSError, ValueError, KeyError, TypeError, IndexError):
         logger.exception('Daily Open-Meteo balance unavailable')
         await message.answer(t(lang, 'err_weather'))

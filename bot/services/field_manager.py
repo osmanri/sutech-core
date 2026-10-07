@@ -60,6 +60,7 @@ from bot.services.geo_service import (
     resolve_timezone_by_coords,
 )
 from bot.water_balance import BalanceInputError, METHODS, calculate_balance, root_zone_capacity
+from bot.field_guidance import carry_growth_estimate
 
 
 class FieldService:
@@ -227,7 +228,8 @@ class FieldService:
             # applied again when the farmer refreshes the recommendation.
             field = await asyncio.to_thread(
                 field_input_from_record, record, on_date=date.fromisoformat(weather["date"]))
-            result = calculate_balance(replace(field, greenhouse_et0=0.0), 0, 0)
+            result = carry_growth_estimate(
+                calculate_balance(replace(field, greenhouse_et0=0.0), 0, 0), result)
             result["state_adjusted"] = True
         return record.get("name") or f"#{field_id}", field, result, weather
 
