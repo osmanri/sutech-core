@@ -41,7 +41,8 @@ export async function generate(id,text,lang,image=null,deep=false) {
   if(image)history=[];
   if(!inScope(text,history,!!image))throw new Error('off_topic');
   const key=await setting('gemini_key');if(!key)throw new Error('not_configured');
-  const model=await setting(deep?'gemini_deep_model':'gemini_model');
+  let model=await setting(deep?'gemini_deep_model':'gemini_model');
+  if(session?.model!==model)history=[];
   if(image)imageMime(image);
   await reserveAI(id);
   await screen(id,esc(a(lang,image?'working':'thinking')),aiKeys(lang),generation);
@@ -49,9 +50,10 @@ export async function generate(id,text,lang,image=null,deep=false) {
   let reply;
   try{reply=await providerReply({key,model,text,lang,history,image,deep});}
   catch(e){
-   if(![500,502,503,504].includes(e.httpStatus))throw e;
+   if(!deep&&![500,502,503,504].includes(e.httpStatus))throw e;
    if((await user(id)).generation!==generation)return {cancelled:true};
-   reply=await providerReply({key,model,text,lang,history,image,deep});
+   if(deep){model=await setting('gemini_model');history=session?.model===model?session.history:[];reply=await providerReply({key,model,text,lang,history,image,deep:false});reply.answer=a(lang,'deep_fallback')+'\n\n'+reply.answer;}
+   else reply=await providerReply({key,model,text,lang,history,image,deep});
   }
   const {answer,responseParts}=reply;
   const latest=await user(id);
@@ -60,7 +62,7 @@ export async function generate(id,text,lang,image=null,deep=false) {
   history=[...history,{role:'user',parts:[{text:(image?'[new plant photo] ':'')+text}]},{role:'model',parts:responseParts}].slice(-8);
   await put(`ai-context:${id}`,id,'ai-context',{history,model});
   await put(`ai-answer:${nonce()}`,id,'ai-answer',{question:text,answer,model,has_image:!!image,created:Date.now()});
-  await screen(id,esc(answer),aiKeys(lang),generation);return {ok:true,characters:answer.length};
+  await screen(id,answer,aiKeys(lang),generation,true);return {ok:true,characters:answer.length};
  } finally {await unlock(guard,token);}
 }
 export async function aiHistory(id,lang,page=0) {

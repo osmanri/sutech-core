@@ -7,8 +7,10 @@ import {generate,aiHistory} from './ai.js';
 import {calculateField,ownedField,refresh,report,currentResult,waterField,card} from './fields.js';
 import {parseField} from './balance.js';
 import {planScreen,planInput} from './planner.js';
+import {pilot,feedback,p} from './pilot.js';
 const fieldButtons=(row,lang)=>keyboard([
  [button(t(lang,'btn_explain'),`explain:${row.id}`)],
+ [button(p(lang,'useful'),`vote:${row.id}:y`),button(p(lang,'unhelpful'),`vote:${row.id}:n`)],
  ...(currentResult(row).gross_m3>0?[[button(tr(lang,'Отметить полив','Суаруды белгілеу','Record watering'),`water:${row.id}`)]]:[]),
  [button(t(lang,'btn_field_update'),`field:${row.id}`),button(t(lang,'btn_export_field'),`export:${row.id}`)],
  [button(tr(lang,'Удалить поле','Алқапты жою','Delete field'),`delete:${row.id}`)],
@@ -41,8 +43,8 @@ async function historyScreen(id,lang,page=0,generation=null) {
  keys.push(back(lang));await screen(id,rows.length?`<b>${esc(t(lang,'btn_history'))}</b>`:tr(lang,'Расчётов пока нет.','Әзірге есеп жоқ.','No calculations yet.'),keyboard(keys),generation);
 }
 export async function action(id,data) {
- const u=await navigate(id,data==='ai'||data==='ai:new'?'ai':'home'),lang=u.lang;
- const show=(text,markup)=>screen(id,text,markup,u.generation);
+ const u=await navigate(id,['ai','ai:new','ai:deep'].includes(data)?'ai':'home'),lang=u.lang;
+ const show=(text,markup,plain=false)=>screen(id,text,markup,u.generation,plain);
  if(data==='home')return home(id,lang,u.generation);
  if(data==='languages')return show('Русский / Қазақша / English',languages(lang));
  if(data.startsWith('lang:')){const selected=data.slice(5);if(!['ru','kz','en'].includes(selected))return;u.lang=selected;await saveUser(id,u);await api.setChatMenuButton({chat_id:id,menu_button:{type:'web_app',text:'Su-Tech',web_app:{url:APP_URL+'?lang='+selected}}});return home(id,selected,u.generation);}
@@ -51,13 +53,20 @@ export async function action(id,data) {
   if(data==='ai:new')await remove(`ai-context:${id}`,id,'ai-context');
   return show(esc(a(lang,data==='ai:new'?'cleared':'intro')),aiKeys(lang));
  }
+ if(data==='ai:deep'){u.aiDeep=true;await saveUser(id,u);return show(esc(a(lang,'deep_hint')),aiKeys(lang));}
+ if(data==='ai:delete')return show(esc(a(lang,'delete_confirm')),keyboard([[button(a(lang,'delete_yes'),'ai:delete:yes')],[button(a(lang,'delete_no'),'ai:history')]]));
+ if(data==='ai:delete:yes'){
+  await db.run("DELETE FROM records WHERE owner=:owner AND kind IN ('ai-answer','ai-context','legacy:ai_exchanges','legacy:ai_conversations')",{':owner':id});
+  return show(esc(a(lang,'deleted')),aiKeys(lang));
+ }
+ if(data==='pilot'||data.startsWith('pilot:'))return pilot(id,lang,data.split(':')[1]??'back',u.generation);
  if(data==='ai:history'||data.startsWith('aih:')){
   const page=data==='ai:history'?0:Math.max(0,Number(data.slice(4))||0),items=await aiHistory(id,lang,page);
-  return show(items.length?tr(lang,'Сохранённые ответы ИИ','ЖИ сақталған жауаптары','Saved AI answers'):tr(lang,'История пока пуста.','Тарих әзірге бос.','No AI history yet.'),keyboard([...items.map((r,i)=>[button(`${page*5+i+1}. ${r.text.replace(/<[^>]+>/g,'').slice(0,65)}`,`ah:${r.id}`)]),[...(page?[button('‹',`aih:${page-1}`)]:[]),...(items.length===5?[button('›',`aih:${page+1}`)]:[])],[button(a(lang,'new_button'),'ai:new')],back(lang)]));
+  return show(items.length?tr(lang,'Сохранённые ответы ИИ','ЖИ сақталған жауаптары','Saved AI answers'):tr(lang,'История пока пуста.','Тарих әзірге бос.','No AI history yet.'),keyboard([...items.map((r,i)=>[button(`${page*5+i+1}. ${r.text.replace(/<[^>]+>/g,'').slice(0,65)}`,`ah:${r.id}`)]),[...(page?[button('‹',`aih:${page-1}`)]:[]),...(items.length===5?[button('›',`aih:${page+1}`)]:[])],[button(a(lang,'new_button'),'ai:new')],[button(a(lang,'history_delete'),'ai:delete')],back(lang)]));
  }
  if(data.startsWith('ah:')){
   const row=await get(data.slice(3),id);if(!row)return home(id,lang,u.generation);
-  return show(esc(row.answer),keyboard([[button(tr(lang,'История ИИ','ЖИ тарихы','AI history'),'ai:history')],back(lang)]));
+  return show(row.answer,keyboard([[button(tr(lang,'История ИИ','ЖИ тарихы','AI history'),'ai:history')],back(lang)]),true);
  }
  if(data==='plan'){u.mode='plan';u.draft={step:0,values:{}};await saveUser(id,u);return planScreen(id);}
  if(data==='retry'){const row=await get(`pending:${id}`,id);return row?deliverCalculation(id,row.payload):home(id,lang,u.generation);}
@@ -68,9 +77,10 @@ export async function action(id,data) {
   if(row.field_id)return show(report({result:row.result,deficit:row.result.deficit,last_day:row.weather.day,weather:row.weather,payload:row.payload},lang),keyboard([[button(t(lang,'btn_history'),'history')],back(lang)]));
   return show(esc([row.crop_name,row.area_text,row.irrigation_text,row.volume_text,row.savings_text].filter(Boolean).join('\n')),keyboard([[button(t(lang,'btn_history'),'history')],back(lang)]));
  }
- if(data==='more')return show(tr(lang,'Настройки и помощь','Баптаулар мен көмек','Settings and help'),keyboard([[button(t(lang,'btn_lang'),'languages'),button(t(lang,'btn_help'),'help')],[button(t(lang,'btn_about'),'about')],back(lang)]));
+ if(data==='more')return show(tr(lang,'Настройки и помощь','Баптаулар мен көмек','Settings and help'),keyboard([[button(t(lang,'btn_lang'),'languages'),button(t(lang,'btn_help'),'help')],[button(t(lang,'btn_about'),'about'),button(p(lang,'join'),'pilot')],back(lang)]));
  if(data==='help'||data==='about')return show(data==='help'?tr(lang,'1. Добавьте участок: культура, площадь, почва и точка на карте.\n2. Откройте «Мои поля» для актуального расчёта.\n3. После полива отметьте объём.\n4. Для вопросов и фото растений откройте ИИ-агронома.','1. Алқап қосыңыз: дақыл, аудан, топырақ және картадағы нүкте.\n2. Жаңа есеп үшін «Менің алқаптарым» бөліміне өтіңіз.\n3. Суарған соң көлемін белгілеңіз.\n4. Өсімдік фотосы мен сұрақтар үшін ЖИ-агрономды ашыңыз.','1. Add a field: crop, area, soil and map location.\n2. Open My fields for a current calculation.\n3. After watering, record the amount.\n4. Open AI agronomist for plant photos and questions.'):tr(lang,'Su-Tech рассчитывает потребность в поливе по погоде Open-Meteo, культуре и почве. Методика: FAO-56. ИИ помогает с уходом и видимыми симптомами растений.','Su-Tech Open-Meteo ауа райы, дақыл және топырақ бойынша суару қажеттілігін есептейді. Әдістеме: FAO-56. ЖИ өсімдік күтімі мен көрінетін белгілерді түсіндіреді.','Su-Tech estimates irrigation needs using Open-Meteo weather, crop and soil. Method: FAO-56. AI helps with plant care and visible symptoms.'),keyboard([back(lang)]));
  const [type,value]=data.split(':');
+ if(type==='vote'){await feedback(id,value,data.split(':')[2]==='y');const row=await ownedField(id,value);return show(p(lang,'thanks')+'\n\n'+report(row,lang),fieldButtons(row,lang));}
  if(['field','explain','water','delete','confirmdelete','export'].includes(type)){
   const row=type==='field'?await refresh(id,value):await ownedField(id,value);
   if(type==='delete')return show(tr(lang,'Удалить это поле?','Бұл алқап жойылсын ба?','Delete this field?'),keyboard([[button(tr(lang,'Удалить','Жою','Delete'),`confirmdelete:${value}`),button(t(lang,'btn_cancel'),`field:${value}`)]]));
@@ -122,12 +132,12 @@ export async function message(m,ctx) {
  }
  await ignoreDelete(id,m.message_id);
  if(text.startsWith('/start')){
-  const entry=text.split(/\s+/)[1]??'',match=entry.match(/^(app|ai)_(ru|kz|en)$/);
+  const entry=text.split(/\s+/)[1]??'',match=entry.match(/^(app|ai|pilot)_(ru|kz|en)$/);
   if(match){u.lang=match[2];await saveUser(id,u);return action(id,match[1]);}
   await navigate(id);return screen(id,'Su-Tech\nРусский / Қазақша / English',languages(u.lang));
  }
  const command=text.split(/\s|@/)[0].toLowerCase();
- const route=matchingButton(text)??({'/menu':'home','/exit':'home','/cancel':'home','/app':'app','/help':'help','/about':'about','/language':'languages','/ai':'ai','/newchat':'ai:new','/plan':'plan','/fields':'fields','/history':'history'}[command]);
+ const route=matchingButton(text)??({'/menu':'home','/exit':'home','/cancel':'home','/app':'app','/help':'help','/about':'about','/language':'languages','/ai':'ai','/newchat':'ai:new','/pilot':'pilot','/plan':'plan','/fields':'fields','/history':'history'}[command]);
  if(route)return action(id,route);
  if(m.web_app_data){let payload;try{payload=JSON.parse(m.web_app_data.data);}catch{return action(id,'app');}return deliverCalculation(id,payload);}
  if(u.mode==='plan'){
@@ -146,7 +156,8 @@ export async function message(m,ctx) {
  try{
   if(photo){if(photo.file_size>4194304)throw new Error('large_image');image=await api.getFileContent(photo.file_id);}
   else if(!text)throw new Error('unsupported');
-  await generate(id,text||(a(u.lang,'photo_prompt')),u.lang,image);
+  const deep=!!u.aiDeep;if(deep){u.aiDeep=false;await saveUser(id,u);}
+  await generate(id,text||(a(u.lang,'photo_prompt')),u.lang,image,deep);
  }catch(e){
   const known=['large_image','bad_image','long_text','busy','cooldown','daily_limit','quota','configuration','not_configured','no_answer','unsupported'];
   const answer=e.message==='off_topic'?tr(u.lang,'Помогаю с растениями, поливом и Su-Tech. Задайте вопрос по этим темам.','Өсімдіктер, суару және Su-Tech бойынша көмектесемін. Осы тақырыптарда сұрақ қойыңыз.','I help with plants, irrigation and Su-Tech. Please ask about these topics.'):a(u.lang,known.includes(e.message)?e.message:'unavailable');

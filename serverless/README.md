@@ -68,8 +68,10 @@ queries to that user. A payload's `user_id` never determines the owner.
   from the Python monitor have not been ported: the documented platform API has
   no scheduler. A gap between observations is shown, not filled with invented
   daily weather.
-- Old pilot/feedback workflows and deep-analysis selection are not exposed in the
-  new short menu. Their original database records are preserved in the archive.
+- Opt-in offer participation and report feedback remain available under More
+  and on field cards. Deleting participation preserves fields and calculations.
+- Deep analysis is selected for the next question/photo. If the stronger model
+  is unavailable, one standard-model fallback is labelled in the answer.
 
 Revoke the CLI key that was pasted into the conversation using BotFather's CLI
 Access controls. Put the replacement directly in local `bot/.env`, never in chat.

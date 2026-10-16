@@ -11,6 +11,7 @@ import {once} from '../tgcloud/lib/updates.js';
 import {action,message} from '../tgcloud/lib/bot.js';
 import {accept} from '../tgcloud/lib/planner.js';
 import {calculate,parseField} from '../tgcloud/lib/balance.js';
+import {feedback} from '../tgcloud/lib/pilot.js';
 const payload={balance_version:2,crop:'tomato',soil_type:'loam',irrigation_type:'drip',area:.1,area_unit:'hectare',day_of_growth:30,moisture_condition:'dry',latitude:47.12,longitude:51.88,field_type:'open'};
 const weather=()=>({timezone:'Asia/Atyrau',utc_offset_seconds:18000,daily_units:{et0_fao_evapotranspiration:'mm',precipitation_sum:'mm'},daily:{time:[new Date(Date.now()+18000000).toISOString().slice(0,10)],et0_fao_evapotranspiration:[5],precipitation_sum:[0]}});
 test('private data cannot cross owners, including overwrite attempts',async()=>{
@@ -93,4 +94,25 @@ test('menu, language and AI views work in all three languages',async()=>{
 test('planner validates stages and units before calculation',()=>{
  assert.throws(()=>accept('day_of_growth',9999,{crop:'tomato'}));assert.throws(()=>accept('location','200 50',{}));assert.throws(()=>accept('area',true,{}));
  assert.deepEqual(accept('area','0,1',{}),{area:.1});
+});
+test('deep analysis falls back once and keeps model output as plain text',async()=>{
+ await put('config:gemini_deep_model',0,'config',{value:'gemini-deep-test'});await navigate(96,'ai');
+ let attempts=0;setFetch(async()=>++attempts===1?{ok:false,status:503}:{ok:true,json:async()=>({candidates:[{finishReason:'STOP',content:{parts:[{text:'Leaf < symptoms & care >'}]}}]})});
+ assert.equal((await generate(96,'How to water tomatoes?','en',null,true)).ok,true);
+ assert.equal(attempts,2);assert.equal(messages.at(-1).params.parse_mode,undefined);
+ assert.ok(messages.at(-1).params.text.includes('Leaf < symptoms & care >'));
+});
+test('deleting AI history preserves quota and other farmers records',async()=>{
+ await put('ai-answer:delete-test',97,'ai-answer',{answer:'private'});await put('ai-answer:keep-test',98,'ai-answer',{answer:'keep'});
+ await db.run('INSERT INTO ai_usage_v2 VALUES(:id,:owner,:time)',{':id':'keep-quota',':owner':97,':time':Date.now()});
+ await action(97,'ai:delete:yes');assert.equal(await get('ai-answer:delete-test',97),null);
+ assert.ok(await get('ai-answer:keep-test',98));assert.equal((await db.get('SELECT COUNT(*) n FROM ai_usage_v2 WHERE owner=97')).n,1);
+});
+test('offer signup is opt-in; ratings are owner scoped and separately removable',async()=>{
+ await action(99,'pilot');assert.equal(await get('pilot:99',99),null);
+ await action(99,'pilot:join');assert.ok(await get('pilot:99',99));
+ await put('field:9999',99,'field',{id:9999,last_day:'2026-10-16'});
+ await feedback(99,9999,true);assert.equal((await list(99,'feedback')).length,1);
+ await assert.rejects(()=>feedback(100,9999,true),/not_found/);
+ await action(99,'pilot:delete');assert.equal((await list(99,'feedback')).length,0);assert.ok(await get('field:9999',99));
 });

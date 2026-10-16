@@ -10,12 +10,14 @@ sys.path.insert(0,str(root))
 from bot.water_balance import CROPS, METHODS, SOILS, parse_field, calculate_balance
 from bot.i18n import STRINGS
 from bot.ai_i18n import AI_STRINGS
+from bot.pilot_i18n import COPY as PILOT_COPY
 scope=ast.parse((root/'bot/services/agronomy_scope.py').read_text(encoding='utf8'))
 DOMAIN_ROOTS=next(ast.literal_eval(node.value) for node in scope.body if isinstance(node,ast.Assign) and any(isinstance(t,ast.Name) and t.id=='DOMAIN_ROOTS' for t in node.targets))
 lib=root/'serverless/tgcloud/lib'
 lib.mkdir(parents=True,exist_ok=True)
 strings={lang:{k:re.sub(r'</?tg-emoji[^>]*>','',v) if isinstance(v,str) else v for k,v in pairs.items()} for lang,pairs in STRINGS.items()}
 (lib/'copy.js').write_text('export const STRINGS = '+json.dumps(strings,ensure_ascii=False)+';\nexport const AI_STRINGS = '+json.dumps(AI_STRINGS,ensure_ascii=False)+';\nexport const DOMAIN_ROOTS = '+json.dumps(DOMAIN_ROOTS,ensure_ascii=False)+';\n',encoding='utf8')
+(lib/'pilot-copy.js').write_text('export const PILOT_COPY = '+json.dumps(PILOT_COPY,ensure_ascii=False)+';\n',encoding='utf8')
 source=ast.parse((root/'bot/services/agronomist.py').read_text(encoding='utf8'))
 prompt=next(n for n in source.body if isinstance(n,ast.FunctionDef) and n.name=='system_prompt')
 scope={'project_knowledge':lambda:(root/'bot/knowledge/project_report.md').read_text(encoding='utf8')}
