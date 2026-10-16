@@ -27,7 +27,8 @@ export function accept(key,raw,values) {
  throw new Error('invalid');
 }
 export async function planScreen(id,error=false) {
- const u=await user(id),d=u.draft,key=steps(d.values)[d.step],lang=u.lang;
+ const u=await user(id),d=u.draft;if(!d||u.mode!=='plan')return;
+ const key=steps(d.values)[d.step],lang=u.lang;
  let text=`<b>Su-Tech · ${d.step+1}/${steps(d.values).length}</b>\n\n${esc(phrase(lang,key))}`;
  if(error)text+='\n\n'+esc(phrase(lang,'invalid'));
  if(key==='confirm')text+='\n\n'+esc([t(lang,'report_crop_'+d.values.crop),d.values.area+' ha',`${d.values.latitude}, ${d.values.longitude}`,d.values.day_of_growth+' d',label(lang,'soil_type',d.values.soil_type),label(lang,'moisture_condition',d.values.moisture_condition),t(lang,'report_irrig_'+d.values.irrigation_type),label(lang,'field_type',d.values.field_type)].join('\n'));
@@ -36,7 +37,7 @@ export async function planScreen(id,error=false) {
  if(['pump','greenhouse_et0'].includes(key))rows.push([button(phrase(lang,key==='pump'?'skip':'estimate'),cb('skip'))]);
  if(key==='confirm')rows.push([button(phrase(lang,'calculate'),cb('calculate'))]);
  if(d.step>0)rows.push([button(phrase(lang,'back'),cb('back'))]);
- rows.push(back(lang));await screen(id,text,keyboard(rows));
+ rows.push(back(lang));await screen(id,text,keyboard(rows),u.generation);
 }
 export async function planInput(id,raw,expected=null) {
  const u=await user(id);if(u.mode!=='plan'||!u.draft)throw new Error('stale');

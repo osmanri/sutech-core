@@ -10,6 +10,7 @@ import {inScope} from '../tgcloud/lib/scope.js';
 import {once} from '../tgcloud/lib/updates.js';
 import {action,message} from '../tgcloud/lib/bot.js';
 import {accept} from '../tgcloud/lib/planner.js';
+import {calculate,parseField} from '../tgcloud/lib/balance.js';
 const payload={balance_version:2,crop:'tomato',soil_type:'loam',irrigation_type:'drip',area:.1,area_unit:'hectare',day_of_growth:30,moisture_condition:'dry',latitude:47.12,longitude:51.88,field_type:'open'};
 const weather=()=>({timezone:'Asia/Atyrau',utc_offset_seconds:18000,daily_units:{et0_fao_evapotranspiration:'mm',precipitation_sum:'mm'},daily:{time:[new Date(Date.now()+18000000).toISOString().slice(0,10)],et0_fao_evapotranspiration:[5],precipitation_sum:[0]}});
 test('private data cannot cross owners, including overwrite attempts',async()=>{
@@ -56,6 +57,16 @@ test('stale AI response never overwrites navigation',async()=>{
  setFetch(async()=>{entered();await waiting;return {ok:true,json:async()=>({candidates:[{finishReason:'STOP',content:{parts:[{text:'Useful answer'}]}}]})};});
  const request=generate(50,'How to water tomatoes?','en');await started;await navigate(50);await screen(50,'Main menu',keyboard([]));
  resolve();assert.equal((await request).cancelled,true);assert.equal(messages.at(-1).params.text,'Main menu');
+});
+test('slow field refresh cannot replace a newer main menu',async()=>{
+ const id=95;await user(id,'en');
+ const p={...payload,latitude:45.555,longitude:60.333};
+ const result=calculate(parseField(p),5,0),today=weather().daily.time[0];
+ await put('field:9595',id,'field',{id:9595,payload:p,result,deficit:result.deficit,planting:new Date(Date.parse(today)-30*86400000).toISOString().slice(0,10),last_day:new Date(Date.parse(today)-86400000).toISOString().slice(0,10),revision:1});
+ let resolve,entered;const waiting=new Promise(r=>resolve=r),started=new Promise(r=>entered=r);
+ setFetch(async()=>{entered();await waiting;return {ok:true,json:async()=>weather()};});
+ const request=action(id,'field:9595');await started;await action(id,'home');resolve();await request;
+ assert.ok(messages.at(-1).params.text.includes('Choose an action'));
 });
 test('out-of-scope text consumes no request quota',async()=>{
  await navigate(60,'ai');let calls=0;setFetch(async()=>{calls++;throw new Error();});

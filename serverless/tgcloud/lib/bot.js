@@ -27,65 +27,66 @@ export async function deliverCalculation(id,payload) {
   return {ok:false,bot_replied:true,recoverable};
  }
 }
-async function fieldsScreen(id,lang,page=0) {
+async function fieldsScreen(id,lang,page=0,generation=null) {
  const fields=await list(id,'field',8,page*8);
  const rows=fields.map(f=>[button(`${t(lang,'report_crop_'+f.payload.crop)} · ${fmt(parseField(f.payload).area_ha,6)} ha`,`field:${f.id}`)]);
  if(page>0||fields.length===8)rows.push([...(page>0?[button('‹',`fields:${page-1}`)]:[]),...(fields.length===8?[button('›',`fields:${page+1}`)]:[])]);
  rows.push([{text:t(lang,'btn_recalculate'),web_app:{url:APP_URL+'?lang='+lang}}],back(lang));
- await screen(id,fields.length?`<b>${esc(t(lang,'btn_fields'))}</b>`:tr(lang,'Пока нет сохранённых полей. Добавьте участок через расчёт.','Сақталған алқап жоқ. Есеп арқылы алқап қосыңыз.','No saved fields yet. Add a field using the calculator.'),keyboard(rows));
+ await screen(id,fields.length?`<b>${esc(t(lang,'btn_fields'))}</b>`:tr(lang,'Пока нет сохранённых полей. Добавьте участок через расчёт.','Сақталған алқап жоқ. Есеп арқылы алқап қосыңыз.','No saved fields yet. Add a field using the calculator.'),keyboard(rows),generation);
 }
-async function historyScreen(id,lang,page=0) {
+async function historyScreen(id,lang,page=0,generation=null) {
  const rows=await list(id,'report',5,page*5);
  const keys=rows.map((r,i)=>[button(`${page*5+i+1}. ${r.weather?.day??r.created_at??''} · ${r.payload?t(lang,'report_crop_'+r.payload.crop):r.crop_name}`,`rh:${encodeURIComponent(r._id).slice(0,55)}`)]);
  if(page||rows.length===5)keys.push([...(page?[button('‹',`history:${page-1}`)]:[]),...(rows.length===5?[button('›',`history:${page+1}`)]:[])]);
- keys.push(back(lang));await screen(id,rows.length?`<b>${esc(t(lang,'btn_history'))}</b>`:tr(lang,'Расчётов пока нет.','Әзірге есеп жоқ.','No calculations yet.'),keyboard(keys));
+ keys.push(back(lang));await screen(id,rows.length?`<b>${esc(t(lang,'btn_history'))}</b>`:tr(lang,'Расчётов пока нет.','Әзірге есеп жоқ.','No calculations yet.'),keyboard(keys),generation);
 }
 export async function action(id,data) {
  const u=await navigate(id,data==='ai'||data==='ai:new'?'ai':'home'),lang=u.lang;
- if(data==='home')return home(id,lang);
- if(data==='languages')return screen(id,'Русский / Қазақша / English',languages(lang));
- if(data.startsWith('lang:')){const selected=data.slice(5);if(!['ru','kz','en'].includes(selected))return;u.lang=selected;await saveUser(id,u);await api.setChatMenuButton({chat_id:id,menu_button:{type:'web_app',text:'Su-Tech',web_app:{url:APP_URL+'?lang='+selected}}});return home(id,selected);}
- if(data==='app')return screen(id,tr(lang,'Настройте участок — расчёт придёт сюда.','Алқапты баптаңыз — есеп осы чатқа келеді.','Set up a field; the result will arrive here.'),keyboard([[{text:t(lang,'btn_webapp'),web_app:{url:APP_URL+'?lang='+lang}}],[button(tr(lang,'Расчёт в чате','Чатта есептеу','Plan in chat'),'plan')],back(lang)]));
+ const show=(text,markup)=>screen(id,text,markup,u.generation);
+ if(data==='home')return home(id,lang,u.generation);
+ if(data==='languages')return show('Русский / Қазақша / English',languages(lang));
+ if(data.startsWith('lang:')){const selected=data.slice(5);if(!['ru','kz','en'].includes(selected))return;u.lang=selected;await saveUser(id,u);await api.setChatMenuButton({chat_id:id,menu_button:{type:'web_app',text:'Su-Tech',web_app:{url:APP_URL+'?lang='+selected}}});return home(id,selected,u.generation);}
+ if(data==='app')return show(tr(lang,'Настройте участок — расчёт придёт сюда.','Алқапты баптаңыз — есеп осы чатқа келеді.','Set up a field; the result will arrive here.'),keyboard([[{text:t(lang,'btn_webapp'),web_app:{url:APP_URL+'?lang='+lang}}],[button(tr(lang,'Расчёт в чате','Чатта есептеу','Plan in chat'),'plan')],back(lang)]));
  if(data==='ai'||data==='ai:new'){
   if(data==='ai:new')await remove(`ai-context:${id}`,id,'ai-context');
-  return screen(id,esc(a(lang,data==='ai:new'?'cleared':'intro')),aiKeys(lang));
+  return show(esc(a(lang,data==='ai:new'?'cleared':'intro')),aiKeys(lang));
  }
  if(data==='ai:history'||data.startsWith('aih:')){
   const page=data==='ai:history'?0:Math.max(0,Number(data.slice(4))||0),items=await aiHistory(id,lang,page);
-  return screen(id,items.length?tr(lang,'Сохранённые ответы ИИ','ЖИ сақталған жауаптары','Saved AI answers'):tr(lang,'История пока пуста.','Тарих әзірге бос.','No AI history yet.'),keyboard([...items.map((r,i)=>[button(`${page*5+i+1}. ${r.text.replace(/<[^>]+>/g,'').slice(0,65)}`,`ah:${r.id}`)]),[...(page?[button('‹',`aih:${page-1}`)]:[]),...(items.length===5?[button('›',`aih:${page+1}`)]:[])],[button(a(lang,'new_button'),'ai:new')],back(lang)]));
+  return show(items.length?tr(lang,'Сохранённые ответы ИИ','ЖИ сақталған жауаптары','Saved AI answers'):tr(lang,'История пока пуста.','Тарих әзірге бос.','No AI history yet.'),keyboard([...items.map((r,i)=>[button(`${page*5+i+1}. ${r.text.replace(/<[^>]+>/g,'').slice(0,65)}`,`ah:${r.id}`)]),[...(page?[button('‹',`aih:${page-1}`)]:[]),...(items.length===5?[button('›',`aih:${page+1}`)]:[])],[button(a(lang,'new_button'),'ai:new')],back(lang)]));
  }
  if(data.startsWith('ah:')){
-  const row=await get(data.slice(3),id);if(!row)return home(id,lang);
-  return screen(id,esc(row.answer),keyboard([[button(tr(lang,'История ИИ','ЖИ тарихы','AI history'),'ai:history')],back(lang)]));
+  const row=await get(data.slice(3),id);if(!row)return home(id,lang,u.generation);
+  return show(esc(row.answer),keyboard([[button(tr(lang,'История ИИ','ЖИ тарихы','AI history'),'ai:history')],back(lang)]));
  }
  if(data==='plan'){u.mode='plan';u.draft={step:0,values:{}};await saveUser(id,u);return planScreen(id);}
- if(data==='retry'){const row=await get(`pending:${id}`,id);return row?deliverCalculation(id,row.payload):home(id,lang);}
- if(data==='fields'||data.startsWith('fields:'))return fieldsScreen(id,lang,Number(data.split(':')[1])||0);
- if(data==='history'||data.startsWith('history:'))return historyScreen(id,lang,Number(data.split(':')[1])||0);
+ if(data==='retry'){const row=await get(`pending:${id}`,id);return row?deliverCalculation(id,row.payload):home(id,lang,u.generation);}
+ if(data==='fields'||data.startsWith('fields:'))return fieldsScreen(id,lang,Number(data.split(':')[1])||0,u.generation);
+ if(data==='history'||data.startsWith('history:'))return historyScreen(id,lang,Number(data.split(':')[1])||0,u.generation);
  if(data.startsWith('rh:')){
-  const row=await get(decodeURIComponent(data.slice(3)),id);if(!row)return home(id,lang);
-  if(row.field_id){const f=await ownedField(id,row.field_id);return screen(id,report({...f,result:row.result,deficit:row.result.deficit,last_day:row.weather.day,weather:row.weather,payload:row.payload},lang),keyboard([[button(t(lang,'btn_history'),'history')],back(lang)]));}
-  return screen(id,esc([row.crop_name,row.area_text,row.irrigation_text,row.volume_text,row.savings_text].filter(Boolean).join('\n')),keyboard([[button(t(lang,'btn_history'),'history')],back(lang)]));
+  const row=await get(decodeURIComponent(data.slice(3)),id);if(!row)return home(id,lang,u.generation);
+  if(row.field_id)return show(report({result:row.result,deficit:row.result.deficit,last_day:row.weather.day,weather:row.weather,payload:row.payload},lang),keyboard([[button(t(lang,'btn_history'),'history')],back(lang)]));
+  return show(esc([row.crop_name,row.area_text,row.irrigation_text,row.volume_text,row.savings_text].filter(Boolean).join('\n')),keyboard([[button(t(lang,'btn_history'),'history')],back(lang)]));
  }
- if(data==='more')return screen(id,tr(lang,'Настройки и помощь','Баптаулар мен көмек','Settings and help'),keyboard([[button(t(lang,'btn_lang'),'languages'),button(t(lang,'btn_help'),'help')],[button(t(lang,'btn_about'),'about')],back(lang)]));
- if(data==='help'||data==='about')return screen(id,data==='help'?tr(lang,'1. Добавьте участок: культура, площадь, почва и точка на карте.\n2. Откройте «Мои поля» для актуального расчёта.\n3. После полива отметьте объём.\n4. Для вопросов и фото растений откройте ИИ-агронома.','1. Алқап қосыңыз: дақыл, аудан, топырақ және картадағы нүкте.\n2. Жаңа есеп үшін «Менің алқаптарым» бөліміне өтіңіз.\n3. Суарған соң көлемін белгілеңіз.\n4. Өсімдік фотосы мен сұрақтар үшін ЖИ-агрономды ашыңыз.','1. Add a field: crop, area, soil and map location.\n2. Open My fields for a current calculation.\n3. After watering, record the amount.\n4. Open AI agronomist for plant photos and questions.'):tr(lang,'Su-Tech рассчитывает потребность в поливе по погоде Open-Meteo, культуре и почве. Методика: FAO-56. ИИ помогает с уходом и видимыми симптомами растений.','Su-Tech Open-Meteo ауа райы, дақыл және топырақ бойынша суару қажеттілігін есептейді. Әдістеме: FAO-56. ЖИ өсімдік күтімі мен көрінетін белгілерді түсіндіреді.','Su-Tech estimates irrigation needs using Open-Meteo weather, crop and soil. Method: FAO-56. AI helps with plant care and visible symptoms.'),keyboard([back(lang)]));
+ if(data==='more')return show(tr(lang,'Настройки и помощь','Баптаулар мен көмек','Settings and help'),keyboard([[button(t(lang,'btn_lang'),'languages'),button(t(lang,'btn_help'),'help')],[button(t(lang,'btn_about'),'about')],back(lang)]));
+ if(data==='help'||data==='about')return show(data==='help'?tr(lang,'1. Добавьте участок: культура, площадь, почва и точка на карте.\n2. Откройте «Мои поля» для актуального расчёта.\n3. После полива отметьте объём.\n4. Для вопросов и фото растений откройте ИИ-агронома.','1. Алқап қосыңыз: дақыл, аудан, топырақ және картадағы нүкте.\n2. Жаңа есеп үшін «Менің алқаптарым» бөліміне өтіңіз.\n3. Суарған соң көлемін белгілеңіз.\n4. Өсімдік фотосы мен сұрақтар үшін ЖИ-агрономды ашыңыз.','1. Add a field: crop, area, soil and map location.\n2. Open My fields for a current calculation.\n3. After watering, record the amount.\n4. Open AI agronomist for plant photos and questions.'):tr(lang,'Su-Tech рассчитывает потребность в поливе по погоде Open-Meteo, культуре и почве. Методика: FAO-56. ИИ помогает с уходом и видимыми симптомами растений.','Su-Tech Open-Meteo ауа райы, дақыл және топырақ бойынша суару қажеттілігін есептейді. Әдістеме: FAO-56. ЖИ өсімдік күтімі мен көрінетін белгілерді түсіндіреді.','Su-Tech estimates irrigation needs using Open-Meteo weather, crop and soil. Method: FAO-56. AI helps with plant care and visible symptoms.'),keyboard([back(lang)]));
  const [type,value]=data.split(':');
  if(['field','explain','water','delete','confirmdelete','export'].includes(type)){
   const row=type==='field'?await refresh(id,value):await ownedField(id,value);
-  if(type==='delete')return screen(id,tr(lang,'Удалить это поле?','Бұл алқап жойылсын ба?','Delete this field?'),keyboard([[button(tr(lang,'Удалить','Жою','Delete'),`confirmdelete:${value}`),button(t(lang,'btn_cancel'),`field:${value}`)]]));
-  if(type==='confirmdelete'){await remove(`field:${value}`,id,'field');return fieldsScreen(id,lang);}
+  if(type==='delete')return show(tr(lang,'Удалить это поле?','Бұл алқап жойылсын ба?','Delete this field?'),keyboard([[button(tr(lang,'Удалить','Жою','Delete'),`confirmdelete:${value}`),button(t(lang,'btn_cancel'),`field:${value}`)]]));
+  if(type==='confirmdelete'){await remove(`field:${value}`,id,'field');return fieldsScreen(id,lang,0,u.generation);}
   if(type==='water'){
    u.mode='water';u.water={id:row.id,expected:row.deficit,revision:row.revision};await saveUser(id,u);
-   return screen(id,tr(lang,'Сколько воды подали на самом деле? Введите объём в м³. Например: 0.2\n\nПодтверждайте только выполненный полив.','Нақты қанша су берілді? Көлемді м³-пен жазыңыз. Мысалы: 0.2\n\nТек орындалған суаруды растаңыз.','How much water did you actually apply? Enter m³, for example: 0.2.\n\nRecord only completed irrigation.'),keyboard([[button(t(lang,'btn_cancel'),`field:${value}`)]]));
+   return show(tr(lang,'Сколько воды подали на самом деле? Введите объём в м³. Например: 0.2\n\nПодтверждайте только выполненный полив.','Нақты қанша су берілді? Көлемді м³-пен жазыңыз. Мысалы: 0.2\n\nТек орындалған суаруды растаңыз.','How much water did you actually apply? Enter m³, for example: 0.2.\n\nRecord only completed irrigation.'),keyboard([[button(t(lang,'btn_cancel'),`field:${value}`)]]));
   }
   if(type==='export'){
    const csv='date,applied_m3,deficit_before_mm,deficit_after_mm\r\n'+(row.events??[]).map(e=>[new Date(e.time).toISOString(),e.applied_m3,e.before,e.after].join(',')).join('\r\n');
    const bytes=new Uint8Array([...csv].map(c=>c.charCodeAt(0)));const doc=await api.sendDocument({chat_id:id,document:new InputFile(bytes,'Su-Tech-irrigation.csv',{type:'text/csv'})});
    u.attachments=[...(u.attachments??[]),doc.message_id];await saveUser(id,u);
   }
-  return screen(id,report(row,lang,type==='explain'),fieldButtons(row,lang));
+  return show(report(row,lang,type==='explain'),fieldButtons(row,lang));
  }
- return home(id,lang);
+ return home(id,lang,u.generation);
 }
 export async function callback(q,ctx) {
  if(q.message?.chat?.type!=='private'||q.message.chat.id!==q.from?.id)return;

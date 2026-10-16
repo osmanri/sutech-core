@@ -24,6 +24,6 @@ export async function screen(id,text,markup,expectedGeneration=null) {
   u.screen=msg.message_id;await saveUser(id,u);return msg.message_id;
 }
 export const navigate=(id,mode='home')=>navigateUser(id,mode);
-export const home=(id,lang)=>screen(id,tr(lang,'<b>Su-Tech</b>\nПолив, поля и помощь по растениям. Выберите действие.','<b>Su-Tech</b>\nСуару, алқаптар және өсімдіктерге көмек. Әрекетті таңдаңыз.','<b>Su-Tech</b>\nIrrigation, fields and plant advice. Choose an action.'),homeKeys(lang));
+export const home=(id,lang,generation=null)=>screen(id,tr(lang,'<b>Su-Tech</b>\nПолив, поля и помощь по растениям. Выберите действие.','<b>Su-Tech</b>\nСуару, алқаптар және өсімдіктерге көмек. Әрекетті таңдаңыз.','<b>Su-Tech</b>\nIrrigation, fields and plant advice. Choose an action.'),homeKeys(lang),generation);
 export function languages(lang) {return keyboard([[button('Русский','lang:ru'),button('Қазақша','lang:kz'),button('English','lang:en')],back(lang)]);}
 export function aiKeys(lang){return keyboard([[button(a(lang,'new_button'),'ai:new'),button(tr(lang,'История ИИ','ЖИ тарихы','AI history'),'ai:history')],[button(tr(lang,'Рассчитать полив в чате','Чатта суару есебі','Calculate in chat'),'plan')],back(lang)]);}
