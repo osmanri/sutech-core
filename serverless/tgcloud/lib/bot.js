@@ -8,6 +8,7 @@ import {calculateField,ownedField,refresh,report,currentResult,waterField,card} 
 import {parseField} from './balance.js';
 import {planScreen,planInput} from './planner.js';
 import {pilot,feedback,p} from './pilot.js';
+import {rememberMessage} from './screens.js';
 const fieldButtons=(row,lang)=>keyboard([
  [button(t(lang,'btn_explain'),`explain:${row.id}`)],
  [button(p(lang,'useful'),`vote:${row.id}:y`),button(p(lang,'unhelpful'),`vote:${row.id}:n`)],
@@ -47,7 +48,7 @@ export async function action(id,data) {
  const show=(text,markup,plain=false)=>screen(id,text,markup,u.generation,plain);
  if(data==='home')return home(id,lang,u.generation);
  if(data==='languages')return show('Русский / Қазақша / English',languages(lang));
- if(data.startsWith('lang:')){const selected=data.slice(5);if(!['ru','kz','en'].includes(selected))return;u.lang=selected;await saveUser(id,u);await api.setChatMenuButton({chat_id:id,menu_button:{type:'web_app',text:'Su-Tech',web_app:{url:APP_URL+'?lang='+selected}}});return home(id,selected,u.generation);}
+ if(data.startsWith('lang:')){const selected=data.slice(5);if(!['ru','kz','en'].includes(selected))return;u.lang=selected;u.languageChosen=true;await saveUser(id,u);await api.setChatMenuButton({chat_id:id,menu_button:{type:'web_app',text:'Su-Tech',web_app:{url:APP_URL+'?lang='+selected}}});return home(id,selected,u.generation);}
  if(data==='app')return show(tr(lang,'Настройте участок — расчёт придёт сюда.','Алқапты баптаңыз — есеп осы чатқа келеді.','Set up a field; the result will arrive here.'),keyboard([[{text:t(lang,'btn_webapp'),web_app:{url:APP_URL+'?lang='+lang}}],[button(tr(lang,'Расчёт в чате','Чатта есептеу','Plan in chat'),'plan')],back(lang)]));
  if(data==='ai'||data==='ai:new'){
   if(data==='ai:new')await remove(`ai-context:${id}`,id,'ai-context');
@@ -100,20 +101,28 @@ export async function action(id,data) {
 }
 export async function callback(q,ctx) {
  if(q.message?.chat?.type!=='private'||q.message.chat.id!==q.from?.id)return;
- const id=ownerId(q.from.id);await api.answerCallbackQuery({callback_query_id:q.id});
+ const id=ownerId(q.from.id);
+ // Expired callback spinners must not prevent the actual button action.
+ try{await api.answerCallbackQuery({callback_query_id:q.id});}catch{}
+ await rememberMessage(id,q.message.message_id,q.message.date);
  const u=await user(id,q.from.language_code),data=String(q.data??'');
  if(data.startsWith('p:')){
-  if(u.mode!=='plan'||!u.draft)return;
+  if(u.mode!=='plan'||!u.draft)return action(id,'home');
   const [,generation,step,...raw]=data.split(':');
-  if(u.generation!==Number(generation)||u.draft.step!==Number(step))return;
+  if(u.generation!==Number(generation)||u.draft.step!==Number(step))return planScreen(id);
   const payload=await planInput(id,raw.join(':'),{generation:Number(generation),step:Number(step)});
   if(payload)await deliverCalculation(id,payload);return;
  }
- if(q.message.message_id!==u.screen)await ignoreDelete(id,q.message.message_id);
  for(const mid of u.attachments??[])await ignoreDelete(id,mid);
  if(u.attachments?.length){u.attachments=[];await saveUser(id,u);}
  try{await action(id,data);}
- catch(e){if(!['not_found','stale','season_ended','weather','busy'].includes(e.message))throw e;
+ catch(e){
+  if(e.message==='stale'){
+   const fresh=await user(id);
+   if(fresh.mode==='plan'&&fresh.draft)return planScreen(id);
+   return fresh.mode==='ai'?screen(id,esc(a(fresh.lang,'intro')),aiKeys(fresh.lang),fresh.generation):home(id,fresh.lang,fresh.generation);
+  }
+  if(!['not_found','season_ended','weather','busy'].includes(e.message))throw e;
   await screen(id,tr(u.lang,'Не удалось открыть актуальный расчёт. Вернитесь к списку полей или повторите позже.','Жаңа есеп ашылмады. Алқаптар тізіміне оралыңыз немесе кейін қайталаңыз.','Could not open a current calculation. Return to your fields or try again later.'),keyboard([[button(t(u.lang,'btn_fields'),'fields')],back(u.lang)]));}
 }
 function matchingButton(text){
@@ -130,11 +139,12 @@ export async function message(m,ctx) {
   const notice=await api.sendMessage({chat_id:id,text:'Su-Tech',reply_markup:{remove_keyboard:true}});
   await ignoreDelete(id,notice.message_id);u.keyboardReset=true;await saveUser(id,u);
  }
- await ignoreDelete(id,m.message_id);
+ if(!await ignoreDelete(id,m.message_id))await rememberMessage(id,m.message_id,m.date);
  if(text.startsWith('/start')){
   const entry=text.split(/\s+/)[1]??'',match=entry.match(/^(app|ai|pilot)_(ru|kz|en)$/);
   if(match){u.lang=match[2];await saveUser(id,u);return action(id,match[1]);}
-  await navigate(id);return screen(id,'Su-Tech\nРусский / Қазақша / English',languages(u.lang));
+  if(u.languageChosen||u.screen)return action(id,'home');
+  const initial=await navigate(id);return screen(id,'Su-Tech\nРусский / Қазақша / English',languages(u.lang),initial.generation);
  }
  const command=text.split(/\s|@/)[0].toLowerCase();
  const route=matchingButton(text)??({'/menu':'home','/exit':'home','/cancel':'home','/app':'app','/help':'help','/about':'about','/language':'languages','/ai':'ai','/newchat':'ai:new','/pilot':'pilot','/plan':'plan','/fields':'fields','/history':'history'}[command]);

@@ -34,9 +34,15 @@ export async function user(id,lang) {
 }
 export async function saveUser(id,u) {
   const {_id,_updated,...value}=u;
-  const result=await db.run('UPDATE records SET body=:body,updated=:time WHERE id=:id AND owner=:owner AND json_extract(body,\'$.generation\')=:generation RETURNING id',{
+  // The renderer owns the screen pointer; an older planner/AI snapshot must
+  // never overwrite it while saving unrelated conversation settings.
+  const result=await db.run('UPDATE records SET body=json_set(:body,\'$.screen\',json_extract(body,\'$.screen\')),updated=:time WHERE id=:id AND owner=:owner AND json_extract(body,\'$.generation\')=:generation RETURNING id',{
     ':id':`user:${id}`,':owner':id,':body':JSON.stringify(value),':time':now(),':generation':u.generation});
   if(!result.rows?.length)throw new Error('stale');
+}
+export async function setScreen(id,messageId) {
+  await db.run("UPDATE records SET body=json_set(body,'$.screen',:message),updated=:time WHERE id=:id AND owner=:owner",{
+    ':id':`user:${id}`,':owner':ownerId(id),':message':messageId,':time':now()});
 }
 export async function navigateUser(id,mode) {
   await user(id);

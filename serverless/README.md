@@ -58,6 +58,15 @@ queries to that user. A payload's `user_id` never determines the owner.
 - Additional tests cover cross-user access, concurrent quota reservations,
   duplicate updates, duplicate watering, language menus, stale AI replies,
   navigation generations, expired sessions and browser transport.
+- Menus use one editable message per chat. A durable per-chat render lease and
+  latest-view mailbox serialize fast taps; unrelated user saves preserve the
+  message pointer. Expired callback acknowledgements do not stop navigation.
+  Known old menus are removed after rendering; clicking an orphan menu registers
+  it for cleanup. Telegram messages older than 48 hours have their buttons
+  disabled when deletion is unavailable. Field and AI history stay in storage.
+- `node admin.mjs ui-smoke` checks rendering against the real Telegram SQLite
+  runtime with a temporary fake Bot API and an isolated, cleaned-up fixture owner.
+  It sends no chat messages and makes no Gemini requests.
 - AI: 20 attempted questions per user in a rolling 24-hour window. Chat reset
   does not reset this counter. Unrelated text is rejected before an API call.
 - At most one extra provider attempt is made for HTTP 500/502/503/504. API keys,

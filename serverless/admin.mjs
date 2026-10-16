@@ -12,8 +12,8 @@ const secrets=Object.entries(env).filter(([k,v])=>v&&/TOKEN|SECRET|KEY|DATABASE/
 const sources={};
 function scan(dir){for(const e of fs.readdirSync(dir,{withFileTypes:true})){const p=path.join(dir,e.name);if(e.isDirectory())scan(p);else if(p.endsWith('.js'))sources[path.relative(path.join(root,'tgcloud'),p).replaceAll('\\','/').replace(/\.js$/,'')]=fs.readFileSync(p,'utf8');}}
 scan(path.join(root,'tgcloud'));
-async function run(code,args={}){
- const space={...sources,'endpoints/maintenance':code};
+async function run(code,args={},overrides={}){
+ const space={...sources,...overrides,'endpoints/maintenance':code};
  const r=await runFunction(env.TGCLOUD_TOKEN,'endpoints/maintenance',space,args,{});
  if(r.error)throw new Error('Runtime rejected maintenance module: '+JSON.stringify(r.error));
  return r;
@@ -25,6 +25,14 @@ try {
   const r=await run(`import {api,db} from 'sdk';import {parseField,calculate} from '../lib/balance.js';import {put,get,lock,unlock} from '../lib/store.js';
   export default async function(){const me=await api.getMe();await put('migration-smoke',0,'smoke',{ok:true});const row=await get('migration-smoke',0);const token=await lock('migration-smoke');await unlock('migration-smoke',token);await db.run('DELETE FROM records WHERE id=:id AND owner=0',{':id':'migration-smoke'});return {username:me.username,bot_id:me.id,database:row.ok,lock:!!token,calculation:calculate(parseField({balance_version:2,crop:'tomato',soil_type:'loam',area:.1,area_unit:'hectare',irrigation_type:'drip',day_of_growth:30,moisture_condition:'dry'}),5,0).gross_m3};}`);
   console.log(JSON.stringify(r));
+ }else if(command==='ui-smoke'){
+  const original=sources['lib/screens'];
+  const apiImport="import {api,db} from 'sdk';";
+  if(!original.includes(apiImport))throw new Error('Review UI smoke test imports');
+  const fakeApi=`export const live=new Map();let mid=1;export let rejectEdit=false;export function failEdit(value){rejectEdit=value;}export const api={async sendMessage(p){const m={...p,message_id:mid++};live.set(m.message_id,m);return m;},async editMessageText(p){if(rejectEdit)throw Object.assign(new Error('Cannot edit'),{code:400,description:'Bad Request: message cannot be edited'});live.set(p.message_id,p);return true;},async deleteMessage(p){live.delete(p.message_id);return true;},async editMessageReplyMarkup(){return true;}};`;
+  const code=`import {db} from 'sdk';import {user,saveUser} from '../lib/store.js';import {screen,keyboard} from '../lib/ui.js';import {live,failEdit} from '../lib/ui_smoke_api.js';
+  export default async function(){const id=4000000000998000;if(await db.get('SELECT id FROM records WHERE owner=:owner LIMIT 1',{':owner':id}))throw new Error('Test namespace is occupied');try{const old=await user(id);await screen(id,'First',keyboard([]));const current=(await user(id)).screen;old.lang='kz';await saveUser(id,old);const preserved=(await user(id)).screen===current;failEdit(true);await screen(id,'Replacement',keyboard([]));failEdit(false);await Promise.all([screen(id,'Parallel A',keyboard([])),screen(id,'Parallel B',keyboard([]))]);return {database:'telegram-sqlite',pointer_preserved:preserved,visible_messages:live.size,latest_text:[...live.values()][0]?.text,passed:preserved&&live.size===1};}finally{await db.run('DELETE FROM records WHERE owner=:owner',{':owner':id});await db.run('DELETE FROM leases WHERE id=:id',{':id':'ui-render:'+id});}}`;
+  console.log(JSON.stringify(await run(code,{}, {'lib/screens':original.replace(apiImport,"import {db} from 'sdk';import {api} from './ui_smoke_api.js';"),'lib/ui_smoke_api':fakeApi})));
  }else if(command==='ai-smoke'){
   console.log(JSON.stringify(await run(`import {providerReply} from '../lib/ai.js';import {setting} from '../lib/store.js';export default async function(input){const key=await setting('gemini_key'),model=await setting('gemini_model');try{const r=await providerReply({key,model,lang:input.lang,text:input.text});return {model,characters:r.answer.length,answer:r.answer};}catch(e){return {model,error:e.message,http_status:e.httpStatus??null};}}`,{lang:'kz',text:'Қызанақтың жапырағы сарғайды. Алдымен нені тексеру керек? Екі қысқа сөйлеммен жауап бер.'})));
  }else if(command==='weather-smoke'){

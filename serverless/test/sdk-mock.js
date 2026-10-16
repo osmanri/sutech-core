@@ -10,9 +10,18 @@ export const db={
  async run(q,p={}){const s=connection.prepare(q);if(/RETURNING\s+/i.test(q)){const rows=s.all(p);return {rows,rowsAffected:rows.length};}const r=s.run(p);return {rows:[],rowsAffected:Number(r.changes),lastInsertRowid:Number(r.lastInsertRowid)};}
 };
 export const messages=[];let nextId=100;
+let apiHandler=null;
+export function setApiHandler(handler){apiHandler=handler;}
+export const liveMessages=new Map();
 export const api=new Proxy({}, {get:(_,method)=>async(params={})=>{
  messages.push({method,params});
- if(method==='sendMessage'||method==='sendDocument')return {message_id:nextId++,text:params.text};
+ const intercepted=apiHandler?await apiHandler(method,params):undefined;
+ if(intercepted!==undefined)return intercepted;
+ if(method==='sendMessage'||method==='sendDocument'){
+  const message={...params,message_id:nextId++};liveMessages.set(`${params.chat_id}:${message.message_id}`,message);return message;
+ }
+ if(method==='editMessageText')liveMessages.set(`${params.chat_id}:${params.message_id}`,{...params});
+ if(method==='deleteMessage')liveMessages.delete(`${params.chat_id}:${params.message_id}`);
  if(method==='getFileContent')return new Uint8Array([255,216,255,0]);
  return true;
 }});
