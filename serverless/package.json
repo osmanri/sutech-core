@@ -1,0 +1,15 @@
+{
+  "name": "sutech-telegram-serverless",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node --experimental-loader ./test/sdk-loader.mjs --test test/*.test.js",
+    "build": "node build.mjs",
+    "status": "node cli.mjs status",
+    "deploy": "npm run build && node cli.mjs push"
+  },
+  "devDependencies": {
+    "@tgcloud/cli": "0.2.0"
+  }
+}

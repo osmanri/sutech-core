@@ -1,0 +1,29 @@
+import {api} from 'sdk';
+import {user,saveUser,navigateUser} from './store.js';
+import {tr,t,a,esc,language} from './i18n.js';
+export const APP_URL='https://app8796056339.tgcloud.ai/';
+export const button=(text,data)=>({text,callback_data:data});
+export const keyboard=rows=>({inline_keyboard:rows.filter(row=>row.length)});
+export const back=lang=>[button(tr(lang,'‹ Назад','‹ Артқа','‹ Back'),'home')];
+export function homeKeys(lang) {return keyboard([
+  [{text:t(lang,'btn_webapp'),web_app:{url:`${APP_URL}?lang=${language(lang)}`}}],
+  [button(a(lang,'button'),'ai')],
+  [button(t(lang,'btn_fields'),'fields'),button(t(lang,'btn_history'),'history')],
+  [button(tr(lang,'Ещё','Тағы','More'),'more')]
+]);}
+export async function ignoreDelete(chat,id) {if(id)try{await api.deleteMessage({chat_id:chat,message_id:id});}catch(e){if(![400,403].includes(e.code))throw e;}}
+export async function screen(id,text,markup,expectedGeneration=null) {
+  let u=await user(id);if(expectedGeneration!==null && u.generation!==expectedGeneration)return null;
+  const params={chat_id:id,text:text.slice(0,4000),parse_mode:'HTML',reply_markup:markup??keyboard([back(u.lang)]),link_preview_options:{is_disabled:true}};
+  if(u.screen){
+    try {await api.editMessageText({...params,message_id:u.screen});return u.screen;}
+    catch(e){if(e.code===400&&/not modified/i.test(e.description??''))return u.screen;if(e.code!==400)throw e;}
+  }
+  const msg=await api.sendMessage(params);u=await user(id);
+  if(expectedGeneration!==null&&u.generation!==expectedGeneration){await ignoreDelete(id,msg.message_id);return null;}
+  u.screen=msg.message_id;await saveUser(id,u);return msg.message_id;
+}
+export const navigate=(id,mode='home')=>navigateUser(id,mode);
+export const home=(id,lang)=>screen(id,tr(lang,'<b>Su-Tech</b>\nПолив, поля и помощь по растениям. Выберите действие.','<b>Su-Tech</b>\nСуару, алқаптар және өсімдіктерге көмек. Әрекетті таңдаңыз.','<b>Su-Tech</b>\nIrrigation, fields and plant advice. Choose an action.'),homeKeys(lang));
+export function languages(lang) {return keyboard([[button('Русский','lang:ru'),button('Қазақша','lang:kz'),button('English','lang:en')],back(lang)]);}
+export function aiKeys(lang){return keyboard([[button(a(lang,'new_button'),'ai:new'),button(tr(lang,'История ИИ','ЖИ тарихы','AI history'),'ai:history')],[button(tr(lang,'Рассчитать полив в чате','Чатта суару есебі','Calculate in chat'),'plan')],back(lang)]);}

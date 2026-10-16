@@ -28,6 +28,7 @@ from bot.handlers.agronomist import agronomist_router, assistant
 from bot.handlers.pilot import pilot_router
 from bot.chat_screens import ChatScreenMiddleware, ScreenSuperseded, screens
 from bot.webapp_fields import fields_today, water_field
+from bot.runtime_guard import assert_legacy_runtime_allowed
 
 try:
     from bot_setup import configure_bot_profile
@@ -271,6 +272,7 @@ async def start_http_server(bot: Bot, dp: Dispatcher) -> web.AppRunner:
 
 
 async def main() -> None:
+    assert_legacy_runtime_allowed()
     logger.info("Starting Su-Tech bot")
     init_db()
 

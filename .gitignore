@@ -4,6 +4,11 @@
 !.env.example
 !**/.env.example
 
+# Telegram Serverless local access credentials and CLI cache
+**/.tgcloud/
+serverless/node_modules/
+serverless/dist/
+
 # Python runtime files
 __pycache__/
 *.py[cod]
