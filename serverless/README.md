@@ -69,6 +69,13 @@ queries to that user. A payload's `user_id` never determines the owner.
   It sends no chat messages and makes no Gemini requests.
 - AI: 20 attempted questions per user in a rolling 24-hour window. Chat reset
   does not reset this counter. Unrelated text is rejected before an API call.
+- Short greetings, thanks and capability questions receive localized, instant
+  replies without provider calls, quota usage or polluting saved AI history.
+  Descriptions of symptoms still reach Gemini with the conversation context.
+  Responses use a warm conversational style and a few relevant emoji.
+- Inline buttons use native Telegram styles: green for opening the app and
+  calculation/recording actions, blue for AI, red for deletion. Labels and neutral
+  back buttons remain usable in clients that do not display the accent colors.
 - At most one extra provider attempt is made for HTTP 500/502/503/504. API keys,
   raw provider errors and photos are not written to chat history or logs.
 - Photos provide preliminary symptom assessment. No field trial or hardware

@@ -1,9 +1,10 @@
 import {fetch,api} from 'sdk';
-import {get,put,list,lock,unlock,setting,reserveAI,user,nonce} from './store.js';
+import {get,put,list,lock,unlock,setting,reserveAI,user,saveUser,nonce} from './store.js';
 import {inScope} from './scope.js';
 import {PROMPTS} from './knowledge.js';
 import {screen,aiKeys} from './ui.js';
 import {a,tr,esc} from './i18n.js';
+import {quickReply,CONVERSATION_STYLE} from './conversation.js';
 function base64(bytes){
  const chars='ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';let out='';
  for(let i=0;i<bytes.length;i+=3){const n=(bytes[i]<<16)|((bytes[i+1]??0)<<8)|(bytes[i+2]??0);out+=chars[(n>>>18)&63]+chars[(n>>>12)&63]+(i+1<bytes.length?chars[(n>>>6)&63]:'=')+(i+2<bytes.length?chars[n&63]:'=');}
@@ -22,7 +23,7 @@ export async function providerReply({key,model,text,lang,history=[],image=null,d
  const gen=model.startsWith('gemini-3')?{maxOutputTokens:4096,thinkingConfig:{thinkingLevel:deep?'MEDIUM':'LOW'}}:{temperature:.25,maxOutputTokens:1200};
  const response=await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`,{
   method:'POST',headers:{'Content-Type':'application/json','x-goog-api-key':key},
-  body:JSON.stringify({systemInstruction:{parts:[{text:PROMPTS[lang]??PROMPTS.ru}]},contents:[...history,{role:'user',parts}],generationConfig:gen})});
+  body:JSON.stringify({systemInstruction:{parts:[{text:(PROMPTS[lang]??PROMPTS.ru)+CONVERSATION_STYLE}]},contents:[...history,{role:'user',parts}],generationConfig:gen})});
  if(!response.ok){const error=new Error(response.status===429?'quota':[400,401,403,404].includes(response.status)?'configuration':'unavailable');error.httpStatus=response.status;throw error;}
  const data=await response.json(),candidate=data.candidates?.[0];
  if(!candidate||!['STOP','MAX_TOKENS',undefined].includes(candidate.finishReason))throw new Error('no_answer');
@@ -36,6 +37,8 @@ export async function generate(id,text,lang,image=null,deep=false) {
  const guard=`ai:${id}`,token=await lock(guard,75);if(!token)throw new Error('busy');
  try {
   const u=await user(id),generation=u.generation;
+  const local=image?null:quickReply(text,lang);
+  if(local){await screen(id,local,aiKeys(lang),generation,true);return {ok:true,local:true,characters:local.length};}
   const session=await get(`ai-context:${id}`,id);
   let history=session&&Date.now()-session._updated<1800000?session.history??[]:[];
   if(image)history=[];
@@ -45,6 +48,8 @@ export async function generate(id,text,lang,image=null,deep=false) {
   if(session?.model!==model)history=[];
   if(image)imageMime(image);
   await reserveAI(id);
+  // A greeting must not consume the user's selected next-question deep mode.
+  if(u.aiDeep){u.aiDeep=false;await saveUser(id,u);}
   await screen(id,esc(a(lang,image?'working':'thinking')),aiKeys(lang),generation);
   await api.sendChatAction({chat_id:id,action:'typing'});
   let reply;

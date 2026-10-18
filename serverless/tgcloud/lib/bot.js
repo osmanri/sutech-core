@@ -9,6 +9,7 @@ import {parseField} from './balance.js';
 import {planScreen,planInput} from './planner.js';
 import {pilot,feedback,p} from './pilot.js';
 import {rememberMessage} from './screens.js';
+import {aiIntro} from './conversation.js';
 const fieldButtons=(row,lang)=>keyboard([
  [button(t(lang,'btn_explain'),`explain:${row.id}`)],
  [button(p(lang,'useful'),`vote:${row.id}:y`),button(p(lang,'unhelpful'),`vote:${row.id}:n`)],
@@ -52,7 +53,7 @@ export async function action(id,data) {
  if(data==='app')return show(tr(lang,'Настройте участок — расчёт придёт сюда.','Алқапты баптаңыз — есеп осы чатқа келеді.','Set up a field; the result will arrive here.'),keyboard([[{text:t(lang,'btn_webapp'),web_app:{url:APP_URL+'?lang='+lang}}],[button(tr(lang,'Расчёт в чате','Чатта есептеу','Plan in chat'),'plan')],back(lang)]));
  if(data==='ai'||data==='ai:new'){
   if(data==='ai:new')await remove(`ai-context:${id}`,id,'ai-context');
-  return show(esc(a(lang,data==='ai:new'?'cleared':'intro')),aiKeys(lang));
+  return show(esc(data==='ai:new'?a(lang,'cleared'):aiIntro(lang)),aiKeys(lang));
  }
  if(data==='ai:deep'){u.aiDeep=true;await saveUser(id,u);return show(esc(a(lang,'deep_hint')),aiKeys(lang));}
  if(data==='ai:delete')return show(esc(a(lang,'delete_confirm')),keyboard([[button(a(lang,'delete_yes'),'ai:delete:yes')],[button(a(lang,'delete_no'),'ai:history')]]));
@@ -120,7 +121,7 @@ export async function callback(q,ctx) {
   if(e.message==='stale'){
    const fresh=await user(id);
    if(fresh.mode==='plan'&&fresh.draft)return planScreen(id);
-   return fresh.mode==='ai'?screen(id,esc(a(fresh.lang,'intro')),aiKeys(fresh.lang),fresh.generation):home(id,fresh.lang,fresh.generation);
+   return fresh.mode==='ai'?screen(id,esc(aiIntro(fresh.lang)),aiKeys(fresh.lang),fresh.generation):home(id,fresh.lang,fresh.generation);
   }
   if(!['not_found','season_ended','weather','busy'].includes(e.message))throw e;
   await screen(id,tr(u.lang,'Не удалось открыть актуальный расчёт. Вернитесь к списку полей или повторите позже.','Жаңа есеп ашылмады. Алқаптар тізіміне оралыңыз немесе кейін қайталаңыз.','Could not open a current calculation. Return to your fields or try again later.'),keyboard([[button(t(u.lang,'btn_fields'),'fields')],back(u.lang)]));}
@@ -166,11 +167,11 @@ export async function message(m,ctx) {
  try{
   if(photo){if(photo.file_size>4194304)throw new Error('large_image');image=await api.getFileContent(photo.file_id);}
   else if(!text)throw new Error('unsupported');
-  const deep=!!u.aiDeep;if(deep){u.aiDeep=false;await saveUser(id,u);}
+  const deep=!!u.aiDeep;
   await generate(id,text||(a(u.lang,'photo_prompt')),u.lang,image,deep);
  }catch(e){
   const known=['large_image','bad_image','long_text','busy','cooldown','daily_limit','quota','configuration','not_configured','no_answer','unsupported'];
-  const answer=e.message==='off_topic'?tr(u.lang,'Помогаю с растениями, поливом и Su-Tech. Задайте вопрос по этим темам.','Өсімдіктер, суару және Su-Tech бойынша көмектесемін. Осы тақырыптарда сұрақ қойыңыз.','I help with plants, irrigation and Su-Tech. Please ask about these topics.'):a(u.lang,known.includes(e.message)?e.message:'unavailable');
+  const answer=e.message==='off_topic'?tr(u.lang,'С этим не помогу, зато могу подсказать по растениям, поливу и Su-Tech 🌱 Что хочешь узнать?','Бұл сұраққа көмектесе алмаймын, бірақ өсімдік, суару және Su-Tech туралы айта аламын 🌱 Не білгің келеді?','That’s outside my area, but I can help with plants, watering and Su-Tech 🌱 What would you like to know?'):a(u.lang,known.includes(e.message)?e.message:'unavailable');
   await screen(id,esc(answer),aiKeys(u.lang),u.generation);
  }
 }
