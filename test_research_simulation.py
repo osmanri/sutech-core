@@ -3,7 +3,7 @@ import random
 import unittest
 
 from bot.water_balance import CROPS
-from research.simulate import (KY, calendar_decider, mean_daily_demand, run_season, safe_multiplier,
+from research.simulate import (bootstrap_ci, KY, calendar_decider, mean_daily_demand, run_season, safe_multiplier,
                                summarise, sutech_decider)
 from research.sensitivity import forecast_for
 
@@ -60,6 +60,16 @@ class Simulation(unittest.TestCase):
         cal = next(s for s in summarise(rows) if s["strategy"] == "cal")
         self.assertAlmostEqual(cal["sutech_vs_this_pct"], -15.0)
         self.assertEqual(cal["sutech_less_water_in"], 2)
+
+    def test_bootstrap_interval_is_reproducible_and_contains_the_mean(self):
+        vals = [-30.0, -28.0, -27.0, -25.0, -26.0, -31.0, -24.0, -29.0]
+        lo, hi = bootstrap_ci(vals, reps=2000)
+        self.assertEqual((lo, hi), bootstrap_ci(vals, reps=2000))
+        self.assertLess(lo, sum(vals) / len(vals))
+        self.assertGreater(hi, sum(vals) / len(vals))
+        self.assertGreaterEqual(lo, min(vals))
+        self.assertLessEqual(hi, max(vals))
+        self.assertEqual(bootstrap_ci([5.0, 5.0, 5.0], reps=500), (5.0, 5.0))
 
 
 if __name__ == "__main__":

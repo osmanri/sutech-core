@@ -16,14 +16,14 @@ def f(x, nd=0):
     return f"{float(x):,.{nd}f}".replace(",", " ")
 
 
-t1 = ["| Crop, method | Su-Tech water, m³/ha | Equal-yield calendar, m³/ha | Su-Tech saving | Seasons with less water | Plain calendar (same mean dose): Su-Tech vs calendar | Stress days: Su-Tech / plain calendar | Relative yield: Su-Tech / plain calendar |",
-      "|---|---|---|---|---|---|---|---|"]
+t1 = ["| Crop, method | Su-Tech water, m³/ha | Equal-yield calendar, m³/ha | Su-Tech saving (95% CI) | Worst–best season | Seasons with less water | Plain calendar (same mean dose): Su-Tech vs calendar | Stress days: Su-Tech / plain calendar | Relative yield: Su-Tech / plain calendar |",
+      "|---|---|---|---|---|---|---|---|---|"]
 for crop in ("cotton", "corn"):
     for method in ("drip", "furrow"):
         s = row(crop, method, "sutech")
         safe = next(r for r in summ if r["crop"] == crop and r["method"] == method and r["strategy"].endswith("_safe"))
         plain = next(r for r in summ if r["crop"] == crop and r["method"] == method and r["strategy"].endswith("_5d" if method == "drip" else "_10d"))
-        t1.append(f"| {N[crop]}, {N[method]} | {f(s['water_m3_ha'])} | {f(safe['water_m3_ha'])} | **{abs(float(safe['sutech_vs_this_pct'])):.0f}%** | {safe['sutech_less_water_in']}/{safe['n']} | "
+        t1.append(f"| {N[crop]}, {N[method]} | {f(s['water_m3_ha'])} | {f(safe['water_m3_ha'])} | **{abs(float(safe['sutech_vs_this_pct'])):.0f}%** ({abs(float(safe['ci95_high'])):.0f}–{abs(float(safe['ci95_low'])):.0f}%) | {abs(float(safe['pair_max'])):.0f}–{abs(float(safe['pair_min'])):.0f}% | {safe['sutech_less_water_in']}/{safe['n']} | "
                   f"{float(plain['sutech_vs_this_pct']):+.1f}% | {float(s['stress_days']):.0f} / {float(plain['stress_days']):.0f} | {float(s['rel_yield']):.2f} / {float(plain['rel_yield']):.2f} |")
 
 sens = {}
