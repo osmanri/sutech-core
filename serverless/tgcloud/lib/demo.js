@@ -48,7 +48,7 @@ export function demoSteps(lang) {
    '',
    `<b>1. TAW</b> = 1000 × (θfc − θwp) × Zr\n= 1000 × (${fmt(fc,2)} − ${fmt(pwp,2)}) × ${fmt(field.zr,2)} = <b>${fmt(r.taw)} mm</b>`,
    `<b>2. RAW</b> = p × TAW\n= ${fmt(field.p,2)} × ${fmt(r.taw)} = <b>${fmt(r.raw)} mm</b>`,
-   `<b>3. ETc</b> = Kc × ET0\n= ${fmt(field.kc,2)} × ${fmt(r.et0)} = <b>${fmt(r.etc)} mm</b>`,
+   `<b>3. ETc</b> = Ks × Kc × ET0\n= ${fmt(r.ks,2)} × ${fmt(field.kc,2)} × ${fmt(r.et0)} = <b>${fmt(r.etc)} mm</b>\n<i>Ks = 1: ${l('вчера запас ещё не был ниже RAW','кеше қор әлі RAW-дан төмен болмаған','yesterday depletion had not yet passed RAW')}</i>`,
    `<b>4. ${l('Дефицит','Тапшылық','Deficit')}</b> = ${l('вчера','кеше','yesterday')} + ETc − ${l('осадки','жауын','rain')}\n= ${fmt(field.yesterday)} + ${fmt(r.etc)} − ${fmt(r.peff)} = <b>${fmt(r.deficit)} mm</b>`,
    `<b>5. ${l('Решение','Шешім','Decision')}</b>: ${fmt(r.deficit)} ${r.deficit>r.raw?'>':'≤'} RAW ${fmt(r.raw)} mm → <b>${r.status==='critical'?l('запас ниже порога стресса — поливать сейчас','ылғал стресс шегінен төмен — қазір суару','below the stress limit — water now'):r.status==='irrigate'?l('поливать','суару','irrigate'):l('ждать','күту','wait')}</b>`,
    `<b>6. ${l('Объём','Көлем','Volume')}</b> = ${l('дефицит','тапшылық','deficit')} × 10 × ${l('площадь','аудан','area')} ÷ η\n= ${fmt(r.deficit)} × 10 × ${fmt(field.area_ha)} ÷ ${fmt(eff,2)} = <b>${fmt(r.gross_m3)} m³</b>`,

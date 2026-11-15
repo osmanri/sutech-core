@@ -74,7 +74,7 @@ export function report(row,lang,details=false) {
   if(row.gap_days)s+=`\n\n${tr(lang,`Пропуск наблюдений: ${row.gap_days} дн. Проверьте влажность почвы перед поливом.`,`Бақылау үзілісі: ${row.gap_days} күн. Суармас бұрын топырақ ылғалын тексеріңіз.`,`Observation gap: ${row.gap_days} days. Check soil moisture before watering.`)}`;
   if(field.saline)s+='\n\n'+tr(lang,'Засолённая почва: промывной режим определяет агроном.','Тұзданған топырақ: шаю режимін агроном анықтайды.','Saline soil: an agronomist must set the leaching regime.');
   if(details){
-    s+=`\n\n<b>FAO-56</b>\nET0: ${fmt(r.et0)} mm/day\nKc: ${fmt(field.kc)}\nETc: ${fmt(r.etc)} mm/day\n${tr(lang,'Осадки','Жауын-шашын','Rain')}: ${fmt(r.rain)} mm\n${tr(lang,'Дефицит','Тапшылық','Deficit')}: ${fmt(row.deficit)} mm\nTAW: ${fmt(r.taw??0)} mm · RAW: ${fmt(r.raw)} mm\n${esc(t(lang,'report_irrig_'+field.method))}: η = ${fmt(r.efficiency*100)}%`;
+    s+=`\n\n<b>FAO-56</b>\nET0: ${fmt(r.et0)} mm/day\nKc: ${fmt(field.kc)}${r.ks!==undefined&&r.ks<1?` · Ks: ${fmt(r.ks)}`:''}\nETc: ${fmt(r.etc)} mm/day\n${tr(lang,'Осадки','Жауын-шашын','Rain')}: ${fmt(r.rain)} mm\n${tr(lang,'Дефицит','Тапшылық','Deficit')}: ${fmt(row.deficit)} mm\nTAW: ${fmt(r.taw??0)} mm · RAW: ${fmt(r.raw)} mm\n${esc(t(lang,'report_irrig_'+field.method))}: η = ${fmt(r.efficiency*100)}%`;
     if(r.cost!==null)s+=`\n${tr(lang,'Электроэнергия на этот полив','Осы суаруға электр шығыны','Electricity for this watering')}: ${fmt(r.cost)} ₸`;
     if(field.field_type==='greenhouse'&&field.greenhouse_et0===null)s+='\n'+tr(lang,'Для теплицы ET0 оценён как 0,70 наружного значения.','Жылыжай ET0 сыртқы мәннің 0,70 бөлігімен бағаланды.','Greenhouse ET0 uses 0.70 of the outdoor value.');
     s+=`\n${VERSION}`;
