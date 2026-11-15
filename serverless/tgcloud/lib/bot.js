@@ -25,7 +25,10 @@ export async function deliverCalculation(id,payload) {
  await screen(id,tr(u.lang,'Считаю по погоде поля…','Алқап ауа райы бойынша есептеп жатырмын…','Calculating with field weather…'),keyboard([back(u.lang)]),generation);
  try {
   const row=await calculateField(id,payload);
-  await screen(id,report(row,u.lang),fieldButtons(row,u.lang),generation);
+  const notice={reset:tr(u.lang,'Параметры поля изменились — расчёт начат заново по новым данным.','Алқап параметрлері өзгерді — есеп жаңа деректермен басынан басталды.','The field parameters changed, so the balance was restarted from the new data.'),
+   costs:tr(u.lang,'Данные насоса обновлены, запас влаги сохранён.','Сорғы деректері жаңартылды, ылғал қоры сақталды.','Pump data updated; the soil-water balance was kept.'),
+   existing:tr(u.lang,'Это поле уже сохранено, расчёт продолжается. Чтобы поправить влажность, нажмите «Проверил влажность почвы».','Бұл алқап сақталған, есеп жалғасады. Ылғалды түзету үшін «Топырақ ылғалын тексердім» батырмасын басыңыз.','This field is already saved and the balance continues. To correct the moisture, use "I checked the soil moisture".')}[row.submit];
+  await screen(id,(notice?esc(notice)+'\n\n':'')+report(row,u.lang),fieldButtons(row,u.lang),generation);
   return {ok:true,bot_replied:true,field_id:row.id};
  } catch(e) {
   const recoverable=e.message==='weather'||e.message==='busy';

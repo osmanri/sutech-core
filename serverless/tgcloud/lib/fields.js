@@ -14,18 +14,98 @@ export function currentResult(row) {
   const gross_m3=status==='deferred'?0:deficit*10*field.area_ha/METHODS[field.method][1];
   return {...base,deficit,threshold,status,gross_m3,net_m3:gross_m3*METHODS[field.method][1],...economics(gross_m3,deficit,field)};
 }
+const DAY_MS=86400000;
+const addDays=(iso,n)=>new Date(Date.parse(iso+'T00:00:00Z')+n*DAY_MS).toISOString().slice(0,10);
+const diffDays=(a,b)=>Math.round((Date.parse(a+'T00:00:00Z')-Date.parse(b+'T00:00:00Z'))/DAY_MS);
+const localDayOf=(time,offset)=>new Date(time+(Number(offset)||0)*1000).toISOString().slice(0,10);
+// Farmer's own soil check (closed loop): replaces the model's estimate of the root-zone deficit.
+// Levels match the setup form: wet = 0, normal = RAW/2, dry = RAW (FAO-56 readily available water).
+export const SOIL_LEVELS={wet:0,normal:.5,dry:1};
+
+const fieldOn=(row,day)=>parseField({...row.payload,day_of_growth:diffDays(day,row.planting)});
+// Irrigation and soil checks recorded for one field day, in time order (after the last reset).
+function eventsOn(row,day) {
+  const off=row.weather?.utc_offset_seconds;
+  return [...(row.events??[]).map(e=>({...e,kind:'water'})),...(row.checks??[]).map(c=>({...c,kind:'check'}))]
+    .filter(e=>(e.day??localDayOf(e.time,off))===day&&!(row.reset_at&&e.time<row.reset_at))
+    .sort((a,b)=>a.time-b.time);
+}
+// One FAO-56 daily step from the start-of-day depletion, then that day's logged actions:
+// irrigation subtracts its net depth, a soil check sets the depletion to the observed level.
+function stepDay(row,day,start,w) {
+  const field=fieldOn(row,day);field.yesterday=start;
+  const result=calculate(field,w.et0,w.rain);
+  let end=result.deficit;
+  for(const e of eventsOn(row,day)){
+    if(e.kind==='water')end=Math.max(0,end-(e.net_mm??e.applied_m3*METHODS[field.method][1]/(10*field.area_ha)));
+    else end=Math.min(result.taw??Infinity,e.value_mm??SOIL_LEVELS[e.level]*result.raw);
+  }
+  return {result,end};
+}
+// Rows saved before the closed-day model stored only "deficit at the end of last_day" (built from
+// that day's forecast). A past last_day is accepted as closed; if it is today, the start-of-day
+// state is recovered from the stored calculation so today's actions can be replayed.
+function migrate(row,today) {
+  if(row.closed_day)return;
+  if(row.last_day&&row.last_day<today){row.closed_day=row.last_day;row.closed_deficit=row.deficit;}
+  else {
+    const r=row.result??{};
+    row.closed_day=addDays(row.last_day??today,-1);
+    row.closed_deficit=r.unbounded!==undefined?Math.max(0,r.unbounded-r.etc+r.peff):row.deficit;
+  }
+  row.migrated_from=row.version??'legacy';
+}
+// Close every finished day in order with the provider's values for that day, then build today's
+// advice from the forecast without storing the forecast as history.
+function recompute(row,w) {
+  const hist=new Map((w.history??[]).map(h=>[h.day,h]));let d=row.closed_deficit,gaps=0;
+  for(let day=addDays(row.closed_day,1);day<w.day;day=addDays(day,1)){
+    const h=hist.get(day);if(!h)gaps++;
+    d=stepDay(row,day,d,h??{et0:0,rain:0}).end;  // no data: only that day's logged actions apply
+    row.closed_day=day;row.closed_deficit=d;
+  }
+  const today=stepDay(row,w.day,d,w),{history,...forecast}=w;void history;
+  row.result=today.result;row.deficit=today.end;row.last_day=w.day;row.weather=forecast;
+  row.payload.day_of_growth=diffDays(w.day,row.planting);row.gap_days=gaps;row.version=VERSION;
+}
+const PHYSICAL=['crop','soil_type','irrigation_type','field_type','is_saline','greenhouse_et0','custom_kc','custom_root_depth','custom_p','stage_days','area','area_unit'];
+const COSTS=['power_price','pump_power_kw','pump_productivity_m3h'];
+const same=(a,b)=>JSON.stringify(a??null)===JSON.stringify(b??null)||(a!==null&&b!==null&&a!==undefined&&b!==undefined&&a!==''&&b!==''&&Number(a)===Number(b));
+function freshRow(fieldId,key,payload,w,parsed) {
+  const row={id:fieldId,key,payload,planting:addDays(w.day,-parsed.day),closed_day:addDays(w.day,-1),
+    closed_deficit:parsed.yesterday,revision:1,events:[],checks:[],version:VERSION};
+  recompute(row,w);return row;
+}
 export async function calculateField(id,payload) {
   ownerId(id);const parsed=parseField(payload),key=fieldKey(payload,parsed);
   const guard=`field-key:${id}:${key}`,token=await lock(guard,45);if(!token)throw new Error('busy');
   try {
     const existing=(await list(id,'field',100)).find(f=>f.key===key);
     const lat=number(payload.latitude??payload.lat,'latitude',-90,90),lon=number(payload.longitude??payload.lon,'longitude',-180,180);
-    const w=await weather(lat,lon);
-    if(existing)return refresh(id,existing.id,w);
-    const result=calculate(parsed,w.et0,w.rain),fieldId=Date.now()*100+Math.floor(Math.random()*100);
-    const planting=new Date(Date.parse(w.day+'T00:00:00Z')-parsed.day*86400000).toISOString().slice(0,10);
-    const row={id:fieldId,key,payload:{...payload,latitude:lat,longitude:lon},planting,deficit:result.deficit,last_day:w.day,result,weather:w,revision:1,events:[],version:VERSION};
-    await put(`field:${fieldId}`,id,'field',row);
+    const w=await weather(lat,lon),clean={...payload,latitude:lat,longitude:lon};
+    if(existing){
+      migrate(existing,w.day);
+      // The planting date is kept from the stored field (the form may resend a stale day count from a
+      // saved draft); only a change of the field itself restarts the balance.
+      if(PHYSICAL.some(k=>!same(existing.payload[k],payload[k]))){
+        // The farmer corrected the field itself: start the balance again from the new inputs.
+        const row=freshRow(existing.id,key,clean,w,parsed);
+        Object.assign(row,{events:existing.events??[],checks:existing.checks??[],reset_at:Date.now(),revision:(existing.revision??1)+1,submit:'reset'});
+        await put(`field:${row.id}`,id,'field',row);await saveCalculation(id,row);return row;
+      }
+      if(COSTS.some(k=>!same(existing.payload[k],payload[k]))){
+        const guard2=`field:${existing.id}`,t2=await lock(guard2,45);if(!t2)throw new Error('busy');
+        try{
+          const row=await ownedField(id,existing.id);migrate(row,w.day);
+          for(const k of COSTS)row.payload[k]=payload[k]??null;
+          recompute(row,w);row.revision++;row.submit='costs';
+          await put(`field:${row.id}`,id,'field',row);return row;
+        } finally {await unlock(guard2,t2);}
+      }
+      const row=await refresh(id,existing.id,w);row.submit='existing';return row;
+    }
+    const row=freshRow(Date.now()*100+Math.floor(Math.random()*100),key,clean,w,parsed);row.submit='new';
+    await put(`field:${row.id}`,id,'field',row);
     await saveCalculation(id,row);
     return row;
   } finally {await unlock(guard,token);}
@@ -34,14 +114,13 @@ export async function refresh(id,fieldId,w=null) {
   const guard=`field:${fieldId}`,token=await lock(guard,45);if(!token)throw new Error('busy');
   try {
     const row=await ownedField(id,fieldId);w??=await weather(row.payload.latitude,row.payload.longitude);
-    if(row.last_day===w.day)return row;
-    // A daily forecast must not be multiplied across unobserved days.
-    const days=Math.round((Date.parse(w.day+'T00:00:00Z')-Date.parse(row.last_day+'T00:00:00Z'))/86400000);
-    const day=Math.round((Date.parse(w.day+'T00:00:00Z')-Date.parse(row.planting+'T00:00:00Z'))/86400000);
-    const field=parseField({...row.payload,day_of_growth:day});field.yesterday=row.deficit;
-    row.result=calculate(field,w.et0,w.rain);row.deficit=row.result.deficit;row.payload.day_of_growth=day;
-    row.last_day=w.day;row.weather=w;row.revision++;row.gap_days=Math.max(0,days-1);
-    await put(`field:${fieldId}`,id,'field',row);await saveCalculation(id,row);return row;
+    const legacy=!row.closed_day;migrate(row,w.day);
+    // Same day and same forecast: nothing to do. A changed forecast only changes today's advice,
+    // because today is always rebuilt from the closed state and never accumulates twice.
+    if(!legacy&&row.last_day===w.day&&row.weather?.et0===w.et0&&row.weather?.rain===w.rain)return row;
+    const newDay=row.last_day!==w.day;
+    recompute(row,w);row.revision++;
+    await put(`field:${fieldId}`,id,'field',row);if(newDay)await saveCalculation(id,row);return row;
   } finally {await unlock(guard,token);}
 }
 export async function waterField(id,fieldId,applied,expected,revision=null) {
@@ -50,15 +129,13 @@ export async function waterField(id,fieldId,applied,expected,revision=null) {
   try {
     const row=await ownedField(id,fieldId);
     if(Math.abs(row.deficit-expected)>1e-8||(revision!==null&&row.revision!==revision))throw new Error('balance_changed');
-    const f=parseField(row.payload),before=row.deficit;
-    row.deficit=Math.max(0,before-applied*METHODS[f.method][1]/(10*f.area_ha));row.revision++;
-    row.events=[...(row.events??[]),{time:Date.now(),applied_m3:applied,before,after:row.deficit}].slice(-365);
+    migrate(row,row.last_day);
+    const f=parseField(row.payload),before=row.deficit,net_mm=applied*METHODS[f.method][1]/(10*f.area_ha);
+    row.events=[...(row.events??[]),{time:Date.now(),day:row.last_day,applied_m3:applied,net_mm,before}].slice(-365);
+    row.deficit=stepDay(row,row.last_day,row.closed_deficit,row.weather).end;row.events.at(-1).after=row.deficit;row.revision++;
     await put(`field:${fieldId}`,id,'field',row);return row;
   } finally {await unlock(guard,token);}
 }
-// Farmer's own soil check (closed loop): replaces the model's estimate of the root-zone deficit.
-// Levels match the setup form: wet = 0, normal = RAW/2, dry = RAW (FAO-56 readily available water).
-export const SOIL_LEVELS={wet:0,normal:.5,dry:1};
 export async function checkMoisture(id,fieldId,level,revision=null) {
   if(!Object.hasOwn(SOIL_LEVELS,level))throw new Error('bad_level');
   const guard=`field:${fieldId}`,token=await lock(guard,30);if(!token)throw new Error('busy');
@@ -66,9 +143,10 @@ export async function checkMoisture(id,fieldId,level,revision=null) {
     const row=await ownedField(id,fieldId);
     if(revision!==null&&row.revision!==revision)throw new Error('balance_changed');
     const f=parseField(row.payload);if(f.crop==='rice')throw new Error('not_applicable');
-    const base=currentResult(row),before=row.deficit;
-    row.deficit=Math.min(base.taw,SOIL_LEVELS[level]*base.raw);row.revision++;
-    row.checks=[...(row.checks??[]),{time:Date.now(),level,before,after:row.deficit}].slice(-365);
+    migrate(row,row.last_day);
+    const base=currentResult(row),before=row.deficit,value_mm=Math.min(base.taw,SOIL_LEVELS[level]*base.raw);
+    row.checks=[...(row.checks??[]),{time:Date.now(),day:row.last_day,level,value_mm,before}].slice(-365);
+    row.deficit=stepDay(row,row.last_day,row.closed_deficit,row.weather).end;row.checks.at(-1).after=row.deficit;row.revision++;
     await put(`field:${fieldId}`,id,'field',row);return row;
   } finally {await unlock(guard,token);}
 }
