@@ -100,6 +100,8 @@ def et0_penman_monteith(
     if rs is None:
         if sunshine_h is None or ra is None:
             raise ValueError("radiation: give rs, or sunshine_h together with lat_deg and day_of_year")
+        if n_day is None:
+            raise ValueError("lat_deg and day_of_year are needed to convert sunshine hours")
         rs = (0.25 + 0.50 * sunshine_h / n_day) * ra  # eq. 35 with default as, bs
     if ra is None:
         raise ValueError("lat_deg and day_of_year are needed for the clear-sky radiation limit")

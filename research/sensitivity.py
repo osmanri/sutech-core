@@ -6,6 +6,7 @@ Truth = real weather on loam (as in simulate.py). The app decides with:
   * systematic ET0 bias of -20 % / +20 % (a forecast that is always too low / too high);
   * the -20 % bias corrected by a soil-moisture check every 7 or 3 days
     (sensor error N(0, 10 mm) on the root-zone depletion);
+  * the same bias corrected by the bot's three-level check (wet / normal / dry) every 7 or 3 days;
   * wrong soil entered by the farmer: sand or clay instead of loam.
 Outputs water use, stress days and relative yield next to the perfect-information run and
 the equal-yield safe calendar, so every scenario can be judged against the same baseline.
@@ -16,8 +17,9 @@ from __future__ import annotations
 import csv
 import math
 import random
-from pathlib import Path
+from collections.abc import Iterator
 from statistics import mean
+from typing import Any
 
 from research.simulate import (KY, LOCATIONS, ROOT, SAFE_INTERVAL, YEARS, calendar_decider, fetch_power,
                                mean_daily_demand, run_season, safe_multiplier, season_weather, sutech_decider)
@@ -26,7 +28,7 @@ REPLICATES = 20
 SEED = 20261115
 
 
-def scenarios():
+def scenarios() -> Iterator[tuple[str, dict[str, Any]]]:
     yield "perfect", dict()
     for sigma in (0.10, 0.20, 0.30):
         yield f"et0_error_{int(sigma * 100)}pct", dict(sigma=sigma)
@@ -34,6 +36,8 @@ def scenarios():
         yield f"et0_bias_{int(bias * 100):+d}pct", dict(bias=bias)
     for every in (7, 3):
         yield f"et0_bias_-20pct_soil_check_{every}d", dict(bias=-0.20, check_every=every, sensor_sd_mm=10.0)
+    for every in (7, 3):
+        yield f"et0_bias_-20pct_3level_check_{every}d", dict(bias=-0.20, check_every=every, categorical=True)
     yield "rain_never_forecast", dict(no_rain=True)
     for app_soil in ("sand", "clay"):
         yield f"soil_entered_{app_soil}", dict(app_soil=app_soil)
@@ -56,11 +60,12 @@ def run(crop="cotton", method="drip", soil="loam", out=None):
         for y, w in seasons.items():
             safe = run_season(crop, soil, method, w, calendar_decider(n, demand * n * m))
             for name, cfg in scenarios():
-                reps = REPLICATES if (cfg.get("sigma") or cfg.get("sensor_sd_mm")) else 1
+                reps = REPLICATES if (cfg.get("sigma") or cfg.get("sensor_sd_mm")) else 1  # categorical checks are deterministic
                 for _ in range(reps):
                     decide, _ = sutech_decider(crop, soil, method, app_soil=cfg.get("app_soil"),
                                                check_every=cfg.get("check_every"),
-                                               sensor_sd_mm=cfg.get("sensor_sd_mm", 0.0), rng=rng)
+                                               sensor_sd_mm=cfg.get("sensor_sd_mm", 0.0), rng=rng,
+                                               categorical=cfg.get("categorical", False))
                     s = run_season(crop, soil, method, w, decide, forecast_for(w, rng, cfg.get("sigma", 0.0), cfg.get("no_rain", False), cfg.get("bias", 0.0)))
                     rows.append(dict(scenario=name, location=loc, year=y, water_m3_ha=s.gross_mm * 10,
                                      stress_days=s.stress_days, rel_yield=s.relative_yield(KY[crop]),

@@ -4,7 +4,7 @@ import {tr,t,a,esc,volume,fmt,language} from './i18n.js';
 import {STRINGS,AI_STRINGS} from './copy.js';
 import {screen,navigate,home,homeKeys,languages,aiKeys,button,keyboard,back,ignoreDelete,APP_URL} from './ui.js';
 import {generate,aiHistory} from './ai.js';
-import {calculateField,ownedField,refresh,report,currentResult,waterField,card} from './fields.js';
+import {calculateField,ownedField,refresh,report,currentResult,waterField,card,checkMoisture,SOIL_LEVELS} from './fields.js';
 import {parseField} from './balance.js';
 import {planScreen,planInput} from './planner.js';
 import {pilot,feedback,p} from './pilot.js';
@@ -15,6 +15,7 @@ const fieldButtons=(row,lang)=>keyboard([
  [button(t(lang,'btn_explain'),`explain:${row.id}`)],
  [button(p(lang,'useful'),`vote:${row.id}:y`),button(p(lang,'unhelpful'),`vote:${row.id}:n`)],
  ...(currentResult(row).gross_m3>0?[[button(tr(lang,'Отметить полив','Суаруды белгілеу','Record watering'),`water:${row.id}`)]]:[]),
+ ...(parseField(row.payload).crop!=='rice'?[[button(tr(lang,'Проверил влажность почвы','Топырақ ылғалын тексердім','I checked the soil moisture'),`soil:${row.id}`)]]:[]),
  [button(t(lang,'btn_field_update'),`field:${row.id}`),button(t(lang,'btn_export_field'),`export:${row.id}`)],
  [button(tr(lang,'Удалить поле','Алқапты жою','Delete field'),`delete:${row.id}`)],
  [button(t(lang,'btn_fields'),'fields')],back(lang)]);
@@ -83,6 +84,20 @@ export async function action(id,data) {
  if(data==='demo'||data==='demo:steps'){const d=data==='demo'?demoScreen(lang):demoSteps(lang);return show(d.text,d.markup);}
  if(data==='more')return show(tr(lang,'Настройки и помощь','Баптаулар мен көмек','Settings and help'),keyboard([[button(t(lang,'btn_lang'),'languages'),button(t(lang,'btn_help'),'help')],[button(t(lang,'btn_about'),'about'),button(p(lang,'join'),'pilot')],[button(tr(lang,'Демо для жюри','Қазылар үшін демо','Jury demo'),'demo')],back(lang)]));
  if(data==='help'||data==='about')return show(data==='help'?tr(lang,'1. Добавьте участок: культура, площадь, почва и точка на карте.\n2. Откройте «Мои поля» для актуального расчёта.\n3. После полива отметьте объём.\n4. Для вопросов и фото растений откройте ИИ-агронома.','1. Алқап қосыңыз: дақыл, аудан, топырақ және картадағы нүкте.\n2. Жаңа есеп үшін «Менің алқаптарым» бөліміне өтіңіз.\n3. Суарған соң көлемін белгілеңіз.\n4. Өсімдік фотосы мен сұрақтар үшін ЖИ-агрономды ашыңыз.','1. Add a field: crop, area, soil and map location.\n2. Open My fields for a current calculation.\n3. After watering, record the amount.\n4. Open AI agronomist for plant photos and questions.'):tr(lang,'Su-Tech рассчитывает потребность в поливе по погоде Open-Meteo, культуре и почве. Методика: FAO-56. ИИ помогает с уходом и видимыми симптомами растений.','Su-Tech Open-Meteo ауа райы, дақыл және топырақ бойынша суару қажеттілігін есептейді. Әдістеме: FAO-56. ЖИ өсімдік күтімі мен көрінетін белгілерді түсіндіреді.','Su-Tech estimates irrigation needs using Open-Meteo weather, crop and soil. Method: FAO-56. AI helps with plant care and visible symptoms.'),keyboard([back(lang)]));
+ if(data.startsWith('soil:')||data.startsWith('soilset:')){
+  const [kind,fid,level]=data.split(':');
+  if(kind==='soil'){
+   const row=await ownedField(id,fid);
+   return show(tr(lang,'Какая сейчас влажность почвы на глубине корней? Проверьте рукой или щупом. Ответ исправит расчёт — это снижает накопленную ошибку прогноза.','Тамыр тереңдігіндегі топырақ ылғалы қандай? Қолмен немесе щуппен тексеріңіз. Жауап есепті түзетеді.','How moist is the soil at root depth? Check by hand or with a probe. Your answer corrects the calculation and removes accumulated forecast error.'),keyboard([
+    [button(tr(lang,'💧 Влажная','💧 Ылғалды','💧 Wet'),`soilset:${fid}:wet`)],
+    [button(tr(lang,'🌱 Нормальная','🌱 Қалыпты','🌱 Normal'),`soilset:${fid}:normal`)],
+    [button(tr(lang,'🏜 Сухая','🏜 Құрғақ','🏜 Dry'),`soilset:${fid}:dry`)],
+    [button(t(lang,'btn_cancel'),`field:${row.id}`)]]));
+  }
+  if(!Object.hasOwn(SOIL_LEVELS,level))return home(id,lang,u.generation);
+  const row=await checkMoisture(id,fid,level);
+  return show(tr(lang,'✅ Баланс скорректирован по вашей проверке.','✅ Баланс сіздің тексеруіңіз бойынша түзетілді.','✅ Balance corrected from your check.')+'\n\n'+report(row,lang),fieldButtons(row,lang));
+ }
  const [type,value]=data.split(':');
  if(type==='vote'){await feedback(id,value,data.split(':')[2]==='y');const row=await ownedField(id,value);return show(p(lang,'thanks')+'\n\n'+report(row,lang),fieldButtons(row,lang));}
  if(['field','explain','water','delete','confirmdelete','export'].includes(type)){
@@ -125,7 +140,7 @@ export async function callback(q,ctx) {
    if(fresh.mode==='plan'&&fresh.draft)return planScreen(id);
    return fresh.mode==='ai'?screen(id,esc(aiIntro(fresh.lang)),aiKeys(fresh.lang),fresh.generation):home(id,fresh.lang,fresh.generation);
   }
-  if(!['not_found','season_ended','weather','busy'].includes(e.message))throw e;
+  if(!['not_found','season_ended','weather','busy','not_applicable','bad_level'].includes(e.message))throw e;
   await screen(id,tr(u.lang,'Не удалось открыть актуальный расчёт. Вернитесь к списку полей или повторите позже.','Жаңа есеп ашылмады. Алқаптар тізіміне оралыңыз немесе кейін қайталаңыз.','Could not open a current calculation. Return to your fields or try again later.'),keyboard([[button(t(u.lang,'btn_fields'),'fields')],back(u.lang)]));}
 }
 function matchingButton(text){

@@ -56,6 +56,22 @@ export async function waterField(id,fieldId,applied,expected,revision=null) {
     await put(`field:${fieldId}`,id,'field',row);return row;
   } finally {await unlock(guard,token);}
 }
+// Farmer's own soil check (closed loop): replaces the model's estimate of the root-zone deficit.
+// Levels match the setup form: wet = 0, normal = RAW/2, dry = RAW (FAO-56 readily available water).
+export const SOIL_LEVELS={wet:0,normal:.5,dry:1};
+export async function checkMoisture(id,fieldId,level,revision=null) {
+  if(!Object.hasOwn(SOIL_LEVELS,level))throw new Error('bad_level');
+  const guard=`field:${fieldId}`,token=await lock(guard,30);if(!token)throw new Error('busy');
+  try {
+    const row=await ownedField(id,fieldId);
+    if(revision!==null&&row.revision!==revision)throw new Error('balance_changed');
+    const f=parseField(row.payload);if(f.crop==='rice')throw new Error('not_applicable');
+    const base=currentResult(row),before=row.deficit;
+    row.deficit=Math.min(base.taw,SOIL_LEVELS[level]*base.raw);row.revision++;
+    row.checks=[...(row.checks??[]),{time:Date.now(),level,before,after:row.deficit}].slice(-365);
+    await put(`field:${fieldId}`,id,'field',row);return row;
+  } finally {await unlock(guard,token);}
+}
 export async function saveCalculation(id,row) {
   await put(`report:${nonce()}`,id,'report',{field_id:row.id,payload:row.payload,result:row.result,weather:row.weather,created:Date.now()});
 }
