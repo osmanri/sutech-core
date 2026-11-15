@@ -45,7 +45,8 @@ class HardwareBridgeTests(unittest.TestCase):
         self.virtual.send_command("WATER:5.0")
         self.assertTrue(self.virtual.pump_active)
         stop_resp = self.virtual.send_command("STOP")
-        self.assertEqual(stop_resp, "OK:PUMP_OFF:REASON=MANUAL_STOP")
+        # 5 s at the 5 ml/s bench flow = 25 ml; 2.25 pulses per ml -> 56 pulses
+        self.assertEqual(stop_resp, "OK:PUMP_OFF:REASON=MANUAL_STOP:ML=24.9:PULSES=56")
         self.assertFalse(self.virtual.pump_active)
 
     def test_07_hardware_bridge_trigger(self):
@@ -113,6 +114,114 @@ class HardwareBridgeTests(unittest.TestCase):
 
     def test_15_beep_signal(self):
         self.assertTrue(self.bridge.beep())
+
+
+class FlowMeterTests(unittest.TestCase):
+    def setUp(self):
+        self.bridge = HardwareBridge(force_virtual=True)
+        self.virtual = self.bridge._virtual
+
+    def test_dose_water_reaches_target(self):
+        before = self.bridge.get_weight()
+        r = self.bridge.dose_water(40)
+        self.assertTrue(r["success"], r)
+        self.assertEqual(r["reason"], "VOLUME_REACHED")
+        self.assertEqual(r["pulses"], 90)
+        self.assertAlmostEqual(r["delivered_ml"], 40.0)
+        self.assertAlmostEqual(self.bridge.get_weight() - before, 40.0, places=1)
+
+    def test_dose_water_rejects_bad_volume(self):
+        for bad in (0, -5, 5000):
+            r = self.bridge.dose_water(bad)
+            self.assertFalse(r["success"])
+        self.assertFalse(self.virtual.events)
+
+    def test_dose_refused_without_calibration_or_water(self):
+        self.virtual.flow_ppml = 0.0
+        r = self.bridge.dose_water(40)
+        self.assertFalse(r["success"])
+        self.assertEqual(r["error"], "ERR:FLOW_NOT_CALIBRATED")
+        self.virtual.flow_ppml = 2.25
+        self.virtual.water_level = 3
+        self.assertIn("ERR:WATER_EMPTY", self.bridge.dose_water(40)["error"])
+
+    def test_calibration_from_timed_run(self):
+        self.virtual.flow_ppml = 0.0
+        self.assertEqual(self.bridge.calibrate_flow(100)["error"], "ERR:NO_FLOW_PULSES")
+        self.bridge.trigger_irrigation(10)      # 50 ml at 5 ml/s -> 112 pulses
+        self.bridge.stop_pump()
+        cal = self.bridge.calibrate_flow(50.0)  # the measuring cylinder shows 50 ml
+        self.assertTrue(cal["success"])
+        self.assertAlmostEqual(cal["pulses_per_ml"], 2.24, places=2)
+        self.assertTrue(self.bridge.get_flow()["calibrated"])
+
+    def test_flow_counter_and_reset(self):
+        self.bridge.dose_water(40)
+        self.assertEqual(self.bridge.get_flow()["pulses"], 90)
+        self.assertTrue(self.bridge.reset_flow())
+        self.assertEqual(self.bridge.get_flow()["pulses"], 0)
+
+
+class FakeSerial:
+    """Scripted serial port: replies to each written command with the queued lines."""
+
+    def __init__(self, script):
+        self.script = list(script)   # list of (expected_command, [lines to send back])
+        self.pending: list[bytes] = []
+        self.written: list[str] = []
+
+    @property
+    def in_waiting(self):
+        return len(self.pending)
+
+    def write(self, data):
+        cmd = data.decode().strip()
+        self.written.append(cmd)
+        expected, lines = self.script.pop(0)
+        assert cmd == expected, (cmd, expected)
+        self.pending.extend(l.encode() + b"\n" for l in lines)
+
+    def readline(self):
+        return self.pending.pop(0) if self.pending else b""
+
+    def reset_input_buffer(self):
+        self.pending.clear()
+
+
+class SerialProtocolTests(unittest.TestCase):
+    def make(self, script):
+        b = HardwareBridge(force_virtual=True)
+        b._serial = FakeSerial(script)
+        b._is_virtual = False
+        return b
+
+    def test_unsolicited_pump_off_is_not_taken_as_reply(self):
+        # The timer ran out right before SCALE was sent: the EVT line arrives first.
+        b = self.make([("SCALE", ["EVT:PUMP_OFF:REASON=TIMER_COMPLETED:ML=NA:PULSES=0", "OK:SCALE=812.4"])])
+        self.assertEqual(b.get_weight(), 812.4)
+        self.assertEqual(list(b.events), ["EVT:PUMP_OFF:REASON=TIMER_COMPLETED:ML=NA:PULSES=0"])
+
+    def test_stale_lines_are_drained_before_a_command(self):
+        b = self.make([("PING", ["PONG"])])
+        b._serial.pending = [b"EVT:PUMP_OFF:REASON=TIMER_COMPLETED:ML=NA:PULSES=0\n", b"INIT:SU-TECH:v2.1\n"]
+        self.assertTrue(b.ping())
+        self.assertEqual(len(b.events), 1)
+
+    def test_real_dose_reads_pump_off_event(self):
+        b = self.make([("WATER_ML:40.0", ["OK:PUMP_ON:TARGET_ML=40.0",
+                                          "EVT:PUMP_OFF:REASON=VOLUME_REACHED:ML=40.0:PULSES=90"])])
+        r = b.dose_water(40)
+        self.assertTrue(r["success"], r)
+        self.assertEqual(r["mode"], "real")
+        self.assertEqual(r["delivered_ml"], 40.0)
+
+    def test_real_dose_timeout_reports_partial_volume(self):
+        b = self.make([("WATER_ML:40.0", ["OK:PUMP_ON:TARGET_ML=40.0",
+                                          "EVT:PUMP_OFF:REASON=TIMEOUT_BEFORE_VOLUME:ML=4.4:PULSES=10"])])
+        r = b.dose_water(40)
+        self.assertFalse(r["success"])
+        self.assertEqual(r["delivered_ml"], 4.4)
+        self.assertIn("TIMEOUT_BEFORE_VOLUME", r["error"])
 
 
 if __name__ == "__main__":

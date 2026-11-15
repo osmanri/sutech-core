@@ -27,6 +27,19 @@
  *   - TARE              -> OK:TARE:OFFSET=<raw>   (current weight becomes 0 g, saved to EEPROM)
  *   - CALIBRATE:<grams> -> OK:CALIBRATE:FACTOR=<counts per gram>  (put a known mass, then send)
  *   - TELEMETRY additionally ends with :WEIGHT=<grams|NA>
+ *
+ * Flow meter (hall-effect, e.g. YF-S201 / YF-S401) for exact water doses:
+ *   - A2: flow sensor signal (pin-change interrupt; D2/D3 stay with the HX711)
+ *   - FLOW              -> OK:FLOW:PULSES=<total>:ML=<ml|NA>:PPML=<pulses per ml>
+ *   - FLOW_RESET        -> OK:FLOW_RESET   (total counter back to 0)
+ *   - FLOW_CAL:<ml>     -> OK:FLOW_CAL:PPML=<pulses per ml>
+ *                          Run WATER:<sec> into a measuring cylinder first, read the ml, then send this.
+ *   - WATER_ML:<ml>     -> OK:PUMP_ON:TARGET_ML=<ml>   (stops itself when the flow meter counts <ml>)
+ *
+ * Messages the Arduino sends on its own, without a command, start with "EVT:" so the
+ * PC never mistakes them for the answer to its next command:
+ *   - EVT:PUMP_OFF:REASON=<TIMER_COMPLETED|VOLUME_REACHED|TIMEOUT_BEFORE_VOLUME>:ML=<ml|NA>:PULSES=<n>
+ * STOP answers synchronously: OK:PUMP_OFF:REASON=MANUAL_STOP:ML=<ml|NA>:PULSES=<n>
  */
 
 #include <EEPROM.h>
@@ -39,21 +52,73 @@
 #define SOIL_MOISTURE_PIN A1
 #define HX_DT_PIN 2
 #define HX_SCK_PIN 3
+#define FLOW_PIN A2  // PC2 = PCINT10 on the ATmega328P (Arduino Uno / Nano)
 
 #define EEPROM_MAGIC_ADDR 0
 #define EEPROM_OFFSET_ADDR 2
 #define EEPROM_FACTOR_ADDR 6
 #define EEPROM_MAGIC 0x5A
+#define EEPROM_FLOW_MAGIC_ADDR 12
+#define EEPROM_FLOW_FACTOR_ADDR 14
+#define EEPROM_FLOW_MAGIC 0xA5
 
 #define RELAY_ACTIVE HIGH
 #define RELAY_INACTIVE LOW
 
 #define MAX_PUMP_SECONDS 30.0f
 #define MIN_WATER_LEVEL_PCT 8  // Threshold below which pump is blocked (dry-run protection)
+#define MAX_DOSE_ML 1000.0f
 
 bool pumpActive = false;
 unsigned long pumpStartTime = 0;
 unsigned long pumpDurationMs = 0;
+
+// Flow meter: pulses counted in the pin-change interrupt
+volatile unsigned long flowPulses = 0;
+volatile uint8_t flowLastState = 0;
+float flowPulsesPerMl = 0.0f;       // 0 = not calibrated
+bool volumeMode = false;            // pump started by WATER_ML
+unsigned long runStartPulses = 0;
+unsigned long targetPulses = 0;
+unsigned long lastRunPulses = 0;    // pulses of the last finished pump run (for FLOW_CAL)
+
+ISR(PCINT1_vect) {
+  uint8_t state = PINC & _BV(PC2);
+  if (state && !flowLastState) flowPulses++;  // count rising edges only
+  flowLastState = state;
+}
+
+unsigned long readFlowPulses() {
+  noInterrupts();
+  unsigned long p = flowPulses;
+  interrupts();
+  return p;
+}
+
+void loadFlowCalibration() {
+  if (EEPROM.read(EEPROM_FLOW_MAGIC_ADDR) == EEPROM_FLOW_MAGIC) {
+    EEPROM.get(EEPROM_FLOW_FACTOR_ADDR, flowPulsesPerMl);
+  }
+}
+
+void saveFlowCalibration() {
+  EEPROM.put(EEPROM_FLOW_FACTOR_ADDR, flowPulsesPerMl);
+  EEPROM.write(EEPROM_FLOW_MAGIC_ADDR, EEPROM_FLOW_MAGIC);
+}
+
+void printMlOrNA(unsigned long pulses) {
+  if (flowPulsesPerMl > 0.0f) {
+    Serial.print((float)pulses / flowPulsesPerMl, 1);
+  } else {
+    Serial.print("NA");
+  }
+}
+
+// Prototypes (the Arduino IDE adds these itself; explicit for other toolchains)
+void startPump(float seconds, bool byVolume, unsigned long pulsesNeeded);
+void stopPump(const char* reason, bool unsolicited);
+void handleCommand(String cmd);
+void playAlarm();
 
 // Cached environmental sensor values
 float cachedTemp = 24.0f;
@@ -242,6 +307,12 @@ void setup() {
   digitalWrite(HX_SCK_PIN, LOW);
   loadScaleCalibration();
 
+  pinMode(FLOW_PIN, INPUT_PULLUP);
+  flowLastState = PINC & _BV(PC2);
+  PCMSK1 |= _BV(PCINT10);
+  PCICR |= _BV(PCIE1);
+  loadFlowCalibration();
+
   // Startup audio chirp
   playChirp(1200, 150);
 
@@ -257,8 +328,15 @@ void loop() {
   // 1. Fail-safe pump cutoff timer
   if (pumpActive) {
     unsigned long elapsed = millis() - pumpStartTime;
-    if (elapsed >= pumpDurationMs) {
-      stopPump("TIMER_COMPLETED");
+    if (volumeMode && readFlowPulses() - runStartPulses >= targetPulses) {
+      stopPump("VOLUME_REACHED", true);
+    } else if (elapsed >= pumpDurationMs) {
+      if (volumeMode) {
+        playAlarm();  // the dose was not reached: empty tank, air in the hose or a blocked sensor
+        stopPump("TIMEOUT_BEFORE_VOLUME", true);
+      } else {
+        stopPump("TIMER_COMPLETED", true);
+      }
     }
   }
 
@@ -404,7 +482,9 @@ void handleCommand(String cmd) {
       return;
     }
 
-    startPump(seconds);
+    startPump(seconds, false, 0);
+    Serial.print("OK:PUMP_ON:DURATION=");
+    Serial.println(seconds, 2);
   }
   else if (cmd.startsWith("WATER_FORCE:")) {
     String secStr = cmd.substring(12);
@@ -416,35 +496,110 @@ void handleCommand(String cmd) {
     if (seconds > MAX_PUMP_SECONDS) {
       seconds = MAX_PUMP_SECONDS;
     }
-    startPump(seconds);
+    startPump(seconds, false, 0);
+    Serial.print("OK:PUMP_ON:DURATION=");
+    Serial.println(seconds, 2);
   }
   else if (cmd == "STOP") {
-    stopPump("MANUAL_STOP");
+    stopPump("MANUAL_STOP", false);
+  }
+  else if (cmd == "FLOW") {
+    unsigned long p = readFlowPulses();
+    Serial.print("OK:FLOW:PULSES=");
+    Serial.print(p);
+    Serial.print(":ML=");
+    printMlOrNA(p);
+    Serial.print(":PPML=");
+    Serial.println(flowPulsesPerMl, 4);
+  }
+  else if (cmd == "FLOW_RESET") {
+    noInterrupts();
+    flowPulses = 0;
+    interrupts();
+    Serial.println("OK:FLOW_RESET");
+  }
+  else if (cmd.startsWith("FLOW_CAL:")) {
+    float ml = cmd.substring(9).toFloat();
+    if (ml <= 0.0f) {
+      Serial.println("ERR:INVALID_VOLUME");
+      return;
+    }
+    if (pumpActive) {
+      Serial.println("ERR:PUMP_RUNNING");
+      return;
+    }
+    if (lastRunPulses == 0) {
+      Serial.println("ERR:NO_FLOW_PULSES");
+      return;
+    }
+    flowPulsesPerMl = (float)lastRunPulses / ml;
+    saveFlowCalibration();
+    Serial.print("OK:FLOW_CAL:PPML=");
+    Serial.println(flowPulsesPerMl, 4);
+  }
+  else if (cmd.startsWith("WATER_ML:")) {
+    float ml = cmd.substring(9).toFloat();
+    if (ml <= 0.0f || ml > MAX_DOSE_ML) {
+      Serial.println("ERR:INVALID_VOLUME");
+      return;
+    }
+    if (flowPulsesPerMl <= 0.0f) {
+      Serial.println("ERR:FLOW_NOT_CALIBRATED");
+      return;
+    }
+    if (pumpActive) {
+      Serial.println("ERR:PUMP_RUNNING");
+      return;
+    }
+    int waterLvl = readWaterLevelPercent();
+    if (waterLvl < MIN_WATER_LEVEL_PCT) {
+      playAlarm();
+      Serial.print("ERR:WATER_EMPTY:LEVEL=");
+      Serial.println(waterLvl);
+      return;
+    }
+    unsigned long target = (unsigned long)(ml * flowPulsesPerMl + 0.5f);
+    if (target == 0) target = 1;
+    startPump(MAX_PUMP_SECONDS, true, target);
+    Serial.print("OK:PUMP_ON:TARGET_ML=");
+    Serial.println(ml, 1);
   }
   else {
     Serial.println("ERR:UNKNOWN_COMMAND");
   }
 }
 
-void startPump(float seconds) {
+// The caller prints the OK:PUMP_ON reply.
+void startPump(float seconds, bool byVolume, unsigned long pulsesNeeded) {
   pumpDurationMs = (unsigned long)(seconds * 1000.0f);
+  volumeMode = byVolume;
+  targetPulses = pulsesNeeded;
+  runStartPulses = readFlowPulses();
   pumpStartTime = millis();
   pumpActive = true;
 
   digitalWrite(RELAY_PIN, RELAY_ACTIVE);
   digitalWrite(LED_INDICATOR, HIGH);
   playChirp(1400, 120);
-
-  Serial.print("OK:PUMP_ON:DURATION=");
-  Serial.println(seconds, 2);
 }
 
-void stopPump(const char* reason) {
+// unsolicited = true when the Arduino stops the pump by itself (timer / volume):
+// the line then starts with EVT: instead of OK: so it is never read as a command reply.
+void stopPump(const char* reason, bool unsolicited) {
+  bool wasActive = pumpActive;
   pumpActive = false;
+  volumeMode = false;
   digitalWrite(RELAY_PIN, RELAY_INACTIVE);
   digitalWrite(LED_INDICATOR, LOW);
+  if (wasActive) {
+    lastRunPulses = readFlowPulses() - runStartPulses;
+  }
   playChirp(900, 180);
 
-  Serial.print("OK:PUMP_OFF:REASON=");
-  Serial.println(reason);
+  Serial.print(unsolicited ? "EVT:PUMP_OFF:REASON=" : "OK:PUMP_OFF:REASON=");
+  Serial.print(reason);
+  Serial.print(":ML=");
+  printMlOrNA(wasActive ? lastRunPulses : 0);
+  Serial.print(":PULSES=");
+  Serial.println(wasActive ? lastRunPulses : 0);
 }

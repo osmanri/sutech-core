@@ -11,6 +11,13 @@ jobs:
         with:
           python-version: "3.12"
       - run: python -m unittest test_water_balance test_water_stress test_et0 test_experiment test_hardware_bridge test_research_simulation test_calculation_audit
+  firmware:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Pump and flow-meter logic compiled and run on the PC
+        working-directory: firmware/host_test
+        run: g++ -std=c++17 -Wall -I. test_firmware.cpp -o test_firmware && ./test_firmware
   serverless:
     runs-on: ubuntu-latest
     steps:
