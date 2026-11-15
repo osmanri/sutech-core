@@ -9,7 +9,7 @@ Truth = real weather on loam (as in simulate.py). The app decides with:
   * the same bias corrected by the bot's three-level check (wet / normal / dry) every 7 or 3 days;
   * wrong soil entered by the farmer: sand or clay instead of loam.
 Outputs water use, stress days and relative yield next to the perfect-information run and
-the equal-yield safe calendar, so every scenario can be judged against the same baseline.
+the strongest equal-yield calendar (interval and dose searched, see simulate.best_safe_calendar), so every scenario can be judged against the same baseline.
 """
 
 from __future__ import annotations
@@ -21,8 +21,8 @@ from collections.abc import Iterator
 from statistics import mean
 from typing import Any
 
-from research.simulate import (KY, LOCATIONS, ROOT, SAFE_INTERVAL, YEARS, calendar_decider, fetch_power,
-                               mean_daily_demand, run_season, safe_multiplier, season_weather, sutech_decider)
+from research.simulate import (KY, LOCATIONS, ROOT, YEARS, best_safe_calendar, calendar_decider, fetch_power,
+                               mean_daily_demand, run_season, season_weather, sutech_decider)
 
 REPLICATES = 20
 SEED = 20261115
@@ -55,8 +55,7 @@ def run(crop="cotton", method="drip", soil="loam", out=None):
     for loc, (lat, lon) in LOCATIONS.items():
         seasons = {y: season_weather(fetch_power(loc, lat, lon, y), crop, y) for y in YEARS}
         demand = mean_daily_demand(crop, soil, method, list(seasons.values()))
-        n = SAFE_INTERVAL[method]
-        m = safe_multiplier(crop, soil, method, list(seasons.values()), n, demand)
+        n, m = best_safe_calendar(crop, soil, method, list(seasons.values()), demand)
         for y, w in seasons.items():
             safe = run_season(crop, soil, method, w, calendar_decider(n, demand * n * m))
             for name, cfg in scenarios():

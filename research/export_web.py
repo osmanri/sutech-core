@@ -25,7 +25,7 @@ def build() -> dict:
     for crop in ("cotton", "corn"):
         for method in ("drip", "furrow"):
             sut = next(r for r in summ if (r["crop"], r["method"], r["strategy"]) == (crop, method, "sutech"))
-            safe = next(r for r in summ if r["crop"] == crop and r["method"] == method and r["strategy"].endswith("_safe"))
+            safe = next(r for r in summ if r["crop"] == crop and r["method"] == method and r["strategy"] == "calendar_best")
             plain = next(r for r in summ if r["crop"] == crop and r["method"] == method
                          and r["strategy"] == ("calendar_5d" if method == "drip" else "calendar_10d"))
             combos.append(dict(

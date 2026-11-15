@@ -34,6 +34,7 @@ import urllib.error
 import urllib.parse
 import urllib.request
 from dataclasses import dataclass, replace
+from functools import lru_cache
 from datetime import date, timedelta
 from pathlib import Path
 from statistics import mean, stdev
@@ -57,6 +58,7 @@ KY = {"cotton": 0.85, "corn": 1.25}  # FAO-33 seasonal yield response factors
 CALENDAR_DAYS = {"drip": (3, 5, 7), "furrow": (7, 10, 14)}
 SAFE_INTERVAL = {"drip": 5, "furrow": 10}
 SAFE_MIN_YIELD = 0.98  # "safe" calendar: every season of the location keeps >= 98 % relative yield
+BEST_INTERVALS = {"drip": range(1, 8), "furrow": range(5, 22)}  # practical calendar intervals, days
 PUMP_KW, PUMP_M3H = 22.0, 60.0  # project reference pump, for kWh only
 
 
@@ -154,6 +156,12 @@ def payload(crop: str, soil: str, method: str, day: int) -> dict:
                 area_unit="hectare", day_of_growth=day, moisture_condition="recent")
 
 
+@lru_cache(maxsize=None)
+def field_for(crop: str, soil: str, method: str, day: int):
+    """Parsed field for one day of the season (cached: the simulation asks for it millions of times)."""
+    return parse_field(payload(crop, soil, method, day))
+
+
 Decide = Callable[[int, float, float, float, object], float]  # -> net mm to apply today
 
 
@@ -166,7 +174,7 @@ def run_season(crop: str, soil: str, method: str, weather: list[tuple[float, flo
     dr = 0.0  # pre-plant irrigation fills the root zone
     s.dr_start = dr
     for day, ((et0, rain), (f_et0, f_rain)) in enumerate(zip(weather, forecast, strict=True)):
-        field = parse_field(payload(crop, soil, method, day))
+        field = field_for(crop, soil, method, day)
         taw, raw = root_zone_capacity(soil, field.zr, field.p)
         dr = min(dr, taw)  # roots grew: depletion is relative to the new, deeper zone
         if day == 0:
@@ -210,7 +218,7 @@ def sutech_decider(crop: str, soil: str, method: str, app_soil: str | None = Non
                 reading = min((0.0, raw / 2, raw), key=lambda level: abs(level - reading))
             state["d"] = reading
         if app_soil and app_soil != soil:
-            field = parse_field(payload(crop, app_soil, method, day))
+            field = field_for(crop, app_soil, method, day)
         r = calculate_balance(replace(field, yesterday=state["d"]), f_et0, f_rain)
         deficit = cast(float, r["deficit"])  # calculate_balance returns a mixed-type dict
         state["d"] = deficit
@@ -242,26 +250,47 @@ def mean_daily_demand(crop: str, soil: str, method: str, seasons: list[list[tupl
     total, n = 0.0, 0
     for w in seasons:
         for day, (et0, rain) in enumerate(w):
-            kc = parse_field(payload(crop, soil, method, day)).kc
+            kc = field_for(crop, soil, method, day).kc
             total += kc * et0 - (0.0 if rain < 5 else rain * 0.75)
             n += 1
     return max(0.0, total / n)
 
 
-def safe_multiplier(crop, soil, method, seasons, interval, demand, step=0.05, limit=4.0) -> float:
-    """Smallest fixed-dose multiplier that keeps EVERY season at >= SAFE_MIN_YIELD.
+def _min_yield(crop, soil, method, seasons, interval, dose_mm) -> float:
+    return min(run_season(crop, soil, method, w, calendar_decider(interval, dose_mm)).relative_yield(KY[crop]) for w in seasons)
+
+
+def safe_multiplier(crop, soil, method, seasons, interval, demand, limit=6.0, tol=0.005) -> float | None:
+    """Smallest fixed-dose multiplier that keeps EVERY season at >= SAFE_MIN_YIELD (bisection).
 
     A farmer cannot retune per year, so one dose is chosen per location with hindsight of all
-    seasons; this gives the calendar its best possible equal-yield setting.
+    seasons; this gives the calendar its best possible equal-yield setting. Returns None when no
+    dose up to `limit` x mean demand is enough (e.g. sandy soil with a long interval: the root
+    zone cannot store a long interval's water, so extra water only drains).
     """
-    m = 1.0
-    while m <= limit + 1e-9:
-        ys = [run_season(crop, soil, method, w, calendar_decider(interval, demand * interval * m)).relative_yield(KY[crop])
-              for w in seasons]
-        if min(ys) >= SAFE_MIN_YIELD:
-            return m
-        m = round(m + step, 10)
-    raise RuntimeError("no safe calendar dose found within the search limit")
+    base = demand * interval
+    if _min_yield(crop, soil, method, seasons, interval, base * limit) < SAFE_MIN_YIELD:
+        return None
+    lo, hi = 0.0, limit
+    while hi - lo > tol:
+        mid = (lo + hi) / 2
+        lo, hi = (lo, mid) if _min_yield(crop, soil, method, seasons, interval, base * mid) >= SAFE_MIN_YIELD else (mid, hi)
+    return hi
+
+
+def best_safe_calendar(crop, soil, method, seasons, demand) -> tuple[int, float]:
+    """The strongest equal-yield calendar: interval AND dose chosen (with hindsight) to minimise water."""
+    best = None
+    for n in BEST_INTERVALS[method]:
+        m = safe_multiplier(crop, soil, method, seasons, n, demand)
+        if m is None:
+            continue
+        water = mean(run_season(crop, soil, method, w, calendar_decider(n, demand * n * m)).gross_mm for w in seasons)
+        if best is None or water < best[0]:
+            best = (water, n, m)
+    if best is None:
+        raise RuntimeError("no safe calendar found for any practical interval")
+    return best[1], best[2]
 
 
 # ---------------------------------------------------------------- experiment
@@ -277,14 +306,18 @@ def simulate(locations=LOCATIONS, years=YEARS, crops=("cotton", "corn"), methods
                 demand = mean_daily_demand(crop, soil, method, list(seasons.values()))
                 n_safe = SAFE_INTERVAL[method]
                 safe_m = safe_multiplier(crop, soil, method, list(seasons.values()), n_safe, demand)
+                n_best, best_m = best_safe_calendar(crop, soil, method, list(seasons.values()), demand)
                 for y in years:
                     decide, _ = sutech_decider(crop, soil, method)
                     strategies = {"sutech": run_season(crop, soil, method, seasons[y], decide)}
                     for n in CALENDAR_DAYS[method]:
                         strategies[f"calendar_{n}d"] = run_season(crop, soil, method, seasons[y],
                                                                   calendar_decider(n, demand * n))
-                    strategies[f"calendar_{n_safe}d_safe"] = run_season(
-                        crop, soil, method, seasons[y], calendar_decider(n_safe, demand * n_safe * safe_m))
+                    if safe_m is not None:
+                        strategies[f"calendar_{n_safe}d_safe"] = run_season(
+                            crop, soil, method, seasons[y], calendar_decider(n_safe, demand * n_safe * safe_m))
+                    strategies["calendar_best"] = run_season(
+                        crop, soil, method, seasons[y], calendar_decider(n_best, demand * n_best * best_m))
                     for name, s in strategies.items():
                         rows.append(dict(location=loc, crop=crop, method=method, year=y, strategy=name,
                                          gross_m3_ha=s.gross_mm * 10, events=s.events,
@@ -292,7 +325,9 @@ def simulate(locations=LOCATIONS, years=YEARS, crops=("cotton", "corn"), methods
                                          rel_yield=s.relative_yield(KY[crop]),
                                          kwh_ha=s.gross_mm * 10 / PUMP_M3H * PUMP_KW,
                                          closure_mm=s.closure_error(),
-                                         dose_multiplier=safe_m if name.endswith("_safe") else 1.0))
+                                         dose_multiplier=safe_m if name.endswith("_safe") else best_m if name == "calendar_best" else 1.0,
+                                         interval_days=n_best if name == "calendar_best" else n_safe if name.endswith("_safe") else
+                                         (int(name.split("_")[1][:-1]) if name.startswith("calendar_") else None)))
     return rows
 
 

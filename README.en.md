@@ -36,11 +36,12 @@ flowchart LR
 
 ## Research results
 
-A computer study on **real weather** from five irrigated regions of Kazakhstan, 2021–2025. Su-Tech is compared with a fixed irrigation calendar tuned to give **the same yield**; both strategies use the same irrigation method.
+A computer study on **real weather** from five irrigated regions of Kazakhstan, 2021–2025. Su-Tech is compared with the **best possible** fixed irrigation calendar: interval and dose chosen to give the same yield (≥ 98% in every season) with the least water. Both strategies use the same irrigation method.
 
 <p align="center"><img src="docs/img/water_by_strategy.svg" alt="Water use: Su-Tech vs an equal-yield calendar" width="760"></p>
 
-- At equal yield Su-Tech uses **18–34% less water**, in **25 of 25 seasons** for every crop/method combination.
+- At equal yield Su-Tech uses **15–28% less water**, in **25 of 25 seasons** for every crop/method combination; in the worst season the saving is 9–20%.
+- Across two soil types and three planting dates (36 combinations) the saving is 14–42% and holds in every season.
 - Against a plain calendar with the same mean dose Su-Tech uses 2–9% **more** water but has no stress days (the calendar has 38–65) and no deep-percolation loss. The saving only exists at equal yield, and should always be stated that way.
 - Random forecast errors are nearly harmless; a **systematic** bias accumulates. A weekly soil-moisture check removes it:
 
