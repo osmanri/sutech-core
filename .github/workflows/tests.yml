@@ -1,0 +1,25 @@
+name: tests
+on:
+  push:
+  pull_request:
+jobs:
+  python:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: python -m unittest test_water_balance test_water_stress test_et0 test_experiment test_hardware_bridge test_research_simulation test_calculation_audit
+  serverless:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Tests that do not need the frontend submodule
+        working-directory: serverless
+        run: |
+          npm ci --ignore-scripts
+          node --experimental-loader ./test/sdk-loader.mjs --test $(ls test/*.test.js | grep -v transport)
