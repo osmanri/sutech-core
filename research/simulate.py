@@ -27,6 +27,7 @@ from __future__ import annotations
 import argparse
 import csv
 import json
+import random
 import sys
 import time
 import urllib.error
@@ -295,6 +296,19 @@ def simulate(locations=LOCATIONS, years=YEARS, crops=("cotton", "corn"), methods
     return rows
 
 
+def bootstrap_ci(values: list[float], reps: int = 10000, seed: int = 20261115, level: float = 0.95) -> tuple[float, float]:
+    """Percentile bootstrap interval of the mean.
+
+    Caveat: the 25 location-seasons are not independent (neighbouring regions share weather in a
+    given year), so this interval is optimistic; the min/max over the 25 pairs is reported next to it.
+    """
+    rng = random.Random(seed)
+    n = len(values)
+    means = sorted(mean(rng.choices(values, k=n)) for _ in range(reps))
+    lo, hi = means[int((1 - level) / 2 * reps)], means[int((1 + level) / 2 * reps) - 1]
+    return lo, hi
+
+
 def summarise(rows: list[dict]) -> list[dict]:
     """Per crop x method x strategy: mean over location-years, and paired difference vs Su-Tech."""
     key = lambda r: (r["crop"], r["method"])
@@ -306,6 +320,7 @@ def summarise(rows: list[dict]) -> list[dict]:
             rs = [r for r in sub if r["strategy"] == strat]
             diffs = [(sut[(r["location"], r["year"])]["gross_m3_ha"] - r["gross_m3_ha"]) / r["gross_m3_ha"] * 100
                      for r in rs if r["gross_m3_ha"] > 0]
+            ci = bootstrap_ci(diffs) if len(diffs) > 1 and strat != "sutech" else (None, None)
             out.append(dict(
                 crop=crop, method=method, strategy=strat, n=len(rs),
                 water_m3_ha=mean(r["gross_m3_ha"] for r in rs),
@@ -315,6 +330,9 @@ def summarise(rows: list[dict]) -> list[dict]:
                 deep_perc_mm=mean(r["deep_perc_mm"] for r in rs),
                 events=mean(r["events"] for r in rs),
                 sutech_vs_this_pct=None if strat == "sutech" or not diffs else mean(diffs),
+                ci95_low=ci[0], ci95_high=ci[1],
+                pair_min=None if strat == "sutech" or not diffs else min(diffs),
+                pair_max=None if strat == "sutech" or not diffs else max(diffs),
                 sutech_less_water_in=None if strat == "sutech" else sum(d < 0 for d in diffs),
             ))
     return out
@@ -332,12 +350,13 @@ def write_outputs(rows: list[dict], summary: list[dict], out_dir: Path) -> None:
              f"{len({(r['location'], r['year']) for r in rows})} location-seasons per crop/method "
              f"({', '.join(LOCATIONS)}; {YEARS[0]}–{YEARS[-1]}), loam, same irrigation method for both strategies.",
              "Model-vs-model on reanalysis weather — see LIMITATIONS in research/simulate.py.", "",
-             "| crop | method | strategy | water m³/ha (sd) | events | stress days | rel. yield | deep perc. mm | Su-Tech vs this | Su-Tech used less in |",
-             "|---|---|---|---|---|---|---|---|---|---|"]
+             "| crop | method | strategy | water m³/ha (sd) | events | stress days | rel. yield | deep perc. mm | Su-Tech vs this (95% CI) | worst / best pair | Su-Tech used less in |",
+             "|---|---|---|---|---|---|---|---|---|---|---|"]
     for s in summary:
         lines.append(f"| {s['crop']} | {s['method']} | {s['strategy']} | {f(s['water_m3_ha'])} ({f(s['water_sd'])}) | "
                      f"{f(s['events'])} | {f(s['stress_days'], 1)} | {f(s['rel_yield'], 3)} | {f(s['deep_perc_mm'])} | "
-                     f"{'—' if s['sutech_vs_this_pct'] is None else f(s['sutech_vs_this_pct'], 1) + ' %'} | "
+                     f"{'—' if s['sutech_vs_this_pct'] is None else f(s['sutech_vs_this_pct'], 1) + ' % [' + f(s['ci95_low'], 1) + '; ' + f(s['ci95_high'], 1) + ']'} | "
+                     f"{'—' if s['pair_max'] is None else f(s['pair_max'], 1) + ' / ' + f(s['pair_min'], 1)} | "
                      f"{'—' if s['sutech_less_water_in'] is None else str(s['sutech_less_water_in']) + '/' + str(s['n'])} |")
     worst = max(abs(r["closure_mm"]) for r in rows)
     lines += ["", f"Water-balance closure check: max |error| = {worst:.2e} mm over all {len(rows)} runs.", ""]
