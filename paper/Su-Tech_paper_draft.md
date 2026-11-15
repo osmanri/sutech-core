@@ -1,6 +1,6 @@
 # Su-Tech: explainable irrigation scheduling from the FAO-56 water balance, with a closed-loop soil check
 
-**Author:** [name, school, city — to be filled in by the author]
+**Author:** Osman Tolobek · [school, city — to be filled in]
 **Status:** DRAFT for the author's revision. Sections marked **[AUTHOR]** need the author's own text or data; the pot experiment (Section 4.4) has **no results yet**.
 
 ## Abstract
@@ -15,7 +15,7 @@ Southern Kazakhstan relies on the transboundary Syr Darya for irrigated agricult
 
 **Research questions.** (1) At equal yield, how much water can daily FAO-56 water-balance scheduling save compared with fixed irrigation calendars in Kazakhstan's irrigated regions? (2) How robust is the decision to errors in the inputs (forecast ET₀, rainfall, soil type)? (3) Can a cheap farmer-supplied soil check correct systematic forecast error?
 
-**Contribution.** (a) An open implementation of the FAO-56 balance with Ks in two languages of code (Python reference, JavaScript production) that agree on 675 reference scenarios; (b) a reproducible retrospective study on real weather with an equal-yield baseline; (c) a quantified failure mode (systematic ET₀ bias) and a remedy that is built into the product; (d) a bench-experiment protocol and tooling for ground-truth testing. **[AUTHOR: add what you personally designed, decided and measured.]**
+**Contribution.** (a) An open implementation of the FAO-56 balance with Ks in two languages of code (Python reference, JavaScript production) that agree on 675 reference scenarios; (b) a reproducible retrospective study on real weather with an equal-yield baseline; (c) a quantified failure mode (systematic ET₀ bias) and a remedy that is built into the product; (d) a bench-experiment protocol and tooling for ground-truth testing. The author's own part is described under *Author contribution and use of AI*.
 
 ## 2 Related work and gap
 
@@ -98,10 +98,12 @@ The saving of 18–34% is the price of safety that a fixed calendar must pay: be
 * Effective rainfall uses a simple project rule.
 
 ## 7 Conclusion
-On five years of real weather in five regions, FAO-56 daily scheduling with a stress coefficient saved 18–34% water at equal yield and avoided crop stress, and a weekly farmer soil check made it robust to systematic forecast bias. These are model results; the bench experiment and a 2027 field trial are the next steps. **[AUTHOR: replace with your own conclusion after the experiment.]**
+On five years of real weather in five regions, FAO-56 daily scheduling with a stress coefficient saved 18–34% water at equal yield and avoided crop stress, and a weekly farmer soil check made it robust to systematic forecast bias. These are model results and not yet measurements. In simple terms: a daily water-balance calculation can save a lot of water compared with a fixed schedule if the schedule must also protect the crop, but it needs an occasional look at the real soil to stay correct. The next steps are my bench experiment with weighed pots and, in 2027, a trial on a real field. **[Replace this paragraph with the final conclusion after the experiment.]**
 
 ## Author contribution and use of AI
-**[AUTHOR: write in your own words.]** Suggested honest wording: *The research question, the choice of methods and assumptions, the experiment design and the interpretation are the author's. Software was written with the help of an AI coding assistant (Claude Code), and every model, formula and test was reviewed and can be explained by the author.*
+I came up with the project and built the physical test stand myself: an Arduino Uno with a relay and a small pump, a soil-moisture sensor, a water-level sensor and a temperature and humidity sensor. I am now adding a scale for the pots, and in the coming weeks I will run the experiment on it; the results will go into Section 4.4 and are not in this draft yet.
+
+I wrote the software with the help of an AI coding assistant (Claude Code). It wrote most of the code, the simulation and the first version of this text. I chose what to build and which questions to ask, and I am learning to explain each formula and each assumption myself; where my own understanding or measurements are still missing, this draft says so. The weather data come from NASA POWER, and the formulas come from the FAO-56 and FAO-33 papers listed below.
 
 ## Data and code availability
 All code, cached weather, result tables and figures: `github.com/osmanri/sutech-core` (`research/`, `experiment/`, `bot/`). Reproduce with `python -m research.simulate && python -m research.sensitivity`.
