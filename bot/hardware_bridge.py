@@ -28,6 +28,9 @@ class VirtualArduinoBridge:
         self.soil_moisture = 65
         self.temperature = 23.5
         self.humidity = 48.0
+        # Simulated pot scale (HX711): grams of pot + soil + water above the tare.
+        self.weight_g = 1000.0
+        self.scale_calibrated = True
 
     def send_command(self, cmd: str) -> str:
         cmd = cmd.strip()
@@ -44,8 +47,17 @@ class VirtualArduinoBridge:
             state = "1" if self.pump_active else "0"
             return (
                 f"OK:TELEMETRY:PUMP={state}:WATER={self.water_level}:"
-                f"SOIL={self.soil_moisture}:TEMP={self.temperature:.1f}:HUM={self.humidity:.1f}"
+                f"SOIL={self.soil_moisture}:TEMP={self.temperature:.1f}:HUM={self.humidity:.1f}:"
+                f"WEIGHT={self.weight_g:.1f}"
             )
+        elif cmd == "SCALE":
+            if not self.scale_calibrated:
+                return "ERR:SCALE_NOT_READY"
+            return f"OK:SCALE={self.weight_g:.1f}"
+        elif cmd == "TARE":
+            self.weight_g = 0.0
+            self.scale_calibrated = True
+            return "OK:TARE:OFFSET=0"
         elif cmd == "MOISTURE":
             return f"OK:MOISTURE={self.soil_moisture}"
         elif cmd == "WATER_LEVEL":
@@ -196,6 +208,24 @@ class HardwareBridge:
                 pass
         return 80
 
+    def get_weight(self) -> float | None:
+        """Pot weight in grams from the HX711 scale, or None when it is not ready."""
+        resp = self.send_raw_command("SCALE")
+        if resp.startswith("OK:SCALE="):
+            try:
+                return float(resp.split("OK:SCALE=")[1].split(":")[0])
+            except (ValueError, IndexError):
+                return None
+        return None
+
+    def tare_scale(self) -> bool:
+        return self.send_raw_command("TARE").startswith("OK:TARE")
+
+    def calibrate_scale(self, known_grams: float) -> dict[str, Any]:
+        resp = self.send_raw_command(f"CALIBRATE:{float(known_grams):.1f}")
+        ok = resp.startswith("OK:CALIBRATE")
+        return {"success": ok, "response": resp, "error": None if ok else resp}
+
     def get_telemetry(self) -> dict[str, Any]:
         """Fetch real-time comprehensive telemetry from all hardware sensors."""
         resp = self.send_raw_command("TELEMETRY")
@@ -206,6 +236,7 @@ class HardwareBridge:
             "temperature": 23.5,
             "humidity": 48.0,
             "has_water": True,
+            "weight_g": None,
             "raw": resp,
         }
         if resp.startswith("OK:TELEMETRY:"):
@@ -236,6 +267,11 @@ class HardwareBridge:
                             telemetry["humidity"] = float(v)
                         except ValueError:
                             pass
+                    elif k == "WEIGHT":
+                        try:
+                            telemetry["weight_g"] = float(v)
+                        except ValueError:
+                            telemetry["weight_g"] = None  # "NA": scale absent or uncalibrated
         return telemetry
 
 
