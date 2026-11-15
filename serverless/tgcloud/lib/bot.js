@@ -10,6 +10,7 @@ import {planScreen,planInput} from './planner.js';
 import {pilot,feedback,p} from './pilot.js';
 import {rememberMessage} from './screens.js';
 import {aiIntro} from './conversation.js';
+import {demoScreen,demoSteps} from './demo.js';
 const fieldButtons=(row,lang)=>keyboard([
  [button(t(lang,'btn_explain'),`explain:${row.id}`)],
  [button(p(lang,'useful'),`vote:${row.id}:y`),button(p(lang,'unhelpful'),`vote:${row.id}:n`)],
@@ -79,7 +80,8 @@ export async function action(id,data) {
   if(row.field_id)return show(report({result:row.result,deficit:row.result.deficit,last_day:row.weather.day,weather:row.weather,payload:row.payload},lang),keyboard([[button(t(lang,'btn_history'),'history')],back(lang)]));
   return show(esc([row.crop_name,row.area_text,row.irrigation_text,row.volume_text,row.savings_text].filter(Boolean).join('\n')),keyboard([[button(t(lang,'btn_history'),'history')],back(lang)]));
  }
- if(data==='more')return show(tr(lang,'Настройки и помощь','Баптаулар мен көмек','Settings and help'),keyboard([[button(t(lang,'btn_lang'),'languages'),button(t(lang,'btn_help'),'help')],[button(t(lang,'btn_about'),'about'),button(p(lang,'join'),'pilot')],back(lang)]));
+ if(data==='demo'||data==='demo:steps'){const d=data==='demo'?demoScreen(lang):demoSteps(lang);return show(d.text,d.markup);}
+ if(data==='more')return show(tr(lang,'Настройки и помощь','Баптаулар мен көмек','Settings and help'),keyboard([[button(t(lang,'btn_lang'),'languages'),button(t(lang,'btn_help'),'help')],[button(t(lang,'btn_about'),'about'),button(p(lang,'join'),'pilot')],[button(tr(lang,'Демо для жюри','Қазылар үшін демо','Jury demo'),'demo')],back(lang)]));
  if(data==='help'||data==='about')return show(data==='help'?tr(lang,'1. Добавьте участок: культура, площадь, почва и точка на карте.\n2. Откройте «Мои поля» для актуального расчёта.\n3. После полива отметьте объём.\n4. Для вопросов и фото растений откройте ИИ-агронома.','1. Алқап қосыңыз: дақыл, аудан, топырақ және картадағы нүкте.\n2. Жаңа есеп үшін «Менің алқаптарым» бөліміне өтіңіз.\n3. Суарған соң көлемін белгілеңіз.\n4. Өсімдік фотосы мен сұрақтар үшін ЖИ-агрономды ашыңыз.','1. Add a field: crop, area, soil and map location.\n2. Open My fields for a current calculation.\n3. After watering, record the amount.\n4. Open AI agronomist for plant photos and questions.'):tr(lang,'Su-Tech рассчитывает потребность в поливе по погоде Open-Meteo, культуре и почве. Методика: FAO-56. ИИ помогает с уходом и видимыми симптомами растений.','Su-Tech Open-Meteo ауа райы, дақыл және топырақ бойынша суару қажеттілігін есептейді. Әдістеме: FAO-56. ЖИ өсімдік күтімі мен көрінетін белгілерді түсіндіреді.','Su-Tech estimates irrigation needs using Open-Meteo weather, crop and soil. Method: FAO-56. AI helps with plant care and visible symptoms.'),keyboard([back(lang)]));
  const [type,value]=data.split(':');
  if(type==='vote'){await feedback(id,value,data.split(':')[2]==='y');const row=await ownedField(id,value);return show(p(lang,'thanks')+'\n\n'+report(row,lang),fieldButtons(row,lang));}
@@ -142,13 +144,13 @@ export async function message(m,ctx) {
  }
  if(!await ignoreDelete(id,m.message_id))await rememberMessage(id,m.message_id,m.date);
  if(text.startsWith('/start')){
-  const entry=text.split(/\s+/)[1]??'',match=entry.match(/^(app|ai|pilot)_(ru|kz|en)$/);
+  const entry=text.split(/\s+/)[1]??'',match=entry.match(/^(app|ai|pilot|demo)_(ru|kz|en)$/);
   if(match){u.lang=match[2];await saveUser(id,u);return action(id,match[1]);}
   if(u.languageChosen||u.screen)return action(id,'home');
   const initial=await navigate(id);return screen(id,'Su-Tech\nРусский / Қазақша / English',languages(u.lang),initial.generation);
  }
  const command=text.split(/\s|@/)[0].toLowerCase();
- const route=matchingButton(text)??({'/menu':'home','/exit':'home','/cancel':'home','/app':'app','/help':'help','/about':'about','/language':'languages','/ai':'ai','/newchat':'ai:new','/pilot':'pilot','/plan':'plan','/fields':'fields','/history':'history'}[command]);
+ const route=matchingButton(text)??({'/menu':'home','/exit':'home','/cancel':'home','/app':'app','/help':'help','/about':'about','/language':'languages','/ai':'ai','/newchat':'ai:new','/pilot':'pilot','/demo':'demo','/plan':'plan','/fields':'fields','/history':'history'}[command]);
  if(route)return action(id,route);
  if(m.web_app_data){let payload;try{payload=JSON.parse(m.web_app_data.data);}catch{return action(id,'app');}return deliverCalculation(id,payload);}
  if(u.mode==='plan'){
