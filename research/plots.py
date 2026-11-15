@@ -34,14 +34,14 @@ def water_by_strategy(summary_csv: Path, out: Path) -> None:
     for crop in ("cotton", "corn"):
         for method in ("drip", "furrow"):
             sut = next(r for r in rows if (r["crop"], r["method"], r["strategy"]) == (crop, method, "sutech"))
-            safe = next(r for r in rows if r["crop"] == crop and r["method"] == method and r["strategy"].endswith("_safe"))
+            safe = next(r for r in rows if r["crop"] == crop and r["method"] == method and r["strategy"] == "calendar_best")
             groups.append((f"{NAMES[crop]}, {NAMES[method]}", float(sut["water_m3_ha"]), float(safe["water_m3_ha"]),
                            float(safe["sutech_vs_this_pct"])))
     w, h, left, right, top = 760, 400, 150, 40, 70
     vmax = max(g[2] for g in groups) * 1.08
     scale = (w - left - right) / vmax
     body = [_text(24, 32, "Вода за сезон при одинаковом урожае, м³/га", 17, weight="700"),
-            _text(24, 52, "Su-Tech против поливательного графика, настроенного на тот же урожай (5 регионов × 5 сезонов)", 12, fill=GREY)]
+            _text(24, 52, "Su-Tech против лучшего графика полива при том же урожае (5 регионов × 5 сезонов, суглинок)", 12, fill=GREY)]
     for i, (label, sut, safe, pct) in enumerate(groups):
         y = top + 20 + i * 62
         body += [_text(left - 12, y + 22, label, 13, "end", "600"),
@@ -52,7 +52,7 @@ def water_by_strategy(summary_csv: Path, out: Path) -> None:
                  _text(w - right, y + 16, f"Su-Tech на {abs(pct):.0f}% меньше", 12, "end", "700", GREEN)]
     body += [f'<rect x="{left}" y="{h - 62}" width="14" height="14" rx="3" fill="{GREEN}"/>', _text(left + 20, h - 50, "Su-Tech", 12),
              f'<rect x="{left + 90}" y="{h - 62}" width="14" height="14" rx="3" fill="{AMBER}"/>',
-             _text(left + 110, h - 50, "график с запасом, при котором урожай ≥ 98% в каждом сезоне", 12),
+             _text(left + 110, h - 50, "лучший график: интервал и норма подобраны, урожай ≥ 98%", 12),
              _text(w - 16, h - 14, "модель на реальной погоде, не полевое измерение", 11, "end", fill=GREY)]
     out.write_text(_svg(w, h, body, "Расход воды за сезон: Su-Tech и график при одинаковом урожае"), encoding="utf-8")
 

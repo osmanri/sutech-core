@@ -1,11 +1,11 @@
 # Su-Tech: explainable irrigation scheduling from the FAO-56 water balance, with a closed-loop soil check
 
 **Author:** Osman Tolobek · [school, city — to be filled in]
-**Status:** DRAFT for the author's revision. Sections marked **[AUTHOR]** need the author's own text or data; the pot experiment (Section 4.4) has **no results yet**.
+**Status:** DRAFT for the author's revision. Sections marked **[AUTHOR]** need the author's own text or data; the pot experiment (Section 4.5) has **no results yet**.
 
 ## Abstract
 
-Irrigation decisions in southern Kazakhstan are made under tight water limits, yet farm-level scheduling tools remain hard to use for small farms. We present Su-Tech, a decision-support system that turns weather, crop, soil and irrigation-method data into a daily irrigate/wait decision, a water volume and a pump cost, and explains every calculation step in a Telegram chat. The core is the FAO-56 root-zone water balance with a water-stress coefficient Ks. We evaluate it in a retrospective simulation on real weather (NASA POWER, five irrigated regions, 2021–2025, cotton and maize, drip and furrow irrigation), comparing Su-Tech with fixed irrigation calendars that use the same irrigation method. At equal yield (≥ 98% relative yield in every season) Su-Tech used **18–34% less water** (95% bootstrap intervals about ±2 percentage points; in the worst single location-season the saving was still 11–26%) and had no days of crop water stress, in 25 of 25 location-seasons for each crop/method combination. Against an uncalibrated calendar with the same mean dose, Su-Tech used 2–9% *more* water, but avoided 38–65 days of stress per season; the saving therefore exists only when yield is held equal. A sensitivity analysis shows that random forecast errors are almost harmless, while a systematic −20% ET₀ bias causes 71–73 stress days per season; a weekly three-level soil-moisture check (wet / normal / dry), implemented in the bot, removes the stress and retains 19–21% saving. These results are model-versus-model; a bench experiment with weighed pots (protocol and tools included) is designed to test them.
+Irrigation decisions in southern Kazakhstan are made under tight water limits, yet farm-level scheduling tools remain hard to use for small farms. We present Su-Tech, a decision-support system that turns weather, crop, soil and irrigation-method data into a daily irrigate/wait decision, a water volume and a pump cost, and explains every calculation step in a Telegram chat. The core is the FAO-56 root-zone water balance with a water-stress coefficient Ks. We evaluate it in a retrospective simulation on real weather (NASA POWER, five irrigated regions, 2021–2025, cotton and maize, drip and furrow irrigation), comparing Su-Tech with fixed irrigation calendars that use the same irrigation method. Against the strongest fixed calendar — interval and dose optimised with hindsight so that every season keeps ≥ 98% relative yield — Su-Tech used **15–28% less water** (95% bootstrap intervals about ±2 percentage points; worst single location-season 9–20%) and had no days of crop water stress, in 25 of 25 location-seasons for each crop/method combination. Across two distinct soils and three planting dates (36 combinations) the saving was 14–42% and held in every season. Against an uncalibrated calendar with the same mean dose, Su-Tech used 2–9% *more* water, but avoided 38–65 days of stress per season; the saving therefore exists only when yield is held equal. A sensitivity analysis shows that random forecast errors are almost harmless, while a systematic −20% ET₀ bias causes 71–73 stress days per season; a weekly three-level soil-moisture check (wet / normal / dry), implemented in the bot, removes the stress and retains 14–17% saving. These results are model-versus-model; a bench experiment with weighed pots (protocol and tools included) is designed to test them.
 
 **Keywords:** irrigation scheduling, FAO-56, water balance, decision support, Kazakhstan, closed-loop control.
 
@@ -37,14 +37,17 @@ Daily weather comes from NASA POWER (2 m temperature, dew point, wind, all-sky s
 ### 3.3 Retrospective simulation
 The "truth" model is the balance of Section 3.1 on real weather (planting 1 May; cotton 195 d, maize 125 d; loam). Two strategies irrigate the same field with the same irrigation method:
 * **Su-Tech:** the production engine, tracking its own deficit and never seeing the truth state.
-* **Calendar:** a fixed net dose every N days, sized from the long-term mean crop demand of the same location. A **plain** calendar uses that dose; an **equal-yield** ("safe") calendar multiplies it by the smallest factor (0.05 steps) for which *every* season at that location reaches ≥ 98% relative yield. The factor is chosen with hindsight of all five seasons, which favours the calendar (a farmer cannot know it in advance). Relative yield uses the FAO-33 relation `1 − Ya/Ym = Ky (1 − ETa/ETm)` [R10] with Ky = 0.85 (cotton) and 1.25 (maize).
+* **Calendar:** a fixed net dose every N days, sized from the long-term mean crop demand of the same location. A **plain** calendar uses that dose. The **best calendar** — the main baseline — searches the interval (drip 1–7 d, furrow 5–21 d) and, for each interval, the smallest dose multiplier (bisection, tolerance 0.005) for which *every* season at that location reaches ≥ 98% relative yield; the combination with the least water wins. Both are chosen with hindsight of all five seasons, which favours the calendar (a farmer cannot know them in advance). An earlier version used a fixed 5-day (drip) or 10-day (furrow) interval; on sandy soil such a calendar cannot reach the yield target at any dose, which motivated the stronger baseline. Relative yield uses the FAO-33 relation `1 − Ya/Ym = Ky (1 − ETa/ETm)` [R10] with Ky = 0.85 (cotton) and 1.25 (maize).
 
 The seasonal water balance closes to 10⁻¹² mm in all 500 runs. Su-Tech and calendar are compared as paired differences per location-season (25 per crop/method).
 
 ### 3.4 Sensitivity analysis
 Su-Tech decides with a degraded forecast while the truth model uses real weather: random multiplicative ET₀ error (σ = 10, 20, 30%; 20 replicates, fixed seed), rainfall never forecast, wrong soil entered, and systematic ET₀ bias of ±20%. The bias scenario is repeated with a soil check that resets the app's deficit every 3 or 7 days, as the farmer's three-level judgement (wet = 0, normal = RAW/2, dry = RAW).
 
-### 3.5 Bench experiment (designed, not yet run)
+### 3.5 Robustness to soil and planting date
+The best-calendar comparison is repeated for every combination of soil (sand, loam, clay), planting date (15 April, 1 May, 15 May), crop and irrigation method — 36 combinations of 25 location-seasons each (`research/robustness.py`).
+
+### 3.6 Bench experiment (designed, not yet run)
 Twelve pots, two groups assigned by lottery (Su-Tech vs fixed schedule), 4–6 weeks, a fast-growing crop. A load cell with an HX711 amplifier weighs each pot daily; evaporation is the weight loss corrected for added water. Outcomes: model accuracy (RMSE, MAE, bias of predicted vs weighed ET), total water per pot, dry mass, dry mass per litre; Welch's t-test and Cohen's d. Protocol: `experiment/PROTOCOL.md`; tools: `experiment/collect.py`, `experiment/analyze.py`.
 
 ## 4 Results
@@ -52,41 +55,45 @@ Twelve pots, two groups assigned by lottery (Su-Tech vs fixed schedule), 4–6 w
 ### 4.1 Water use at equal yield
 {{TABLE_SIMULATION}}
 
-Su-Tech used less water than the equal-yield calendar in every one of the 25 location-seasons for each combination (the bootstrap intervals in Table 1 treat the 25 location-seasons as independent and are therefore optimistic; the worst-to-best range is given beside them), while that calendar still reached a mean relative yield of 99.3–99.6% (Su-Tech: 100% by construction of the model, no stress days). Compared with a *plain* calendar of the same mean dose Su-Tech used somewhat more water (+2 to +9% across the tested intervals) but kept the crop unstressed; the plain calendars suffered 38–65 stress days and a relative yield of 0.84–0.90. Deep percolation per season was 2–24 mm for Su-Tech, 127–150 mm for the plain calendars and 234–522 mm for the equal-yield calendars, whose larger doses are what costs the extra water (per-run values in `research/results/simulation_runs.csv`).
+Su-Tech used less water than the equal-yield calendar in every one of the 25 location-seasons for each combination (the bootstrap intervals in Table 1 treat the 25 location-seasons as independent and are therefore optimistic; the worst-to-best range is given beside them), while the best calendar — daily for drip, every 5 days for furrow, with doses 1.18–1.49 × mean demand — still had 6–10 days of mild stress and a relative yield of 99.2–99.4% (Su-Tech: no stress days). Compared with a *plain* calendar of the same mean dose Su-Tech used somewhat more water (+2 to +9% across the tested intervals) but kept the crop unstressed; the plain calendars suffered 38–65 stress days and a relative yield of 0.84–0.90. Deep percolation per season was 2–24 mm for Su-Tech, 127–150 mm for the plain calendars and 210–394 mm for the best calendars, whose larger doses are what costs the extra water (per-run values in `research/results/simulation_runs.csv`).
 
 ![Water use at equal yield](../docs/img/water_by_strategy.svg)
 
-### 4.2 Robustness to input errors (cotton)
+### 4.2 Other soils and planting dates
+Over all 36 soil × planting-date × crop × method combinations Su-Tech used less water than the best calendar in every season (36/36 combinations, 25/25 seasons each), with a mean saving of 26% and a range of 14–42%; it never had stress days. The saving is largest on sand (26–42%), where a calendar must over-irrigate heavily because the root zone stores little water, and 14–29% on loam. **Clay gave results identical to loam**: in the project's soil parameters both have the same available water (θFC − θWP = 0.15), so the model cannot distinguish them — effectively two soils were tested. Worst single season anywhere: 6% saving. Full table: `research/results/robustness.md`.
+
+### 4.3 Robustness to input errors (cotton)
 {{TABLE_SENSITIVITY}}
 
-Random errors had little effect. A systematic ET₀ underestimate accumulates in the app's own balance, because the app cannot see the soil, and caused 71–73 stress days. A weekly three-level soil check eliminated them while keeping 19–21% saving; checking every 3 days saved less (9–15%) because coarse repeated judgements trigger extra irrigations.
+Random errors had little effect. A systematic ET₀ underestimate accumulates in the app's own balance, because the app cannot see the soil, and caused 71–73 stress days. A weekly three-level soil check eliminated them while keeping 14–17% saving; checking every 3 days nearly removed the saving (0–12%) because coarse repeated judgements trigger extra irrigations. An accurate sensor (±10 mm) read weekly kept 19–23%.
 
 ![Stress days under input errors](../docs/img/sensitivity_stress.svg)
 
-### 4.3 Validation
+### 4.4 Validation
 ET₀ implementation vs FAO-56 Example 18: see 3.2 and `VALIDATION.md`. A comparison with CROPWAT 8.0 on identical inputs is **not yet done [AUTHOR]**. Python and JavaScript engines agree on 675 reference scenarios (relative tolerance 10⁻⁸).
 
-### 4.4 Bench experiment
+### 4.5 Bench experiment
 **[AUTHOR: results go here after the experiment — model accuracy (RMSE/MAE/bias), water per pot by group with Welch test and effect size, dry mass, and a photograph of the stand. Do not fill this section with simulated numbers.]**
 
 ## 5 Discussion
 
-The saving of 18–34% is the price of safety that a fixed calendar must pay: because it cannot react to rain or heat waves, it needs a margin large enough for the worst season. Su-Tech's advantage is therefore timing, not a more efficient irrigation system, and it is largest where the baseline efficiency is lowest (furrow). The weak point is equally clear: a decision tool that integrates its own estimate drifts when inputs are biased, so a cheap, infrequent observation of the real soil is essential. This is built into the bot as a button, and the study supports a weekly rhythm.
+The saving of 15–28% (14–42% across soils and planting dates) is the price of safety that a fixed calendar must pay: because it cannot react to rain or heat waves, it needs a margin large enough for the worst season. Su-Tech's advantage is therefore timing, not a more efficient irrigation system, and it is largest where the baseline efficiency is lowest (furrow). The weak point is equally clear: a decision tool that integrates its own estimate drifts when inputs are biased, so a cheap, infrequent observation of the real soil is essential. This is built into the bot as a button, and the study supports a weekly rhythm.
 
 ## 6 Limitations
 * Model against model, on reanalysis weather for regional centres, not farm stations; no field measurement of yield or water yet.
 * Yield is estimated from the FAO-33 relation, not measured.
-* One soil in the main analysis; fixed planting date; no salinity or capillary rise; crop and soil parameters are not locally calibrated.
+* Soils differ in the model only by available water; clay and loam coincide, so two soils were effectively tested. No salinity or capillary rise; crop and soil parameters are not locally calibrated.
+* The best calendar is chosen with hindsight of all seasons, which favours the calendar; a real farmer could not achieve it.
 * Su-Tech has perfect weather knowledge in the main comparison; forecast error is treated only in the sensitivity analysis.
 * Drip-mode Su-Tech irrigates almost daily (94–129 events per season), which in practice needs automation.
 * The soil check is simulated with the same three levels as the app; real farmer judgement may be noisier.
 * Effective rainfall uses a simple project rule.
 
 ## 7 Conclusion
-On five years of real weather in five regions, FAO-56 daily scheduling with a stress coefficient saved 18–34% water at equal yield and avoided crop stress, and a weekly farmer soil check made it robust to systematic forecast bias. These are model results and not yet measurements. In simple terms: a daily water-balance calculation can save a lot of water compared with a fixed schedule if the schedule must also protect the crop, but it needs an occasional look at the real soil to stay correct. The next steps are my bench experiment with weighed pots and, in 2027, a trial on a real field. **[Replace this paragraph with the final conclusion after the experiment.]**
+On five years of real weather in five regions, FAO-56 daily scheduling with a stress coefficient saved 15–28% water against the strongest fixed calendar at equal yield (14–42% across soils and planting dates) and avoided crop stress, and a weekly farmer soil check made it robust to systematic forecast bias. These are model results and not yet measurements. In simple terms: a daily water-balance calculation can save a lot of water compared with a fixed schedule if the schedule must also protect the crop, but it needs an occasional look at the real soil to stay correct. The next steps are my bench experiment with weighed pots and, in 2027, a trial on a real field. **[Replace this paragraph with the final conclusion after the experiment.]**
 
 ## Author contribution and use of AI
-I came up with the project and built the physical test stand myself: an Arduino Uno with a relay and a small pump, a soil-moisture sensor, a water-level sensor and a temperature and humidity sensor. I am now adding a scale for the pots, and in the coming weeks I will run the experiment on it; the results will go into Section 4.4 and are not in this draft yet.
+I came up with the project and built the physical test stand myself: an Arduino Uno with a relay and a small pump, a soil-moisture sensor, a water-level sensor and a temperature and humidity sensor. I am now adding a scale for the pots, and in the coming weeks I will run the experiment on it; the results will go into Section 4.5 and are not in this draft yet.
 
 I wrote the software with the help of an AI coding assistant (Claude Code). It wrote most of the code, the simulation and the first version of this text. I chose what to build and which questions to ask, and I am learning to explain each formula and each assumption myself; where my own understanding or measurements are still missing, this draft says so. The weather data come from NASA POWER, and the formulas come from the FAO-56 and FAO-33 papers listed below.
 

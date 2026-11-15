@@ -3,7 +3,7 @@ import random
 import unittest
 
 from bot.water_balance import CROPS
-from research.simulate import (bootstrap_ci, KY, calendar_decider, mean_daily_demand, run_season, safe_multiplier,
+from research.simulate import (best_safe_calendar, bootstrap_ci, KY, calendar_decider, mean_daily_demand, run_season, safe_multiplier,
                                summarise, sutech_decider)
 from research.sensitivity import forecast_for
 
@@ -60,6 +60,21 @@ class Simulation(unittest.TestCase):
         cal = next(s for s in summarise(rows) if s["strategy"] == "cal")
         self.assertAlmostEqual(cal["sutech_vs_this_pct"], -15.0)
         self.assertEqual(cal["sutech_less_water_in"], 2)
+
+    def test_best_calendar_is_at_least_as_good_as_any_fixed_interval(self):
+        demand = mean_daily_demand("cotton", "loam", "drip", [RAINY])
+        n, m = best_safe_calendar("cotton", "loam", "drip", [RAINY], demand)
+        best = run_season("cotton", "loam", "drip", RAINY, calendar_decider(n, demand * n * m))
+        self.assertGreaterEqual(best.relative_yield(KY["cotton"]), 0.98)
+        m5 = safe_multiplier("cotton", "loam", "drip", [RAINY], 5, demand)
+        if m5 is not None:
+            fixed = run_season("cotton", "loam", "drip", RAINY, calendar_decider(5, demand * 5 * m5))
+            self.assertLessEqual(best.gross_mm, fixed.gross_mm + 1e-9)
+
+    def test_impossible_calendar_reports_no_solution(self):
+        # A 40-day interval on sand cannot keep the crop unstressed at any dose: water above TAW drains.
+        demand = mean_daily_demand("cotton", "sand", "drip", [DRY])
+        self.assertIsNone(safe_multiplier("cotton", "sand", "drip", [DRY], 40, demand))
 
     def test_bootstrap_interval_is_reproducible_and_contains_the_mean(self):
         vals = [-30.0, -28.0, -27.0, -25.0, -26.0, -31.0, -24.0, -29.0]
