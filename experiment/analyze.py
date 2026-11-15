@@ -94,7 +94,7 @@ def cohens_d(a: list[float], b: list[float]) -> float:
 def error_metrics(observed: list[float], predicted: list[float]) -> dict[str, float]:
     if not observed or len(observed) != len(predicted):
         raise ValueError("need equal-length, non-empty observed and predicted series")
-    err = [p - o for o, p in zip(observed, predicted)]
+    err = [p - o for o, p in zip(observed, predicted, strict=True)]
     return {
         "n": len(err),
         "rmse_mm": math.sqrt(mean(e * e for e in err)),

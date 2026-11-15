@@ -27,7 +27,6 @@ from __future__ import annotations
 import argparse
 import csv
 import json
-import math
 import sys
 import time
 import urllib.error
@@ -37,7 +36,8 @@ from dataclasses import dataclass, replace
 from datetime import date, timedelta
 from pathlib import Path
 from statistics import mean, stdev
-from typing import Callable
+from collections.abc import Callable
+from typing import cast
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
@@ -83,7 +83,7 @@ def fetch_weather(name: str, lat: float, lon: float, year: int, cache: Path = WE
         path.write_text(json.dumps(raw), encoding="utf-8")
     d = json.loads(path.read_text(encoding="utf-8"))["daily"]
     out = {}
-    for day, et0, rain in zip(d["time"], d["et0_fao_evapotranspiration"], d["precipitation_sum"]):
+    for day, et0, rain in zip(d["time"], d["et0_fao_evapotranspiration"], d["precipitation_sum"], strict=True):
         if et0 is None or rain is None:
             raise ValueError(f"missing weather on {day} in {path.name}")
         out[day] = (float(et0), float(rain))
@@ -164,7 +164,7 @@ def run_season(crop: str, soil: str, method: str, weather: list[tuple[float, flo
     s = Season(eff=eff)
     dr = 0.0  # pre-plant irrigation fills the root zone
     s.dr_start = dr
-    for day, ((et0, rain), (f_et0, f_rain)) in enumerate(zip(weather, forecast)):
+    for day, ((et0, rain), (f_et0, f_rain)) in enumerate(zip(weather, forecast, strict=True)):
         field = parse_field(payload(crop, soil, method, day))
         taw, raw = root_zone_capacity(soil, field.zr, field.p)
         dr = min(dr, taw)  # roots grew: depletion is relative to the new, deeper zone
@@ -189,25 +189,32 @@ def run_season(crop: str, soil: str, method: str, weather: list[tuple[float, flo
 
 def sutech_decider(crop: str, soil: str, method: str, app_soil: str | None = None,
                    check_every: int | None = None, sensor_sd_mm: float = 0.0,
-                   rng=None) -> tuple[Decide, Callable[[], None]]:
+                   rng=None, categorical: bool = False) -> tuple[Decide, Callable[[], None]]:
     """The production engine with its OWN deficit estimate (it never sees the truth).
 
     app_soil: the soil the farmer entered in the app, which may differ from the real one.
     check_every: every N days a soil-moisture reading replaces the app's estimate with the
     true depletion plus sensor noise N(0, sensor_sd_mm) (closed-loop correction).
+    categorical: the check is the farmer's three-way judgement the bot offers (wet / normal / dry),
+    i.e. depletion snapped to the nearest of 0, RAW/2, RAW — the same levels as the setup form.
     """
     state = {"d": 0.0}
 
     def decide(day, true_dr, f_et0, f_rain, field):
         if check_every and day > 0 and day % check_every == 0:
             noise = rng.gauss(0.0, sensor_sd_mm) if (rng and sensor_sd_mm) else 0.0
-            state["d"] = max(0.0, true_dr + noise)
+            reading = max(0.0, true_dr + noise)
+            if categorical:
+                raw = root_zone_capacity(soil, field.zr, field.p)[1]
+                reading = min((0.0, raw / 2, raw), key=lambda level: abs(level - reading))
+            state["d"] = reading
         if app_soil and app_soil != soil:
             field = parse_field(payload(crop, app_soil, method, day))
         r = calculate_balance(replace(field, yesterday=state["d"]), f_et0, f_rain)
-        state["d"] = r["deficit"]
+        deficit = cast(float, r["deficit"])  # calculate_balance returns a mixed-type dict
+        state["d"] = deficit
         if r["status"] in ("irrigate", "critical"):
-            applied = r["deficit"]
+            applied = deficit
             state["d"] = 0.0
             # r["deficit"] already contains today's forecast ETc and rain; with a perfect forecast
             # this refills the root zone exactly, with a wrong one the truth model shows the miss.
