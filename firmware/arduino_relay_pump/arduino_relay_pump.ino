@@ -19,7 +19,17 @@
  *   - WATER_FORCE:<sec> -> Turns pump ON for <sec> bypassing water level check
  *   - STOP              -> Immediate pump cutoff
  *   - BEEP              -> Test sound signal
+ *
+ * Pot scale (HX711 + load cell) for the evaporation experiment:
+ *   - D2: HX711 DT, D3: HX711 SCK
+ *   - SCALE             -> OK:SCALE=<grams>   (average of 5 readings; ERR:SCALE_NOT_READY if absent)
+ *   - SCALE_RAW         -> OK:SCALE_RAW=<raw counts>
+ *   - TARE              -> OK:TARE:OFFSET=<raw>   (current weight becomes 0 g, saved to EEPROM)
+ *   - CALIBRATE:<grams> -> OK:CALIBRATE:FACTOR=<counts per gram>  (put a known mass, then send)
+ *   - TELEMETRY additionally ends with :WEIGHT=<grams|NA>
  */
+
+#include <EEPROM.h>
 
 #define RELAY_PIN 8
 #define BUZZER_PIN 9
@@ -27,6 +37,13 @@
 #define DHT_PIN 7
 #define WATER_LEVEL_PIN A0
 #define SOIL_MOISTURE_PIN A1
+#define HX_DT_PIN 2
+#define HX_SCK_PIN 3
+
+#define EEPROM_MAGIC_ADDR 0
+#define EEPROM_OFFSET_ADDR 2
+#define EEPROM_FACTOR_ADDR 6
+#define EEPROM_MAGIC 0x5A
 
 #define RELAY_ACTIVE HIGH
 #define RELAY_INACTIVE LOW
@@ -119,6 +136,83 @@ void updateDHTIfNeeded() {
   }
 }
 
+// ---------------------------------------------------------------------------
+// HX711 pot scale (bit-banged, no external library)
+// ---------------------------------------------------------------------------
+long scaleOffset = 0;
+float scaleFactor = 0.0f;  // raw counts per gram; 0 = not calibrated
+
+bool hxReady() {
+  return digitalRead(HX_DT_PIN) == LOW;
+}
+
+// Returns false when the HX711 is not answering (not connected / not powered).
+bool hxReadRaw(long &value) {
+  unsigned long start = millis();
+  while (!hxReady()) {
+    if (millis() - start > 200) return false;
+  }
+  unsigned long data = 0;
+  noInterrupts();
+  for (uint8_t i = 0; i < 24; i++) {
+    digitalWrite(HX_SCK_PIN, HIGH);
+    delayMicroseconds(1);
+    data = (data << 1) | (digitalRead(HX_DT_PIN) ? 1UL : 0UL);
+    digitalWrite(HX_SCK_PIN, LOW);
+    delayMicroseconds(1);
+  }
+  // 25th pulse selects channel A, gain 128 for the next conversion
+  digitalWrite(HX_SCK_PIN, HIGH);
+  delayMicroseconds(1);
+  digitalWrite(HX_SCK_PIN, LOW);
+  interrupts();
+  if (data & 0x800000UL) data |= 0xFF000000UL;  // sign extend 24 -> 32 bit
+  value = (long)data;
+  return true;
+}
+
+// Average of n readings to suppress noise (the HX711 runs at 10 Hz).
+bool hxReadAverage(uint8_t n, long &avg) {
+  long long sum = 0;
+  for (uint8_t i = 0; i < n; i++) {
+    long v;
+    if (!hxReadRaw(v)) return false;
+    sum += v;
+  }
+  avg = (long)(sum / n);
+  return true;
+}
+
+void loadScaleCalibration() {
+  if (EEPROM.read(EEPROM_MAGIC_ADDR) == EEPROM_MAGIC) {
+    EEPROM.get(EEPROM_OFFSET_ADDR, scaleOffset);
+    EEPROM.get(EEPROM_FACTOR_ADDR, scaleFactor);
+  }
+}
+
+void saveScaleCalibration() {
+  EEPROM.put(EEPROM_OFFSET_ADDR, scaleOffset);
+  EEPROM.put(EEPROM_FACTOR_ADDR, scaleFactor);
+  EEPROM.write(EEPROM_MAGIC_ADDR, EEPROM_MAGIC);
+}
+
+// Weight in grams; false if the scale is missing or not calibrated.
+bool readWeightGrams(float &grams) {
+  long raw;
+  if (scaleFactor == 0.0f || !hxReadAverage(5, raw)) return false;
+  grams = (float)(raw - scaleOffset) / scaleFactor;
+  return true;
+}
+
+void printWeightOrNA() {
+  float g;
+  if (readWeightGrams(g)) {
+    Serial.print(g, 1);
+  } else {
+    Serial.print("NA");
+  }
+}
+
 void playChirp(int freq, int duration) {
   tone(BUZZER_PIN, freq, duration);
 }
@@ -142,6 +236,11 @@ void setup() {
   pinMode(DHT_PIN, INPUT_PULLUP);
   pinMode(WATER_LEVEL_PIN, INPUT);
   pinMode(SOIL_MOISTURE_PIN, INPUT);
+
+  pinMode(HX_DT_PIN, INPUT);
+  pinMode(HX_SCK_PIN, OUTPUT);
+  digitalWrite(HX_SCK_PIN, LOW);
+  loadScaleCalibration();
 
   // Startup audio chirp
   playChirp(1200, 150);
@@ -216,7 +315,59 @@ void handleCommand(String cmd) {
     Serial.print(":TEMP=");
     Serial.print(cachedTemp, 1);
     Serial.print(":HUM=");
-    Serial.println(cachedHum, 1);
+    Serial.print(cachedHum, 1);
+    Serial.print(":WEIGHT=");
+    printWeightOrNA();
+    Serial.println();
+  }
+  else if (cmd == "SCALE") {
+    float g;
+    if (readWeightGrams(g)) {
+      Serial.print("OK:SCALE=");
+      Serial.println(g, 1);
+    } else {
+      Serial.println("ERR:SCALE_NOT_READY");
+    }
+  }
+  else if (cmd == "SCALE_RAW") {
+    long raw;
+    if (hxReadAverage(5, raw)) {
+      Serial.print("OK:SCALE_RAW=");
+      Serial.println(raw);
+    } else {
+      Serial.println("ERR:SCALE_NOT_READY");
+    }
+  }
+  else if (cmd == "TARE") {
+    long raw;
+    if (!hxReadAverage(10, raw)) {
+      Serial.println("ERR:SCALE_NOT_READY");
+      return;
+    }
+    scaleOffset = raw;
+    saveScaleCalibration();
+    Serial.print("OK:TARE:OFFSET=");
+    Serial.println(scaleOffset);
+  }
+  else if (cmd.startsWith("CALIBRATE:")) {
+    float grams = cmd.substring(10).toFloat();
+    long raw;
+    if (grams <= 0.0f) {
+      Serial.println("ERR:INVALID_MASS");
+      return;
+    }
+    if (!hxReadAverage(10, raw)) {
+      Serial.println("ERR:SCALE_NOT_READY");
+      return;
+    }
+    if (raw == scaleOffset) {
+      Serial.println("ERR:NO_LOAD_DETECTED");
+      return;
+    }
+    scaleFactor = (float)(raw - scaleOffset) / grams;
+    saveScaleCalibration();
+    Serial.print("OK:CALIBRATE:FACTOR=");
+    Serial.println(scaleFactor, 3);
   }
   else if (cmd == "MOISTURE") {
     int soil = readSoilMoisturePercent();
