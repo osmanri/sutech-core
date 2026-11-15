@@ -71,11 +71,12 @@ def et0_penman_monteith(
     rs: float | None = None, sunshine_h: float | None = None,
     lat_deg: float | None = None, day_of_year: int | None = None,
     rh_max: float | None = None, rh_min: float | None = None, rh_mean: float | None = None,
+    t_dew: float | None = None,
 ) -> float:
     """Daily ET0, mm/day (eq. 6).
 
     Radiation: give `rs` (measured, MJ m-2 day-1) or `sunshine_h` with lat/day.
-    Humidity: give rh_max and rh_min (eq. 17), or only rh_mean (eq. 19).
+    Humidity (FAO-56 order of preference): t_dew (eq. 14), rh_max and rh_min (eq. 17), rh_mean (eq. 19).
     For an indoor stand pass measured Rs under the lamp and u2 = the real air speed.
     """
     if t_max < t_min:
@@ -84,12 +85,14 @@ def et0_penman_monteith(
         raise ValueError("wind speed cannot be negative")
     t_mean = (t_max + t_min) / 2.0
     es = (sat_vapour_pressure(t_max) + sat_vapour_pressure(t_min)) / 2.0
-    if rh_max is not None and rh_min is not None:
+    if t_dew is not None:
+        ea = sat_vapour_pressure(t_dew)
+    elif rh_max is not None and rh_min is not None:
         ea = (sat_vapour_pressure(t_min) * rh_max / 100.0 + sat_vapour_pressure(t_max) * rh_min / 100.0) / 2.0
     elif rh_mean is not None:
         ea = rh_mean / 100.0 * es
     else:
-        raise ValueError("humidity: give rh_max and rh_min, or rh_mean")
+        raise ValueError("humidity: give t_dew, rh_max and rh_min, or rh_mean")
 
     ra, n_day = (None, None)
     if lat_deg is not None and day_of_year is not None:

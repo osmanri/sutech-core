@@ -59,6 +59,16 @@ class Invariants(unittest.TestCase):
         args = {k: v for k, v in BRUSSELS.items() if k != "sunshine_h"}
         self.assertAlmostEqual(et0_penman_monteith(**args, rs=rs), et0_penman_monteith(**BRUSSELS), places=9)
 
+    def test_dew_point_path_matches_actual_vapour_pressure(self):
+        # FAO-56 eq. 14: ea = e0(Tdew). A dew point giving ea = 1.409 kPa reproduces the RH path.
+        from bot.et0 import sat_vapour_pressure as e0
+        lo, hi = -10.0, 30.0
+        for _ in range(80):
+            mid = (lo + hi) / 2
+            lo, hi = (mid, hi) if e0(mid) < (e0(12.3) * .84 + e0(21.5) * .63) / 2 else (lo, mid)
+        args = {k: v for k, v in BRUSSELS.items() if k not in ("rh_max", "rh_min")}
+        self.assertAlmostEqual(et0_penman_monteith(**args, t_dew=lo), et0_penman_monteith(**BRUSSELS), places=6)
+
     def test_bad_inputs(self):
         with self.assertRaises(ValueError):
             et0_penman_monteith(**{**BRUSSELS, "t_max": 5.0})
