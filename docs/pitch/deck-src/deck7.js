@@ -53,6 +53,21 @@ function slide(o) {
   const [ax, ay, aw, bx, by, bw] = o.glow;
   s.addImage({ path: 'm/glow-lime.png', x: ax, y: ay, w: aw, h: aw, altText: '', objectName: '!!glowA' });
   s.addImage({ path: 'm/glow-green.png', x: bx, y: by, w: bw, h: bw, altText: '', objectName: '!!glowB' });
+  // corner details: faint big icon half off-slide, two small ones, and a dot grid
+  {
+    const sets = [['drop-half', 'thermometer', 'sun'], ['waves', 'leaf', 'drop'], ['sparkle', 'drop', 'leaf'], ['wind', 'cloud-rain', 'drop'],
+      ['map-trifold', 'leaf', 'drop'], ['flask', 'drop', 'leaf'], ['chart-line-up', 'drop', 'leaf'], ['warning-circle', 'drop', 'leaf'],
+      ['tractor', 'grains', 'drop'], ['scales', 'leaf', 'drop'], ['users-three', 'leaf', 'drop'], ['calendar-check', 'leaf', 'drop'], ['cpu', 'lightning', 'drop']];
+    const [n1, n2, n3] = sets[(shown + uid) % sets.length];
+    const put = (n, x, y, w, tr, k) => s.addImage({ path: `img/d-${n}-lime.png`, x, y, w, h: w, transparency: tr, altText: '', objectName: `decor-${n}-${k}` });
+    if (!o.blank) {
+      put(n1, 11.9, -0.45, 1.7, 80, 1); put(n2, 11.2, 0.95, 0.4, 68, 2); put(n3, 12.6, 1.3, 0.34, 68, 3);
+      s.addImage({ path: 'm/dots.png', x: 0.6, y: 6.5, w: 1.45, h: 0.9, transparency: 62, altText: "", objectName: "decor-dots" });
+    } else {
+      put(n1, 11.9, 5.6, 1.7, 80, 1); put(n2, 11.1, 6.45, 0.4, 68, 2);
+      s.addImage({ path: 'm/dots.png', x: 11.2, y: 0.95, w: 1.45, h: 0.9, transparency: 62, altText: "", objectName: "decor-dots" });
+    }
+  }
   s._after = () => {
     const L = o.logo || { x: 0.6, y: 0.36, d: 0.52 };
     s.addShape(pres.shapes.OVAL, { x: L.x, y: L.y, w: L.d, h: L.d, fill: { color: WHITE }, line: { type: 'none' }, objectName: '!!logodisc' });
