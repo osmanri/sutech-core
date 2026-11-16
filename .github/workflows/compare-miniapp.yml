@@ -24,10 +24,12 @@ jobs:
         run: |
           npm ci --ignore-scripts
           npm run build
-          cp -r dist /tmp/built
-          node cli.mjs fetch || true
-          node cli.mjs pull --force || true
-          echo "=== files differing: repository build vs live (ignoring CR/LF) ==="
-          diff -rq --strip-trailing-cr /tmp/built dist || true
-          echo "=== details ==="
-          diff -ru --strip-trailing-cr /tmp/built dist 2>&1 | head -400 || true
+          node cli.mjs status || true
+          echo "=== public live files vs repository build (ignoring CR/LF) ==="
+          BASE=https://app8796056339.tgcloud.ai
+          mkdir -p /tmp/live
+          (cd dist && find . -type f \( -name '*.js' -o -name '*.css' -o -name '*.html' -o -name '*.svg' -o -name 'LICENSE' \) | sed 's|^\./||') | while read f; do
+            mkdir -p "/tmp/live/$(dirname "$f")"
+            curl -fsS "$BASE/$f" -o "/tmp/live/$f" || echo "missing live: $f"
+            if diff -q --strip-trailing-cr "dist/$f" "/tmp/live/$f" >/dev/null; then :; else echo "DIFFERS: $f"; diff -u --strip-trailing-cr "/tmp/live/$f" "dist/$f" | head -60; fi
+          done
