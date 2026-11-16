@@ -1,0 +1,36 @@
+name: deploy-miniapp
+# Publishes the Mini App (static files built from the frontend submodule). The bot code is not touched.
+# Runs when the frontend pointer or the build files change on main, or by hand: Actions -> deploy-miniapp -> Run workflow.
+# Verified with compare-miniapp: the live files were identical to the build before this workflow was added.
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths: ['frontend', 'serverless/build.mjs', 'serverless/web/**', '.github/workflows/deploy-miniapp.yml']
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Write bot/.env from the secret
+        env:
+          BOT_ENV: ${{ secrets.BOT_ENV }}
+        run: |
+          test -n "$BOT_ENV" || { echo "Secret BOT_ENV is empty"; exit 1; }
+          printf '%s\n' "$BOT_ENV" > bot/.env
+      - name: Frontend tests
+        working-directory: frontend
+        run: for t in test_*.cjs; do node "$t"; done
+      - name: Build and publish the Mini App only
+        working-directory: serverless
+        run: |
+          npm ci --ignore-scripts
+          npm run build
+          node cli.mjs fetch
+          node cli.mjs push dist
+          node cli.mjs status
