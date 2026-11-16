@@ -19,3 +19,10 @@ test('same method never receives a fabricated water saving',()=>{
  const p={...fixtures[0].payload,irrigation_type:'furrow',moisture_condition:'dry'};
  const r=calculate(parseField(p),9,0);assert.ok(Math.abs(r.gross_m3-r.traditional_m3)<1e-9);
 });
+test('Ks (FAO-56 eq. 84) matches the Python engine hand-computed case',()=>{
+ const f=parseField({balance_version:2,crop:'wheat',soil_type:'loam',irrigation_type:'drip',area:1,area_unit:'hectare',day_of_growth:60,moisture_condition:'dry'});
+ const unstressed=calculate(f,5,0);assert.equal(unstressed.ks,1);assert.ok(Math.abs(unstressed.deficit-108.875)<1e-9);
+ f.yesterday=150;const r=calculate(f,5,0),ks=37.5/84.375;
+ assert.ok(Math.abs(r.ks-ks)<1e-12);assert.ok(Math.abs(r.etc-5*1.15*ks)<1e-12);assert.ok(Math.abs(r.deficit-(150+r.etc))<1e-12);
+ f.yesterday=calculate(f,5,0).taw;assert.ok(calculate(f,5,0).ks<1e-12);
+});

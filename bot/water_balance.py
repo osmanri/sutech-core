@@ -7,7 +7,7 @@ No recommendation is treated as evidence that irrigation actually occurred.
 import math
 from dataclasses import dataclass
 
-CALCULATION_VERSION = 'fao56.5'
+CALCULATION_VERSION = 'fao56.6'
 
 # Default screening model for a film-covered greenhouse when no calibrated
 # indoor ET0 measurement is available. The farmer can still supply a measured
@@ -85,6 +85,17 @@ def crop_parameters(crop, day, stages):
     # to the end of development, then stays at the supplied maximum.
     zr = zmin + (zmax - zmin) * min(day / (initial + development), 1.)
     return kc, zr, p, stage
+
+
+def stress_coefficient(depletion, taw, raw, p):
+    """FAO-56 eq. 84: Ks = (TAW - Dr) / ((1 - p) TAW) once depletion exceeds RAW.
+
+    Uses the depletion at the start of the day (FAO-56 recommends Dr,i-1).
+    A stressed crop transpires less, so the deficit grows more slowly.
+    """
+    if taw <= 0 or depletion <= raw:
+        return 1.
+    return min(1., max(0., (taw - depletion) / ((1. - p) * taw)))
 
 
 def root_zone_capacity(soil, zr, p):
@@ -206,7 +217,8 @@ def calculate_balance(field, et0, rain):
                     raw=0.0, deficit=net_mm, threshold=net_mm, **economy)
     taw, raw = root_zone_capacity(field.soil, field.zr, field.p)
     peff = 0. if rain < 5 else rain * .75
-    etc = et0 * field.kc
+    ks = stress_coefficient(field.yesterday, taw, raw, field.p)
+    etc = et0 * field.kc * ks
     # Preserve RAW equality when equal evaporation/rain cancel. Sequential
     # additions can otherwise fabricate a one-ULP stress excursion.
     unbounded = math.fsum((field.yesterday, etc, -peff))
@@ -227,7 +239,7 @@ def calculate_balance(field, et0, rain):
                                   field.pump_power_kw, field.pump_productivity_m3h)
     return dict(status=status, taw=taw, raw=raw, deficit=deficit, unbounded=unbounded,
                 overflow=max(0., unbounded-taw), rain_excess=max(0., -unbounded),
-                et0=et0, rain=rain, peff=peff, etc=etc, kc=field.kc, zr=field.zr, p=field.p,
+                et0=et0, rain=rain, peff=peff, etc=etc, ks=ks, kc=field.kc, zr=field.zr, p=field.p,
                 threshold=threshold, tech_threshold=tech_threshold,
                 efficiency=efficiency, net_m3=net, gross_m3=gross,
                 **economy)

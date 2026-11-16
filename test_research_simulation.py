@@ -1,0 +1,91 @@
+"""Known-answer checks for the retrospective simulation (synthetic weather, no network)."""
+import random
+import unittest
+
+from bot.water_balance import CROPS
+from research.simulate import (best_safe_calendar, bootstrap_ci, KY, calendar_decider, mean_daily_demand, run_season, safe_multiplier,
+                               summarise, sutech_decider)
+from research.sensitivity import forecast_for
+
+DAYS = sum(CROPS["cotton"][4])
+DRY = [(6.0, 0.0)] * DAYS                                  # hot, rainless season
+RAINY = [(5.0, 20.0 if d % 10 == 0 else 0.0) for d in range(DAYS)]
+
+
+def sutech(weather, forecast=None, **kw):
+    decide, _ = sutech_decider("cotton", "loam", "drip", **kw)
+    return run_season("cotton", "loam", "drip", weather, decide, forecast)
+
+
+class Simulation(unittest.TestCase):
+    def test_water_balance_closes(self):
+        for s in (sutech(DRY), sutech(RAINY), run_season("cotton", "loam", "furrow", RAINY, calendar_decider(10, 50.0))):
+            self.assertAlmostEqual(s.closure_error(), 0.0, places=8)
+
+    def test_perfect_information_sutech_never_stresses(self):
+        for w in (DRY, RAINY):
+            s = sutech(w)
+            self.assertEqual(s.stress_days, 0)
+            self.assertAlmostEqual(s.relative_yield(KY["cotton"]), 1.0)
+
+    def test_no_irrigation_in_dry_season_causes_stress(self):
+        s = run_season("cotton", "loam", "drip", DRY, calendar_decider(5, 0.0))
+        self.assertGreater(s.stress_days, 100)
+        self.assertLess(s.relative_yield(KY["cotton"]), 0.6)
+
+    def test_sutech_applies_exactly_crop_demand_without_rain(self):
+        s = sutech(DRY)
+        self.assertAlmostEqual(s.net_mm, s.etm - s.dr_end, places=6)
+        self.assertLess(s.deep_perc, 1e-9)
+
+    def test_safe_calendar_reaches_target_yield(self):
+        demand = mean_daily_demand("cotton", "loam", "drip", [RAINY])
+        m = safe_multiplier("cotton", "loam", "drip", [RAINY], 5, demand)
+        s = run_season("cotton", "loam", "drip", RAINY, calendar_decider(5, demand * 5 * m))
+        self.assertGreaterEqual(s.relative_yield(KY["cotton"]), 0.98)
+        if m > 1.0:  # one step less must miss the target, otherwise m is not minimal
+            less = run_season("cotton", "loam", "drip", RAINY, calendar_decider(5, demand * 5 * (m - 0.05)))
+            self.assertLess(less.relative_yield(KY["cotton"]), 0.98)
+
+    def test_underestimating_forecast_drifts_into_stress_and_soil_check_fixes_it(self):
+        biased = forecast_for(DRY, random.Random(1), bias=-0.2)
+        self.assertGreater(sutech(DRY, biased).stress_days, 50)
+        fixed = sutech(DRY, biased, check_every=7, sensor_sd_mm=0.0)
+        self.assertEqual(fixed.stress_days, 0)
+
+    def test_summary_pairs_runs_by_location_and_year(self):
+        rows = [dict(crop="c", method="m", location="L", year=y, strategy=st, gross_m3_ha=g, stress_days=0,
+                     rel_yield=1.0, deep_perc_mm=0.0, events=1)
+                for y, st, g in ((1, "sutech", 80.0), (1, "cal", 100.0), (2, "sutech", 90.0), (2, "cal", 100.0))]
+        cal = next(s for s in summarise(rows) if s["strategy"] == "cal")
+        self.assertAlmostEqual(cal["sutech_vs_this_pct"], -15.0)
+        self.assertEqual(cal["sutech_less_water_in"], 2)
+
+    def test_best_calendar_is_at_least_as_good_as_any_fixed_interval(self):
+        demand = mean_daily_demand("cotton", "loam", "drip", [RAINY])
+        n, m = best_safe_calendar("cotton", "loam", "drip", [RAINY], demand)
+        best = run_season("cotton", "loam", "drip", RAINY, calendar_decider(n, demand * n * m))
+        self.assertGreaterEqual(best.relative_yield(KY["cotton"]), 0.98)
+        m5 = safe_multiplier("cotton", "loam", "drip", [RAINY], 5, demand)
+        if m5 is not None:
+            fixed = run_season("cotton", "loam", "drip", RAINY, calendar_decider(5, demand * 5 * m5))
+            self.assertLessEqual(best.gross_mm, fixed.gross_mm + 1e-9)
+
+    def test_impossible_calendar_reports_no_solution(self):
+        # A 40-day interval on sand cannot keep the crop unstressed at any dose: water above TAW drains.
+        demand = mean_daily_demand("cotton", "sand", "drip", [DRY])
+        self.assertIsNone(safe_multiplier("cotton", "sand", "drip", [DRY], 40, demand))
+
+    def test_bootstrap_interval_is_reproducible_and_contains_the_mean(self):
+        vals = [-30.0, -28.0, -27.0, -25.0, -26.0, -31.0, -24.0, -29.0]
+        lo, hi = bootstrap_ci(vals, reps=2000)
+        self.assertEqual((lo, hi), bootstrap_ci(vals, reps=2000))
+        self.assertLess(lo, sum(vals) / len(vals))
+        self.assertGreater(hi, sum(vals) / len(vals))
+        self.assertGreaterEqual(lo, min(vals))
+        self.assertLessEqual(hi, max(vals))
+        self.assertEqual(bootstrap_ci([5.0, 5.0, 5.0], reps=500), (5.0, 5.0))
+
+
+if __name__ == "__main__":
+    unittest.main()
