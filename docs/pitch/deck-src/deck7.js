@@ -88,7 +88,7 @@ let s = slide({ section: 'Проблема', blank: true, photo: 'aral', glow: [
   if (i < 2) sep(s, x + 3.8, 2.75, x + 3.8, 6.3, g);
 });
 T(s, 'Осман Толобек · [школа, город] · Samsung Solve for Tomorrow', { x: 0.6, y: 6.55, w: 9, h: 0.28, fontSize: 12.5, color: PALE }, 5, 'fade');
-credit(s, 'Фото: «Graveyard of Ships (Aral sea)», Wikimedia Commons, CC0', 6.86);
+credit(s, 'Фото: «Graveyard of Ships (Aral sea)», Mirfayzbek Abdullayev, Wikimedia Commons, CC0', 6.86);
 s._after();
 s.addNotes('Здравствуйте! Меня зовут Осман Толобек, мой проект — Su-Tech. Это Аральское море: корабли стоят посреди пустыни. Сельское хозяйство забирает 72 процента пресной воды мира. В Казахстане до половины воды теряется ещё в каналах. В 2026 году ввели лимиты, посевы риса в Туркестанской области сокращают на 78 процентов.');
 
@@ -167,7 +167,7 @@ s.addImage({ path: 'm/phone-mini.png', x: 3.45, y: 2.0, w: 2.3, h: 4.84, altText
   T(s, d, { x: 7.3, y: y + 0.46, w: 5.4, h: 0.32, fontSize: 12.5, color: PALE }, g);
   if (i < 4) sep(s, 6.5, y + 0.9, 12.73, y + 0.9, g);
 });
-credit(s, 'Фото: Wikimedia Commons (авторы указаны в конце презентации)', 6.9);
+credit(s, 'Фото: Alabama Extension, Wikimedia Commons, CC0', 6.9);
 s._after();
 s.addNotes('Так это выглядит: слева сам бот, справа Mini App с полем на спутниковой карте. Три языка, ИИ-агроном. Демо для вас — по QR-коду.');
 
@@ -243,7 +243,7 @@ T(s, 'То же + кнопка «сухо / нормально / влажно» 
 T(s, '0', { x: 7.45, y: 2.9, w: 5.2, h: 2.3, valign: 'middle', fontFace: HEAD, fontSize: 150, color: LIME, wrap: false }, 4, 'zoom');
 T(s, 'дней стресса · экономия 14–17%', { x: 7.45, y: 5.3, w: 5.25, h: 0.5, fontSize: 20, bold: true }, 4);
 T(s, 'Случайные ошибки до ±30%, неучтённые дожди, неверная почва — 0 дней стресса · хлопок, модель', { x: 0.6, y: 6.55, w: 12.1, h: 0.25, fontSize: 9.5, color: PALE }, 5, 'fade');
-credit(s, 'Фото: Wilfredor (CC0) и PSSP (CC BY 2.0), Wikimedia Commons', 6.86);
+credit(s, 'Фото: Wilfredor и Alabama Extension, Wikimedia Commons, CC0', 6.86);
 s._after();
 s.addNotes('Я специально искал, где модель ломается. Случайные ошибки ей не страшны. А если прогноз всё время занижает испарение, ошибка копится — 73 дня стресса за сезон. Решение — одна кнопка: раз в неделю фермер отвечает, сухая ли почва. Стресс исчезает, экономия остаётся. Эта кнопка уже есть в боте.');
 
@@ -263,7 +263,7 @@ sep(s, 0.6, 4.35, 12.73, 4.35, 2);
   if (ic) icon(s, ic, 'lime', x + 4.6, y + 0.5, 0.75, g);
   T(s, d, { x, y: y + 1.45, w: 5.4, h: 0.55, fontSize: 12, color: PALE }, g);
 });
-credit(s, 'Фото: Wikimedia Commons (авторы указаны в конце презентации)', 6.88);
+credit(s, 'Фото: Wikideas1, Wikimedia Commons, CC0', 6.88);
 s._after();
 s.addNotes('Финансы. Стенд стоил [сумма]. Фермеру Su-Tech бесплатен — нужен только Telegram. Зарабатывать проект может так: [выбранная модель]. Рынок: 702 тысячи гектаров уже на водосберегающих технологиях, к 2030 году цель — 1,3 миллиона.');
 
@@ -339,7 +339,7 @@ s.addShape(pres.shapes.RECTANGLE, { x: 1.0, y: 4.1, w: 5.45, h: 0.05, fill: { co
   T(s, d, { x: cx - 1.0, y: y0, w: 2.0, h: 0.4, align: 'center', fontSize: 18, bold: true, color: done ? LIME : WHITE }, g);
   T(s, t, { x: cx - 1.0, y: y0 + 0.45, w: 2.0, h: 0.75, align: 'center', fontSize: 12.5, color: PALE }, g);
 });
-credit(s, 'Фото: Wikimedia Commons (авторы указаны в конце презентации)', 6.88);
+credit(s, 'Фото: Wikideas1, Wikimedia Commons, CC0', 6.88);
 s._after();
 s.addNotes('Бот работает с сентября, в ноябре проверена математика. Дальше — опыт с горшками, конкурс в марте и пилот на поле летом 2027 года.');
 
@@ -368,7 +368,7 @@ T(s, 'Спасибо! · Осман Толобек · [контакт]', { x: 0.
 s.addShape(pres.shapes.ROUNDED_RECTANGLE, { x: 8.5, y: 1.15, w: 4.23, h: 5.3, rectRadius: 0.3, fill: { color: WHITE }, line: { type: 'none' }, objectName: an(3) });
 s.addImage({ path: 'm/qr-demo.png', x: 8.92, y: 1.57, w: 3.4, h: 3.4, altText: 'QR-код: бот Su-Tech в демо-режиме', objectName: an(3) });
 T(s, 't.me/Su_Tech_bot → /demo', { x: 8.5, y: 5.25, w: 4.23, h: 0.5, align: 'center', fontSize: 16, bold: true, color: DEEP }, 3);
-T(s, 'Фото на слайдах: Wilfredor, Benoît Prieur, «Graveyard of Ships» (CC0); PSSP (CC BY 2.0); остальные — см. список источников. Wikimedia Commons.', { x: 0.75, y: 6.78, w: 11.5, h: 0.25, fontSize: 8.5, color: MUTED });
+T(s, 'Фото (Wikimedia Commons): Mirfayzbek Abdullayev — Аральское море; Wilfredor — сухая земля; Benoît Prieur — канал (все CC0); Alabama Extension — хлопок (CC0); Wikideas1 — полив (CC0); PSSP — каналы Файсалабада (CC BY 2.0).', { x: 0.75, y: 6.78, w: 11.5, h: 0.25, fontSize: 8.5, color: MUTED });
 s._after();
 s.addNotes('Наведите камеру на QR-код — бот откроется в демо и покажет весь расчёт по шагам. Мы ищем первое хозяйство для пилота: если вы знаете фермера, который готов попробовать, подойдите ко мне после защиты. Спасибо!');
 
