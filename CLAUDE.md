@@ -19,3 +19,16 @@ At the start of a session check `git status` and `git log origin/<branch>..HEAD`
 - Do not invent statistics, quotes or results; unknown values stay `[in brackets]` until the owner supplies them.
 - The experiment result and field data do not exist yet; the study in `research/` is model against model.
 - The code was written with an AI assistant; say so honestly wherever authorship is described.
+
+## Merging and deploying (owner's standing instruction)
+
+The owner only sends requests in chat. After a change is committed and pushed:
+
+1. open a pull request from the working branch into `main` and merge it yourself (the owner authorised this);
+2. a merge that touches `serverless/**` or `bot/**` triggers `.github/workflows/deploy-bot.yml`, which runs the bot tests
+   and publishes the bot (modules only, never `--force`, never the Mini App). Check the run is green and report it;
+3. if the run is red, read the job log, fix, and repeat; never leave `main` red;
+4. the bot's live code is backed up daily by `backup-live-bot.yml` to the branch `live-bot-backup`: if that branch exists,
+   the live bot differs from `main`. Merge it into `main` (ignoring CR/LF differences) before deploying anything.
+
+Full plain-language guide for the owner: `docs/HOWTO.md`. Secret `BOT_ENV` (text of `bot/.env`) is already set in GitHub.
