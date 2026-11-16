@@ -30,6 +30,6 @@ jobs:
           mkdir -p /tmp/live
           (cd dist && find . -type f \( -name '*.js' -o -name '*.css' -o -name '*.html' -o -name '*.svg' -o -name 'LICENSE' \) | sed 's|^\./||') | while read f; do
             mkdir -p "/tmp/live/$(dirname "$f")"
-            curl -fsS "$BASE/$f" -o "/tmp/live/$f" || echo "missing live: $f"
+            u="$f"; [ "$f" = index.html ] && u=""; curl -fsSL "$BASE/$u" -o "/tmp/live/$f" || echo "missing live: $f"
             if diff -q --strip-trailing-cr "dist/$f" "/tmp/live/$f" >/dev/null; then :; else echo "DIFFERS: $f"; diff -u --strip-trailing-cr "/tmp/live/$f" "dist/$f" | head -60; fi
           done
