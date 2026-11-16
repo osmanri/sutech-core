@@ -3,6 +3,7 @@
 //   - no slide masters, placeholders, charts, tables, flipped lines, letter spacing or shape/image transparency:
 //     transparency is baked into PNGs (prep_canva.py), charts are images or plain rectangles;
 //   - photos and the dark background are ordinary full-slide images, so they can be swapped in Canva.
+//   - no zero-size shapes: Canva rejects the whole file as damaged if a line has width or height 0.
 // PowerPoint animations do not survive a Canva import; animate in Canva itself.
 const pptxgen = require('pptxgenjs');
 const OUT = process.env.OUT || 'Su-Tech-Canva.pptx';
@@ -22,8 +23,8 @@ function T(s, text, o) {
   s.addText(text, Object.assign({ margin: 0, valign: 'top', isTextBox: true, color: WHITE, fontSize: 14, fontFace: head ? HEAD : BODY, bold: !!head }, o));
 }
 const icon = (s, n, c, x, y, size) => s.addImage({ path: `m/${n}-${c}.png`, x, y, w: size, h: size, altText: '' });
-function hline(s, x1, x2, y, color = SEP, width = 1) { s.addShape(pres.shapes.LINE, { x: x1, y, w: x2 - x1, h: 0, line: { color, width } }); }
-function vline(s, x, y1, y2, color = SEP, width = 1) { s.addShape(pres.shapes.LINE, { x, y: y1, w: 0, h: y2 - y1, line: { color, width } }); }
+function hline(s, x1, x2, y, color = SEP, width = 1) { s.addShape(pres.shapes.LINE, { x: x1, y, w: x2 - x1, h: 0.001, line: { color, width } }); }
+function vline(s, x, y1, y2, color = SEP, width = 1) { s.addShape(pres.shapes.LINE, { x, y: y1, w: 0.001, h: y2 - y1, line: { color, width } }); }
 function dashed(s, x, y, w, h, label, round) {
   s.addShape(round ? pres.shapes.OVAL : pres.shapes.RECTANGLE, { x, y, w, h, fill: { color: '0D3D2E' }, line: { color: PALE, width: 1.25, dashType: 'dash' } });
   T(s, label, { x, y: y + h / 2 - 0.18, w, h: 0.36, align: 'center', valign: 'middle', fontSize: 12, color: PALE });
