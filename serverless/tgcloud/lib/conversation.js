@@ -41,9 +41,9 @@ export function quickReply(text,lang) {
 }
 
 export const aiIntro=lang=>tr(lang,
- 'Привет! 👋 Я ИИ-агроном Su-Tech. Помогу разобраться с растениями, поливом и почвой 🌱\n\nПришли фото или просто опиши, что случилось — можно и без фотографии.\n\nФото и вопросы обрабатывает Google Gemini. Оценка по фото предварительная. Ответы сохраняются в истории, фото — нет.',
- 'Сәлем! 👋 Мен Su-Tech ЖИ-агрономымын. Өсімдік, суару және топырақ туралы көмектесемін 🌱\n\nФото жібер немесе не болғанын жаз — фотосыз да болады.\n\nФото мен сұрақты Google Gemini өңдейді. Фото бойынша бағалау алдын ала жасалады. Жауаптар тарихта сақталады, фотолар сақталмайды.',
- 'Hi! 👋 I’m Su-Tech’s AI agronomist. I can help with plants, watering and soil 🌱\n\nSend a photo or tell me what is happening — a photo is optional.\n\nGoogle Gemini processes photos and questions. Photo assessments are preliminary. Answers are saved in history; photos are not stored.');
+ 'Привет! 👋 Я ИИ-агроном Su-Tech. Помогу разобраться с растениями, поливом и почвой 🌱\n\nПришли фото или просто опиши, что случилось — можно и без фотографии. Культуру можно подтвердить кнопкой «Культура на фото».\n\nФото и вопросы обрабатывает Google Gemini. В экспериментальной группе фото также обрабатывает сервис распознавания Su-Tech. Оценка предварительная. Ответы сохраняются в истории, фото — нет. Сбор фото для обучения выключен.',
+ 'Сәлем! 👋 Мен Su-Tech ЖИ-агрономымын. Өсімдік, суару және топырақ туралы көмектесемін 🌱\n\nФото жібер немесе не болғанын жаз — фотосыз да болады. Дақылды «Фотодағы дақыл» батырмасымен растауға болады.\n\nФото мен сұрақты Google Gemini өңдейді. Эксперименттік топта фотоларды Su-Tech тану қызметі де өңдейді. Бағалау алдын ала жасалады. Жауаптар тарихта сақталады, фотолар сақталмайды. Оқыту үшін фото жинау өшірулі.',
+ 'Hi! 👋 I’m Su-Tech’s AI agronomist. I can help with plants, watering and soil 🌱\n\nSend a photo or tell me what is happening — a photo is optional. Confirm the crop using “Crop in photo”.\n\nGoogle Gemini processes photos and questions. In the experimental group, Su-Tech’s recognition service also processes photos. Assessments are preliminary. Answers are saved in history; photos are not stored. Training photo collection is disabled.');
 
 export const CONVERSATION_STYLE=`
 Use a warm, natural, conversational tone, like a helpful agronomist in a chat.
