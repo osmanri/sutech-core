@@ -62,7 +62,7 @@ def split(src_l, src_r, dst):
     L, R = Image.new('RGB', (1920, 1080)), None
     a = _tint(_cover(Image.open(src_l).convert('RGB'), 960, 1080), 0.6, light='#8aa060')
     b = _tint(_cover(Image.open(src_r).convert('RGB'), 960, 1080), 0.7, light='#6ab87a')
-    a = Image.composite(Image.new('RGB', a.size, BASE), a, Image.new('L', a.size, 120))
-    b = Image.composite(Image.new('RGB', b.size, BASE), b, Image.new('L', b.size, 125))
+    a = Image.composite(Image.new('RGB', a.size, BASE), a, Image.new('L', a.size, 160))
+    b = Image.composite(Image.new('RGB', b.size, BASE), b, Image.new('L', b.size, 165))
     L.paste(a, (0, 0)); L.paste(b, (960, 0))
     L.save(dst, quality=88)
