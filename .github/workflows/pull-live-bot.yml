@@ -14,7 +14,6 @@ jobs:
         with:
           ref: 858e34d47344e269f0040dd181b6fbbe99939884
           fetch-depth: 0
-          submodules: recursive
       - uses: actions/setup-node@v4
         with:
           node-version: "22"
