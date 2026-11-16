@@ -1,0 +1,41 @@
+name: pull-live-bot
+# Saves the code that is deployed on the live bot as a git branch (live-bot-snapshot), based on the repository
+# state before the recent work, so it can be merged with the repository instead of being overwritten.
+# Changes nothing on the bot. Run: Actions -> pull-live-bot -> Run workflow.
+on:
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  pull:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: 858e34d47344e269f0040dd181b6fbbe99939884
+          fetch-depth: 0
+          submodules: recursive
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Write bot/.env from the secret
+        env:
+          BOT_ENV: ${{ secrets.BOT_ENV }}
+        run: |
+          test -n "$BOT_ENV" || { echo "Secret BOT_ENV is empty"; exit 1; }
+          printf '%s\n' "$BOT_ENV" > bot/.env
+      - name: Download the live code into serverless/tgcloud
+        working-directory: serverless
+        run: |
+          npm ci --ignore-scripts
+          node cli.mjs fetch
+          node cli.mjs pull --force
+      - name: Commit it to the branch live-bot-snapshot
+        run: |
+          git config user.name "live-bot-snapshot"
+          git config user.email "noreply@github.com"
+          git checkout -b live-bot-snapshot
+          git add serverless/tgcloud
+          git status --short | head -50
+          git commit -m "Snapshot of the code deployed on the live bot (revision from tgcloud)" || echo "nothing to commit"
+          git push -f origin live-bot-snapshot
