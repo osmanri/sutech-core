@@ -29,6 +29,11 @@ jobs:
         run: |
           npm ci --ignore-scripts
           node --experimental-loader ./test/sdk-loader.mjs --test $(ls test/*.test.js | grep -v transport)
-      - name: Deploy
+      - name: Deploy the bot code (not the Mini App)
         working-directory: serverless
-        run: npm run deploy
+        run: |
+          npm run build
+          # sync the local snapshot with what is live, then send ONLY the bot modules; no --force
+          node cli.mjs fetch
+          node cli.mjs push tgcloud
+          node cli.mjs status
