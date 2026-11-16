@@ -3,13 +3,13 @@ M = '../native/m/'
 have = lambda n: os.path.exists(f'{n}.jpg') and open(f'{n}.jpg', 'rb').read(2) == b'\xff\xd8'
 src = lambda want, *fallback: next(n for n in (want, *fallback) if have(n))
 plan = {   # slide photo -> (candidates, flip, overlay left, overlay right, colour kept, overlay top, overlay bottom)
-    'aral':    (('aral', 'dry'),            False, 60, 60, 0.8, 30, 200),
-    'canal':   (('canal',),                 False, 185, 60, 0.7, 0, 0),
-    'green':   (('green', 'canal'),         False, 190, 90, 0.7, 0, 0),
-    'fields':  (('fields',),                False, 185, 140, 0.7, 0, 0),
-    'steppe':  (('steppe', 'fields'),       False, 150, 150, 0.7, 120, 175),
-    'fields2': (('fields2', 'fields'),      False, 185, 60, 0.7, 0, 0),
-    'dry':     (('dry',),                   False, 185, 90, 0.6, 0, 0),
+    'aral':    (('aral', 'dry'),            False, 150, 150, 0.5, 90, 220),
+    'canal':   (('canal',),                 False, 220, 130, 0.4, 0, 0),
+    'green':   (('green', 'canal'),         False, 220, 150, 0.4, 0, 0),
+    'fields':  (('fields',),                False, 220, 175, 0.4, 0, 0),
+    'steppe':  (('steppe', 'fields'),       False, 195, 195, 0.4, 155, 210),
+    'fields2': (('fields2', 'fields'),      False, 220, 135, 0.4, 0, 0),
+    'dry':     (('dry',),                   False, 220, 165, 0.4, 0, 0),
 }
 for name, (cands, flip, l, r, keep, tp, bt) in plan.items():
     s = src(*cands)
