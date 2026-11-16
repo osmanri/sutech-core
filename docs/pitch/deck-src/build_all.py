@@ -13,7 +13,7 @@ plan = {   # slide photo -> (candidates, flip, overlay left, overlay right, colo
 }
 for name, (cands, flip, l, r, keep, tp, bt) in plan.items():
     s = src(*cands)
-    P.full(f'{s}.jpg', f'{M}full-{name}.jpg', blur=1.2, left=l, right=r, keep=keep, flip=flip, top=tp, bottom=bt)
+    P.full(f'{s}.jpg', f'{M}full-{name}.jpg', blur=9, left=l, right=r, keep=keep, flip=flip, top=tp, bottom=bt)
     print(f'{name:8s} <- {s}')
 P.split(f"{src('dry')}.jpg", f"{src('green', 'canal')}.jpg", f'{M}full-split.jpg')
 print('split    <-', src('dry'), '|', src('green', 'canal'))

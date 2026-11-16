@@ -64,5 +64,6 @@ def split(src_l, src_r, dst):
     b = _tint(_cover(Image.open(src_r).convert('RGB'), 960, 1080), 0.7, light='#6ab87a')
     a = Image.composite(Image.new('RGB', a.size, BASE), a, Image.new('L', a.size, 160))
     b = Image.composite(Image.new('RGB', b.size, BASE), b, Image.new('L', b.size, 165))
+    a = a.filter(ImageFilter.GaussianBlur(7)); b = b.filter(ImageFilter.GaussianBlur(7))
     L.paste(a, (0, 0)); L.paste(b, (960, 0))
     L.save(dst, quality=88)
