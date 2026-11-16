@@ -1,0 +1,33 @@
+name: compare-miniapp
+# Read-only: builds the Mini App from the repository and shows how it differs from the files live on the server.
+# Changes nothing. Run: Actions -> compare-miniapp -> Run workflow.
+on:
+  workflow_dispatch:
+jobs:
+  compare:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Write bot/.env from the secret
+        env:
+          BOT_ENV: ${{ secrets.BOT_ENV }}
+        run: |
+          test -n "$BOT_ENV" || { echo "Secret BOT_ENV is empty"; exit 1; }
+          printf '%s\n' "$BOT_ENV" > bot/.env
+      - name: Build, download live files, diff
+        working-directory: serverless
+        run: |
+          npm ci --ignore-scripts
+          npm run build
+          cp -r dist /tmp/built
+          node cli.mjs fetch || true
+          node cli.mjs pull --force || true
+          echo "=== files differing: repository build vs live (ignoring CR/LF) ==="
+          diff -rq --strip-trailing-cr /tmp/built dist || true
+          echo "=== details ==="
+          diff -ru --strip-trailing-cr /tmp/built dist 2>&1 | head -400 || true
