@@ -11,6 +11,7 @@ import {pilot,feedback,p} from './pilot.js';
 import {rememberMessage} from './screens.js';
 import {aiIntro} from './conversation.js';
 import {demoScreen,demoSteps} from './demo.js';
+import {CROP_IDS} from './diagnosis.js';
 const fieldButtons=(row,lang)=>keyboard([
  [button(t(lang,'btn_explain'),`explain:${row.id}`)],
  [button(p(lang,'useful'),`vote:${row.id}:y`),button(p(lang,'unhelpful'),`vote:${row.id}:n`)],
@@ -50,7 +51,7 @@ async function historyScreen(id,lang,page=0,generation=null) {
  keys.push(back(lang));await screen(id,rows.length?`<b>${esc(t(lang,'btn_history'))}</b>`:tr(lang,'Расчётов пока нет.','Әзірге есеп жоқ.','No calculations yet.'),keyboard(keys),generation);
 }
 export async function action(id,data) {
- const u=await navigate(id,['ai','ai:new','ai:deep'].includes(data)?'ai':'home'),lang=u.lang;
+ const u=await navigate(id,['ai','ai:new','ai:deep','ai:crop','ai:photo-data'].includes(data)||data.startsWith('ai:crop:')?'ai':'home'),lang=u.lang;
  const show=(text,markup,plain=false)=>screen(id,text,markup,u.generation,plain);
  if(data==='home')return home(id,lang,u.generation);
  if(data==='languages')return show('Русский / Қазақша / English',languages(lang));
@@ -61,9 +62,21 @@ export async function action(id,data) {
   return show(esc(data==='ai:new'?a(lang,'cleared'):aiIntro(lang)),aiKeys(lang));
  }
  if(data==='ai:deep'){u.aiDeep=true;await saveUser(id,u);return show(esc(a(lang,'deep_hint')),aiKeys(lang));}
+ if(data==='ai:crop')return show(tr(lang,'Подтвердите культуру на следующих фото. При смене растения выберите её заново.','Келесі фотолардағы дақылды растаңыз. Өсімдік ауысса, қайта таңдаңыз.','Confirm the crop in your next photos. Select again when the plant changes.'),keyboard([
+  [button(tr(lang,'Томат','Қызанақ','Tomato'),'ai:crop:tomato'),button(tr(lang,'Картофель','Картоп','Potato'),'ai:crop:potato')],
+  [button(tr(lang,'Кукуруза','Жүгері','Maize'),'ai:crop:maize'),button(tr(lang,'Другая / не знаю','Басқа / білмеймін','Other / unsure'),'ai:crop:unknown')],[button(tr(lang,'Назад','Артқа','Back'),'ai')]]));
+ if(data.startsWith('ai:crop:')){
+  const crop=data.slice(8);if(![...CROP_IDS,'unknown'].includes(crop))return;
+  u.photoCrop=crop;await saveUser(id,u);
+  return show(tr(lang,'Выбор сохранён. Пришлите чёткое фото одного листа и опишите симптомы.','Таңдау сақталды. Бір жапырақтың анық фотосын жіберіп, белгілерді сипаттаңыз.','Choice saved. Send a clear photo of one leaf and describe the symptoms.'),aiKeys(lang));
+ }
+ if(data==='ai:photo-data')return show(tr(lang,
+  'Сбор фото для обучения выключен. Фото из чата не сохраняются в обучающий набор. После настройки приватного хранилища потребуется отдельное добровольное согласие с возможностью отзыва и удаления.',
+  'Оқыту үшін фото жинау өшірулі. Чат фотолары оқыту жиынына сақталмайды. Жеке сақтау орны дайын болған соң, қайтарып алу және жою мүмкіндігі бар бөлек ерікті келісім қажет болады.',
+  'Training photo collection is disabled. Chat photos are not saved to a training set. Once private storage is configured, separate voluntary consent with withdrawal and deletion will be required.'),aiKeys(lang));
  if(data==='ai:delete')return show(esc(a(lang,'delete_confirm')),keyboard([[button(a(lang,'delete_yes'),'ai:delete:yes')],[button(a(lang,'delete_no'),'ai:history')]]));
  if(data==='ai:delete:yes'){
-  await db.run("DELETE FROM records WHERE owner=:owner AND kind IN ('ai-answer','ai-context','legacy:ai_exchanges','legacy:ai_conversations')",{':owner':id});
+  await db.run("DELETE FROM records WHERE owner=:owner AND kind IN ('ai-answer','ai-context','photo-comparison','legacy:ai_exchanges','legacy:ai_conversations')",{':owner':id});
   return show(esc(a(lang,'deleted')),aiKeys(lang));
  }
  if(data==='pilot'||data.startsWith('pilot:'))return pilot(id,lang,data.split(':')[1]??'back',u.generation);
