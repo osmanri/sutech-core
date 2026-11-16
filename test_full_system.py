@@ -39,7 +39,7 @@ from handlers.webapp import (
 )
 from handlers.start import format_history_card
 from keyboards.inline import get_history_carousel_keyboard, get_lang_keyboard, get_report_inline_keyboard
-from keyboards.reply import get_main_reply_keyboard
+from keyboards.reply import get_main_reply_keyboard, get_more_reply_keyboard
 
 
 class TestReporter:
@@ -240,14 +240,17 @@ print(f"  -> Сюита 3 завершена: линейность объемо�
 # ─────────────────────────────────────────────────────────────────────────────
 print("\n[СЮИТА 4] Проверка клавиатур и карусели истории (Reply & Inline)...")
 
-# 1. Reply-клавиатура (3 ряда)
+# 1. Reply-клавиатура: главное меню (4 ряда) и вторичное меню «Ещё»
 for lang in ("ru", "kz"):
     kb = get_main_reply_keyboard(lang)
-    reporter.check(len(kb.keyboard) == 3, f"Reply клавиатура на {lang} имеет ровно 3 ряда")
-    reporter.check(len(kb.keyboard[0]) == 1, f"Ряд 1 на {lang} содержит 1 кнопку WebApp на всю ширину")
-    reporter.check(kb.keyboard[0][0].web_app is not None, f"Кнопка ряда 1 на {lang} является WebApp")
-    reporter.check(len(kb.keyboard[1]) == 2, f"Ряд 2 на {lang} содержит 2 кнопки (Поля | История)")
-    reporter.check(len(kb.keyboard[2]) == 3, f"Ряд 3 на {lang} содержит 3 кнопки (Язык | О системе | Помощь)")
+    reporter.check(len(kb.keyboard) == 4, f"Главное меню на {lang} имеет 4 ряда")
+    reporter.check(len(kb.keyboard[0]) == 1, f"Ряд 1 на {lang}: одна кнопка запуска приложения")
+    reporter.check(len(kb.keyboard[1]) == 1, f"Ряд 2 на {lang}: кнопка ИИ-агронома")
+    reporter.check(len(kb.keyboard[2]) == 2, f"Ряд 3 на {lang} содержит 2 кнопки (Поля | История)")
+    reporter.check(len(kb.keyboard[3]) == 1, f"Ряд 4 на {lang}: кнопка «Ещё»")
+    more = get_more_reply_keyboard(lang)
+    reporter.check(len(more.keyboard[0]) == 2, f"Меню «Ещё» на {lang}: Язык | Помощь")
+    reporter.check(len(more.keyboard[1]) == 1 and len(more.keyboard[2]) == 1, f"Меню «Ещё» на {lang}: «О системе» и «Назад»")
 
 # 2. Инлайн-карусель пагинации истории
 test_record = {
@@ -295,6 +298,10 @@ print(f"  -> Сюита 4 завершена: навигация и карусе
 # СЮИТА 5: Синхронизация фронтенда (index.html, app.js, 8 культур, 5 методов полива)
 # ─────────────────────────────────────────────────────────────────────────────
 print("\n[СЮИТА 5] Верификация фронтенда и статических ассетов...")
+
+if not os.path.exists(os.path.join(BASE_DIR, "frontend", "index.html")):
+    import unittest
+    raise unittest.SkipTest("frontend submodule is not checked out (git submodule update --init)")
 
 html_file = os.path.join(BASE_DIR, "frontend", "index.html")
 js_file = os.path.join(BASE_DIR, "frontend", "js", "app.js")

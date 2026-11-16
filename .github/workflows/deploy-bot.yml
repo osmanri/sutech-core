@@ -1,0 +1,31 @@
+name: deploy-bot
+# Manual deploy of the Telegram bot, so it can be done from a phone:
+# GitHub -> Actions -> deploy-bot -> Run workflow.
+# Needs ONE repository secret, BOT_ENV: the full text of your local bot/.env file
+# (BOT_TOKEN=..., TGCLOUD_TOKEN=..., GEMINI_API_KEY=... one per line).
+on:
+  workflow_dispatch:
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Write bot/.env from the secret
+        env:
+          BOT_ENV: ${{ secrets.BOT_ENV }}
+        run: |
+          test -n "$BOT_ENV" || { echo "Secret BOT_ENV is empty: add it in Settings -> Secrets and variables -> Actions"; exit 1; }
+          printf '%s\n' "$BOT_ENV" > bot/.env
+      - name: Tests
+        working-directory: serverless
+        run: |
+          npm ci --ignore-scripts
+          node --experimental-loader ./test/sdk-loader.mjs --test $(ls test/*.test.js | grep -v transport)
+      - name: Deploy
+        working-directory: serverless
+        run: npm run deploy
