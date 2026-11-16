@@ -14,7 +14,7 @@ export function homeKeys(lang) {return keyboard([
   [{text:t(lang,'btn_webapp'),web_app:{url:`${APP_URL}?lang=${language(lang)}`}}],
   [button(a(lang,'button'),'ai')],
   [button(t(lang,'btn_fields'),'fields'),button(t(lang,'btn_history'),'history')],
-  [button(tr(lang,'Демо','Демо','Demo'),'demo','success'),button(tr(lang,'Ещё','Тағы','More'),'more')]
+  [button(tr(lang,'Ещё','Тағы','More'),'more')]
 ]);}
 export const ignoreDelete=(chat,id)=>retireMessage(chat,id);
 export async function screen(id,text,markup,expectedGeneration=null,plain=false) {
