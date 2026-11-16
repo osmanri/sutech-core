@@ -26,6 +26,8 @@ jobs:
           npm run build
           node cli.mjs status || true
           node cli.mjs fetch || true
+          echo '=== status after the snapshot (what differs from the live bot) ==='
+          node cli.mjs status || true
           cd ..
           echo "=== files that differ between the live bot and this repository ==="
           git status --short -- serverless | head -80
