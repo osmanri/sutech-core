@@ -1,10 +1,13 @@
 name: deploy-bot
-# Manual deploy of the Telegram bot, so it can be done from a phone:
-# GitHub -> Actions -> deploy-bot -> Run workflow.
+# Publishes the Telegram bot: automatically after a merge into main that changes the bot,
+# or by hand: GitHub -> Actions -> deploy-bot -> Run workflow.
 # Needs ONE repository secret, BOT_ENV: the full text of your local bot/.env file
 # (BOT_TOKEN=..., TGCLOUD_TOKEN=..., GEMINI_API_KEY=... one per line).
 on:
   workflow_dispatch:
+  push:            # every merge into main that touches the bot publishes it automatically
+    branches: [main]
+    paths: ['serverless/**', 'bot/**', '.github/workflows/deploy-bot.yml']
 jobs:
   deploy:
     runs-on: ubuntu-latest
