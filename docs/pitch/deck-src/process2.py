@@ -14,7 +14,7 @@ def _cover(im, w, h):
     return im.crop((l, t, l + w, t + h))
 
 
-def _tint(im, keep=0.35, shadow='#00110d', light='#3f8a52'):
+def _tint(im, keep=0.35, shadow='#00110d', light='#4f9a5f'):
     g = ImageOps.colorize(ImageOps.grayscale(ImageEnhance.Contrast(im).enhance(1.08)), black=shadow, white=light)
     return Image.blend(g, ImageEnhance.Color(im).enhance(0.8), keep)
 
@@ -27,13 +27,17 @@ def _ramp(w, h, a0, a1, horizontal=True):
     return g.point(lambda v: round(a0 + (a1 - a0) * v / 255))
 
 
-def full(src, dst, blur=2.0, left=215, right=90, keep=0.35, flip=False):
+def full(src, dst, blur=2.0, left=215, right=90, keep=0.35, flip=False, top=0, bottom=0):
     im = _cover(Image.open(src).convert('RGB'), 1920, 1080)
     if flip:
         im = ImageOps.mirror(im)
     im = _tint(im, keep).filter(ImageFilter.GaussianBlur(blur))
     dark = Image.new('RGB', im.size, BASE)
     mask = _ramp(*im.size, left, right)      # dark overlay strength: strong on the left, lighter right
+    if top or bottom:                        # plus a vertical ramp: light at the top, dark under the text
+        from PIL import ImageChops
+        v = _ramp(im.width, im.height, top, bottom, horizontal=False)
+        mask = ImageChops.lighter(mask, v)
     im = Image.composite(dark, im, mask)
     im.save(dst, quality=88)
 
@@ -56,9 +60,9 @@ def half(src, dst, w=1000, h=1080, side='right', keep=0.55, fade=360, dim=60):
 def split(src_l, src_r, dst):
     """two full-height halves side by side (dry | green) for the 'weak spot' slide."""
     L, R = Image.new('RGB', (1920, 1080)), None
-    a = _tint(_cover(Image.open(src_l).convert('RGB'), 960, 1080), 0.45, light='#6f8f58')
-    b = _tint(_cover(Image.open(src_r).convert('RGB'), 960, 1080), 0.6, light='#6ab87a')
-    a = Image.composite(Image.new('RGB', a.size, BASE), a, Image.new('L', a.size, 150))
-    b = Image.composite(Image.new('RGB', b.size, BASE), b, Image.new('L', b.size, 150))
+    a = _tint(_cover(Image.open(src_l).convert('RGB'), 960, 1080), 0.6, light='#8aa060')
+    b = _tint(_cover(Image.open(src_r).convert('RGB'), 960, 1080), 0.7, light='#6ab87a')
+    a = Image.composite(Image.new('RGB', a.size, BASE), a, Image.new('L', a.size, 120))
+    b = Image.composite(Image.new('RGB', b.size, BASE), b, Image.new('L', b.size, 125))
     L.paste(a, (0, 0)); L.paste(b, (960, 0))
     L.save(dst, quality=88)
