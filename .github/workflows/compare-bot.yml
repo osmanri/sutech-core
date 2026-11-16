@@ -28,6 +28,8 @@ jobs:
           node cli.mjs fetch || true
           echo '=== status after the snapshot (what differs from the live bot) ==='
           node cli.mjs status || true
+          echo '=== line-by-line diff: working copy vs live bot ==='
+          node cli.mjs diff --no-pager 2>&1 | head -700 || true
           cd ..
           echo "=== files that differ between the live bot and this repository ==="
           git status --short -- serverless | head -80
