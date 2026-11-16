@@ -1,5 +1,5 @@
 // FAO-56.5 calculation engine, ported from bot/water_balance.py.
-export const VERSION = 'fao56.5';
+export const VERSION = 'fao56.6';
 export const SOILS = {sand:[.12,.05],loam:[.33,.18],clay:[.45,.30]};
 export const CROPS = {
   wheat:[.55,.25,1.25,[.30,1.15,.35],[20,25,60,30]],
@@ -18,6 +18,8 @@ export function number(v,name,min=0,max=1e6) {
   if (!Number.isFinite(n) || n<min || n>max) throw new InputError(name);
   return n;
 }
+// FAO-56 eq. 84, start-of-day depletion; mirrors stress_coefficient in bot/water_balance.py.
+export function stress(depletion,taw,raw,p){return taw<=0||depletion<=raw?1:Math.min(1,Math.max(0,(taw-depletion)/((1-p)*taw)));}
 export function capacity(soil,zr,p) {const [fc,pwp]=SOILS[soil];const taw=1000*(fc-pwp)*zr;return [taw,p*taw];}
 export function parameters(crop,day,stages) {
   const [p,zmin,zmax,[ini,mid,end]]=CROPS[crop];const [a,b,c,d]=stages;
@@ -74,12 +76,12 @@ export function calculate(field,et0,rain) {
     const net_mm=Math.max(0,etc+seepage-peff),efficiency=.50,net_m3=net_mm*10*field.area_ha,gross_m3=net_m3/efficiency;
     return {status:'rice',is_rice:true,water_layer_cm:12,seepage,etc,et0,rain,peff,net_mm,efficiency,net_m3,gross_m3,raw:0,deficit:net_mm,threshold:net_mm,...economics(gross_m3,net_mm,field)};
   }
-  const [taw,raw]=capacity(field.soil,field.zr,field.p),peff=rain<5?0:rain*.75,etc=et0*field.kc;
+  const [taw,raw]=capacity(field.soil,field.zr,field.p),peff=rain<5?0:rain*.75,ks=stress(field.yesterday,taw,raw,field.p),etc=et0*field.kc*ks;
   const unbounded=field.yesterday+(etc-peff),deficit=Math.min(taw,Math.max(0,unbounded));
   const [tech_threshold,efficiency]=METHODS[field.method],threshold=Math.min(tech_threshold,raw);
   const status=deficit-raw>1e-9?'critical':deficit>=threshold||Math.abs(deficit-threshold)<=1e-9?'irrigate':'deferred';
   const net_m3=status==='deferred'?0:deficit*10*field.area_ha,gross_m3=net_m3/efficiency;
-  return {status,taw,raw,deficit,unbounded,overflow:Math.max(0,unbounded-taw),rain_excess:Math.max(0,-unbounded),et0,rain,peff,etc,kc:field.kc,zr:field.zr,p:field.p,threshold,tech_threshold,efficiency,net_m3,gross_m3,...economics(gross_m3,deficit,field)};
+  return {status,taw,raw,deficit,unbounded,overflow:Math.max(0,unbounded-taw),rain_excess:Math.max(0,-unbounded),et0,rain,peff,etc,ks,kc:field.kc,zr:field.zr,p:field.p,threshold,tech_threshold,efficiency,net_m3,gross_m3,...economics(gross_m3,deficit,field)};
 }
 export function fieldKey(payload,field) {
   const lat=number(payload.lat??payload.latitude,'latitude',-90,90),lon=number(payload.lon??payload.longitude,'longitude',-180,180);
