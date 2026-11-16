@@ -63,8 +63,13 @@ function slide(o) {
     if (!o.blank) {
       put(n1, 11.9, -0.45, 1.7, 80, 1); put(n2, 11.2, 0.95, 0.4, 68, 2); put(n3, 12.6, 1.3, 0.34, 68, 3);
       s.addImage({ path: 'm/dots.png', x: 0.6, y: 6.5, w: 1.45, h: 0.9, transparency: 62, altText: "", objectName: "decor-dots" });
+      s.addImage({ path: 'm/rings.png', x: 9.9, y: 3.9, w: 5.2, h: 5.2, transparency: 90, altText: '', objectName: 'decor-rings' });
+      s.addImage({ path: 'm/dots.png', x: 11.3, y: 6.1, w: 1.45, h: 0.9, transparency: 70, altText: '', objectName: 'decor-dots-2' });
+      put(n3, 12.45, 6.35, 0.5, 74, 4); put(n2, 8.6, 0.12, 0.3, 78, 5);
     } else {
       put(n1, 11.9, 5.6, 1.7, 80, 1); put(n2, 11.1, 6.45, 0.4, 68, 2);
+      s.addImage({ path: 'm/rings.png', x: -1.6, y: 4.6, w: 4.6, h: 4.6, transparency: 90, altText: '', objectName: 'decor-rings' });
+      put(n3, 0.15, 3.3, 0.45, 76, 4);
       s.addImage({ path: 'm/dots.png', x: 11.2, y: 0.95, w: 1.45, h: 0.9, transparency: 62, altText: "", objectName: "decor-dots" });
     }
   }
@@ -171,8 +176,10 @@ s.addNotes('Из чего состоит проект. Стенд на Arduino: 
 // ===== 5. ПРИЛОЖЕНИЕ — phones over a field photo =====
 s = slide({ section: 'Решение', photo: 'green', glow: [0.2, 1.6, 6.5, 7.2, 2.8, 7] });
 title(s, 'Всё в одном ', 'чате');
-s.addImage({ path: 'm/phone-bot.png', x: 0.85, y: 2.0, w: 2.3, h: 4.84, altText: 'Чат с ботом Su-Tech: меню «Открыть Su-Tech», «ИИ-агроном», «Мои поля», «История»', objectName: '!!phone-bot' });
-s.addImage({ path: 'm/phone-mini.png', x: 3.45, y: 2.0, w: 2.3, h: 4.84, altText: 'Mini App Su-Tech: «Точный полив. Живое поле.» и карта поля', objectName: '!!phone-mini' });
+s.addImage({ path: 'm/rings.png', x: -0.4, y: 1.3, w: 6.4, h: 6.4, transparency: 82, altText: '', objectName: 'phones-rings' });
+s.addImage({ path: 'm/disc.png', x: 0.7, y: 2.5, w: 4.1, h: 4.1, transparency: 93, altText: '', objectName: 'phones-disc' });
+s.addImage({ path: 'm/phone-bot.png', x: 0.85, y: 2.3, w: 2.1, h: 4.42, altText: 'Чат с ботом Su-Tech: меню «Открыть Su-Tech», «ИИ-агроном», «Мои поля», «История»', objectName: '!!phone-bot' });
+s.addImage({ path: 'm/phone-mini.png', x: 2.7, y: 1.85, w: 2.1, h: 4.42, altText: 'Mini App Su-Tech: «Точный полив. Живое поле.» и карта поля', objectName: '!!phone-mini' });
 [['chat-circle-text', 'Совет приходит сообщением', 'каждый день, прямо в Telegram'], ['map-trifold', 'Поле на спутниковой карте', 'отмечается пальцем, площадь считается сама'],
  ['plant', 'Культура, почва, насос', 'хлопок, кукуруза, пшеница и другие'], ['translate', 'Три языка', 'русский, қазақша, English'],
  ['robot', 'ИИ-агроном', 'отвечает на вопросы и смотрит фото листьев']].forEach(([ic, t, d], i) => {
