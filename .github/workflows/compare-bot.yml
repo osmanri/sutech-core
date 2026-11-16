@@ -1,0 +1,33 @@
+name: compare-bot
+# Read-only: downloads what is deployed on the bot and shows how it differs from this repository.
+# Changes nothing on the bot. Run: Actions -> compare-bot -> Run workflow.
+on:
+  workflow_dispatch:
+jobs:
+  compare:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Write bot/.env from the secret
+        env:
+          BOT_ENV: ${{ secrets.BOT_ENV }}
+        run: |
+          test -n "$BOT_ENV" || { echo "Secret BOT_ENV is empty"; exit 1; }
+          printf '%s\n' "$BOT_ENV" > bot/.env
+      - name: Fetch the deployed bot and diff against the repository
+        working-directory: serverless
+        run: |
+          npm ci --ignore-scripts
+          npm run build
+          node cli.mjs status || true
+          node cli.mjs fetch || true
+          cd ..
+          echo "=== files that differ between the live bot and this repository ==="
+          git status --short -- serverless | head -80
+          echo "=== summary ==="
+          git diff --stat -- serverless | tail -40
