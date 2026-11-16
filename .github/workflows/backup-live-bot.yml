@@ -1,0 +1,49 @@
+name: backup-live-bot
+# Daily safety net. Downloads the code that is live on the bot; if it differs from main (someone changed the bot
+# outside the repository), the live code is saved to the branch live-bot-backup so it is never lost.
+# Changes nothing on the bot and never touches main. Also runnable by hand: Actions -> backup-live-bot.
+on:
+  schedule:
+    - cron: "17 3 * * *"
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Write bot/.env from the secret
+        env:
+          BOT_ENV: ${{ secrets.BOT_ENV }}
+        run: |
+          test -n "$BOT_ENV" || { echo "Secret BOT_ENV is empty"; exit 1; }
+          printf '%s\n' "$BOT_ENV" > bot/.env
+      - name: Download the live code over the working copy
+        working-directory: serverless
+        run: |
+          npm ci --ignore-scripts
+          node cli.mjs fetch
+          node cli.mjs pull --force
+          sed -i 's/\r$//' tgcloud/lib/*.js tgcloud/handlers/*.js tgcloud/endpoints/*.js tgcloud/*.js 2>/dev/null || true
+      - name: Save to live-bot-backup if the live bot differs from main
+        run: |
+          if git diff --quiet -- serverless/tgcloud; then
+            echo "The live bot matches main. Nothing to save."
+            exit 0
+          fi
+          echo "THE LIVE BOT DIFFERS FROM main:"
+          git diff --stat -- serverless/tgcloud | tail -20
+          git config user.name "live-bot-backup"
+          git config user.email "noreply@github.com"
+          git checkout -b live-bot-backup
+          git add serverless/tgcloud
+          git commit -m "Backup: code that is live on the bot differs from main ($(date -u +%F))"
+          git push -f origin live-bot-backup
+          echo "Saved to the branch live-bot-backup. Review and merge it into main."
