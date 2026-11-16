@@ -43,6 +43,24 @@ from bot.services.geo_service import (
 )
 
 
+class _FakeGeocodeResponse:
+    """Minimal stand-in for an aiohttp response used as `async with session.get(...)`."""
+
+    status = 200
+
+    def __init__(self, data):
+        self._data = data
+
+    async def __aenter__(self):
+        return self
+
+    async def __aexit__(self, *exc):
+        return False
+
+    async def json(self):
+        return self._data
+
+
 class CleanFieldsArchitectureTests(unittest.IsolatedAsyncioTestCase):
     def setUp(self):
         self.temp_dir = tempfile.TemporaryDirectory()
@@ -129,11 +147,15 @@ class CleanFieldsArchitectureTests(unittest.IsolatedAsyncioTestCase):
             self.assertNotIn("Атырау", location_offline)
 
         # 2. Если точка в океане (нет населенного пункта) — честный fallback с координатами
-        label_ocean = await get_field_location_name(0.0, 0.0)
+        with patch("bot.services.geo_service.aiohttp.ClientSession.get", return_value=_FakeGeocodeResponse({"address": {}})):
+            label_ocean = await get_field_location_name(0.0, 0.0)
         self.assertEqual(label_ocean, "Поле (0.0000, 0.0000)")
 
-        # 3. При наличии населенного пункта возвращается реальное название (не хардкод)
-        label_real = await get_field_location_name(47.1167, 51.8833)
+        # 3. При наличии населенного пункта возвращается реальное название (не хардкод).
+        #    Ответ сервиса подменён: тест не должен зависеть от интернета.
+        fake = _FakeGeocodeResponse({"address": {"city": "Атырау"}})
+        with patch("bot.services.geo_service.aiohttp.ClientSession.get", return_value=fake):
+            label_real = await get_field_location_name(47.1167, 51.8833)
         self.assertIn("Атырау", label_real)
 
     def test_export_service_generates_clean_csv_with_dynamic_gps_headers(self):
