@@ -127,3 +127,19 @@ export function selfCheckLines(row,r,lang) {
   if(c.bias==='model_drier')L.push(tr(lang,'Почва каждый раз оказывалась влажнее, чем считал бот. Если так и дальше, расход воды культурой, возможно, ниже табличного: агроном может снизить множитель Kc в режиме эксперта. Бот сам ничего не меняет.','Топырақ әр жолы бот есептегеннен ылғалды болды. Солай жалғасса, дақыл суды кестеден аз жұмсауы мүмкін: агроном сарапшы режимінде Kc көбейткішін төмендете алады. Бот өзі ештеңе өзгертпейді.','The soil was wetter than the bot calculated each time. If this continues, the crop may use less water than the table says: an agronomist can lower the Kc multiplier in expert mode. The bot changes nothing by itself.'));
   return L;
 }
+
+// Manual replacement for scheduled reminders (the platform has no scheduler): which fields are overdue for a soil-moisture check.
+export const CHECK_DUE_DAYS=7;
+export function checkAge(row,now=Date.now()) {
+  const last=(row.checks??[]).filter(c=>!(row.reset_at&&c.time<row.reset_at)).at(-1);
+  return last?Math.floor((now-last.time)/DAY):null;      // null: never checked
+}
+export const needsCheck=(row,now=Date.now())=>{
+  if(row.payload?.crop==='rice'||row.result?.status==='unsupported')return false;
+  const a=checkAge(row,now);return a===null||a>CHECK_DUE_DAYS;
+};
+export function checkNudge(row,lang,now=Date.now()) {
+  if(!needsCheck(row,now))return '';
+  const a=checkAge(row,now);
+  return '🔔 '+(a===null?tr(lang,'Влажность почвы ещё ни разу не проверяли. Проверьте и нажмите «Проверил влажность почвы»: так бот точнее.','Топырақ ылғалы әлі тексерілмеген. Тексеріп, «Топырақ ылғалын тексердім» батырмасын басыңыз: бот дәлірек болады.','The soil moisture has not been checked yet. Check it and press “I checked the soil moisture”: the bot gets more accurate.'):tr(lang,`Влажность почвы проверяли ${a} дн. назад. Проверьте снова и нажмите «Проверил влажность почвы».`,`Топырақ ылғалы ${a} күн бұрын тексерілген. Қайта тексеріп, «Топырақ ылғалын тексердім» батырмасын басыңыз.`,`The soil moisture was checked ${a} days ago. Check again and press “I checked the soil moisture”.`));
+}
