@@ -95,7 +95,7 @@ Su-Tech при назначенном поливе не превышает 2 × 
 
 ## Повторная проверка и публикация
 
-`python -m unittest test_calculation_audit test_water_balance test_balance_integration test_field_state test_bot_platform test_compact_report test_report_explanation test_premium_emoji`
+`python -m unittest tests.test_calculation_audit tests.test_water_balance tests.test_balance_integration tests.test_field_state tests.test_bot_platform tests.test_compact_report tests.test_report_explanation tests.test_premium_emoji`
 
 `node frontend/test_field_map.cjs`
 

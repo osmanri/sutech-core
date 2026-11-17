@@ -51,7 +51,7 @@ A computer study on **real weather** from five irrigated regions of Kazakhstan, 
 
 ## Validation
 
-- Penman–Monteith ET₀ (`bot/et0.py`) reproduces FAO-56 Example 18 (Brussels, 6 July): 3.88 mm/day against a reference of about 3.9. Intermediate values are confirmed by an independent source; the final figure is still being checked against the printed book. See [VALIDATION.md](VALIDATION.md).
+- Penman–Monteith ET₀ (`bot/et0.py`) reproduces FAO-56 Example 18 (Brussels, 6 July): 3.88 mm/day against a reference of about 3.9. Intermediate values are confirmed by an independent source; the final figure is still being checked against the printed book. See [docs/audits/VALIDATION.md](docs/audits/VALIDATION.md).
 - The seasonal water balance closes to 10⁻¹² mm over all 500 simulation runs.
 - The Python and JavaScript engines agree on 675 reference scenarios.
 
@@ -74,7 +74,7 @@ Arduino Uno with relay and pump, soil-moisture, water-level and temperature sens
 
 ```bash
 git clone --recurse-submodules https://github.com/osmanri/sutech-core.git && cd sutech-core
-python -m unittest test_water_balance test_water_stress test_et0 test_experiment test_hardware_bridge test_research_simulation
+python -m unittest tests.test_water_balance tests.test_water_stress tests.test_et0 tests.test_experiment tests.test_hardware_bridge tests.test_research_simulation
 python -m research.simulate && python -m research.sensitivity && python -m research.plots   # offline, weather is cached
 cd serverless && npm ci --ignore-scripts && npm test
 ```

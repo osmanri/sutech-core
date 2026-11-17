@@ -16,7 +16,7 @@ from bot.keyboards.reply import get_main_reply_keyboard
 from bot.services.agronomist import (AIError, AgronomistService, GeminiClient,
                                     LimitedImageBuffer, MAX_HISTORY_MESSAGES,
                                     MAX_IMAGE_BYTES, MAX_SESSIONS, image_mime)
-from test_bot_platform import shared_test_dispatcher
+from tests.test_bot_platform import shared_test_dispatcher
 
 JPEG = b"\xff\xd8\xff\xe0test-photo"
 

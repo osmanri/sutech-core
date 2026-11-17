@@ -7,7 +7,7 @@ from bot.balance_report import format_balance_report, format_balance_explanation
 from bot.i18n import t
 from bot.keyboards.inline import get_report_inline_keyboard
 from bot.water_balance import calculate_balance, parse_field
-from test_water_balance import payload
+from tests.test_water_balance import payload
 
 
 class DecisionCardTests(unittest.TestCase):

@@ -73,11 +73,11 @@ An ephemeral hosting filesystem can still erase SQLite on redeploy.
 
 ## Validation and release
 
-Run `python -m unittest test_water_balance test_balance_integration
+Run `python -m unittest tests.test_water_balance tests.test_balance_integration
 test_compact_report test_report_explanation test_bot_platform test_premium_emoji`
 and `node frontend/test_field_map.cjs`.
 
-Run `python -m unittest test_calculation_audit` for the independent rational
+Run `python -m unittest tests.test_calculation_audit` for the independent rational
 oracle: crop/stage/soil/method/weather/unit combinations, all growth days,
 RAW equality and custom-crop/pump/area/tariff boundaries. See
 `CALCULATION_AUDIT.md` for scope and the reproduced old economic failure.

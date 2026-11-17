@@ -13,9 +13,9 @@ from bot.handlers import webapp, fields
 from bot.chat_screens import ChatScreens, ChatScreenMiddleware
 from aiogram.types import Update
 from bot.main import analyze_webapp, BOT_APP_KEY, FSM_STORAGE_KEY
-import test_bot_platform as platform_fixture
-import test_field_refresh as refresh_fixture
-from test_water_balance import payload
+import tests.test_bot_platform as platform_fixture
+import tests.test_field_refresh as refresh_fixture
+from tests.test_water_balance import payload
 
 
 class CalculationRecoveryTests(unittest.IsolatedAsyncioTestCase):
