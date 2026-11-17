@@ -1,5 +1,5 @@
 // FAO-56.5 calculation engine, ported from bot/water_balance.py.
-export const VERSION = 'fao56.6';
+export const VERSION = 'fao56.7';
 // A pump cannot run all 24 hours; a volume above one day's pumping is advised over several days.
 export const PUMP_MAX_HOURS_PER_DAY = 20;
 // FAO-56 Table 19 midpoints: theta_FC and theta_WP lie inside the printed ranges, available water 0.07 / 0.15 / 0.15.
@@ -13,6 +13,8 @@ export const CROPS = {
   tomato:[.40,.25,1.10,[.60,1.15,.80],[30,40,45,30]],
   potato:[.35,.20,.50,[.50,1.15,.75],[25,30,45,30]]
 };
+// Fraction of the soil surface wetted, FAO-56 Table 20: trickle 0.3-0.4 (midpoint, subsurface the same); others unreduced.
+export const WETTED_FRACTION = {drip:.35,subsurface:.35,sprinkler:1,pivot:1,furrow:1};
 export const METHODS = {drip:[5,.90],subsurface:[5,.90],sprinkler:[20,.75],pivot:[20,.75],furrow:[40,.50]};
 export class InputError extends Error {}
 export function number(v,name,min=0,max=1e6) {
@@ -24,8 +26,9 @@ export function number(v,name,min=0,max=1e6) {
 // FAO-56 eq. 84, start-of-day depletion; mirrors stress_coefficient in bot/water_balance.py.
 export function stress(depletion,taw,raw,p){return taw<=0||depletion<=raw?1:Math.min(1,Math.max(0,(taw-depletion)/((1-p)*taw)));}
 export function capacity(soil,zr,p) {const [fc,pwp]=SOILS[soil];const taw=1000*(fc-pwp)*zr;return [taw,p*taw];}
-export function parameters(crop,day,stages) {
-  const [p,zmin,zmax,[ini,mid,end]]=CROPS[crop];const [a,b,c,d]=stages;
+export function parameters(crop,day,stages,method='sprinkler') {
+  const [p,zmin,zmax,[ini0,mid,end]]=CROPS[crop];const ini=ini0*WETTED_FRACTION[method]; // FAO-56 eq. 60: Kc ini = fw * Kc ini(Table 12)
+  const [a,b,c,d]=stages;
   let kc,stage;
   if(day<=a){kc=ini;stage='initial';}
   else if(day<=a+b){kc=ini+(mid-ini)*(day-a)/b;stage='development';}
@@ -48,7 +51,7 @@ export function parseField(data) {
     stages=stages.map(v=>number(v,'stages',1,730));
     if(stages.some(v=>!Number.isInteger(v)))throw new InputError('stages');
     if(day>stages.reduce((a,b)=>a+b,0))throw new InputError('season_ended');
-    profile=parameters(crop,day,stages);
+    profile=parameters(crop,day,stages,method);
   } else if(crop==='other') {
     profile={kc:number(data.custom_kc,'custom_kc',.05,2),zr:number(data.custom_root_depth,'custom_root_depth',.05,3),p:number(data.custom_p,'custom_p',.1,.8),stage:'custom'};
   }

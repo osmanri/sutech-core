@@ -32,7 +32,8 @@ test('missed days are closed one by one with that day\'s weather',async()=>{
     const r=await refresh(801,a.id);
     let d=a.closed_deficit;for(let k=0;k<=4;k++)d=etcOf(p,50+k,d,6).deficit;
     assert.ok(Math.abs(r.deficit-d)<1e-9,`expected ${d}, got ${r.deficit}`);
-    assert.ok(r.deficit-a.deficit>4*5,'four more days of water use are counted, not one');
+    const oneDay=etcOf(p,50,a.closed_deficit,6).deficit-a.closed_deficit;
+    assert.ok(r.deficit-a.deficit>3*oneDay,'four more days of water use are counted, not one');
     assert.equal(r.gap_days,0);assert.equal(r.closed_day,iso(-1));
   }finally{home();}
 });
