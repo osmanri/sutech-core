@@ -1,7 +1,8 @@
 // "Why this?": how much to trust today's advice, what was assumed, where each number comes from, and what would change if
 // the assumptions were wrong. Pure functions of the stored field: no new calculation, no invented numbers.
 import {CROP_STATUS} from './crops-data.js';
-import {METHODS,SALT_TOLERANCE,parseField} from './balance.js';
+import {METHODS,SALT_TOLERANCE} from './balance.js';
+import {parseField,describe} from './expert.js';
 import {tr,t,fmt,esc,volume} from './i18n.js';
 
 const DAY=86400000;
@@ -31,6 +32,7 @@ export function confidenceLine(c,lang) {
 }
 export function assumptions(row,field,r,lang) {
   const lines=[],m=METHODS[field.method];
+  if(field.manual?.length)lines.push(tr(lang,'✏️ Изменено вручную: ','✏️ Қолмен өзгертілген: ','✏️ Changed manually: ')+describe(field,lang,tr,fmt).join('; ')+tr(lang,'. Это не значения таблицы FAO-56.','. Бұл FAO-56 кестесінің мәндері емес.','. These are not FAO-56 table values.'));
   const stages=field.stages?.length?field.stages.reduce((a,b)=>a+b,0):null;
   if(stages&&row.payload.stage_days==null)lines.push(tr(lang,`Календарь стадий взят из каталога (${stages} дн.); уточните даты посадки.`,`Кезеңдер күнтізбесі каталогтан алынды (${stages} күн); егу күнін нақтылаңыз.`,`The stage calendar comes from the catalog (${stages} days); refine the planting date.`));
   lines.push(tr(lang,`Почва: ${esc(t(lang,'balance_soil_'+field.soil))}, доступная вода ${fmt(r.taw??0)} мм в слое корней.`,`Топырақ: ${esc(t(lang,'balance_soil_'+field.soil))}, тамыр қабатындағы қолжетімді су ${fmt(r.taw??0)} мм.`,`Soil: ${esc(t(lang,'balance_soil_'+field.soil))}, available water ${fmt(r.taw??0)} mm in the root layer.`));
@@ -85,6 +87,7 @@ export function detailsBlock(row,field,r,lang) {
     `Kc: ${fmt(field.kc,2)}${r.ks!==undefined&&r.ks<1?` · Ks: ${fmt(r.ks,2)}`:''} · ETc: ${r1(r.etc)} ${MMD(lang)}`,
     `${tr(lang,'Дефицит','Тапшылық','Deficit')}: ${r1(row.deficit)} ${MM(lang)} · TAW: ${r1(r.taw??0)} ${MM(lang)} · RAW: ${r1(r.raw)} ${MM(lang)}`,
     `${esc(t(lang,'report_irrig_'+field.method))}: η = ${fmt(Math.round(r.efficiency*100))}%`];
+  if(field.manual?.length)L.push('✏️ '+tr(lang,'Изменено вручную','Қолмен өзгертілген','Changed manually')+': '+describe(field,lang,tr,fmt).join('; '));
   if(r.cost!==null&&r.cost!==undefined)L.push(`${tr(lang,'Электроэнергия на этот полив','Осы суаруға электр шығыны','Electricity for this watering')}: ${fmt(Math.round(r.cost),0)} ₸`);
   if(field.field_type==='greenhouse'&&field.greenhouse_et0===null)L.push(tr(lang,'Для теплицы ET₀ оценён как 0,70 наружного значения.','Жылыжай ET₀ сыртқы мәннің 0,70 бөлігімен бағаланды.','Greenhouse ET₀ uses 0.70 of the outdoor value.'));
   return L.join('\n');
@@ -97,7 +100,9 @@ export function fieldCsv(row) {
   const p=row.payload,f=parseField(p),L=[];
   L.push('# Su-Tech field export. Engine '+VERSION+'. Values in the parameter block are inputs; the tables are what was recorded.');
   L.push('parameter,value');
-  for(const [k,v] of [['crop',p.crop],['soil',p.soil_type],['irrigation',p.irrigation_type],['area_ha',f.area_ha],['planting_day_of_season',p.day_of_growth],['field_type',p.field_type??'open'],['kc_today',f.kc],['root_depth_m',f.zr],['p',f.p],['stage',f.stage],['water_ec_dSm',p.water_ec],['soil_ec_dSm',p.soil_ec],['weather_source','Open-Meteo forecast'],['last_calculation_day',row.last_day],['deficit_mm',row.deficit]])L.push(`${k},${cell(v)}`);
+  for(const [k,v] of [['crop',p.crop],['soil',p.soil_type],['irrigation',p.irrigation_type],['area_ha',f.area_ha],['planting_day_of_season',p.day_of_growth],['field_type',p.field_type??'open'],['kc_today',f.kc],['root_depth_m',f.zr],['p',f.p],['stage',f.stage],['water_ec_dSm',p.water_ec],['soil_ec_dSm',p.soil_ec],['weather_source','Open-Meteo forecast'],['last_calculation_day',row.last_day],['deficit_mm',row.deficit],['manual_overrides',JSON.stringify(row.payload.expert??{})]])L.push(`${k},${cell(v)}`);
+  L.push('');L.push('expert_changes: time,parameter,from,to');
+  for(const e of row.expert_log??[])L.push([new Date(e.time).toISOString(),e.key,e.from,e.to].map(cell).join(','));
   L.push('');L.push('watering: time,applied_m3,deficit_before_mm,deficit_after_mm');
   for(const e of row.events??[])L.push([new Date(e.time).toISOString(),e.applied_m3,e.before,e.after].map(cell).join(','));
   L.push('');L.push('soil_check: time,day,level,value_mm,deficit_before_mm,deficit_after_mm');
