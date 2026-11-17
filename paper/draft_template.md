@@ -15,7 +15,7 @@ Southern Kazakhstan relies on the transboundary Syr Darya for irrigated agricult
 
 **Research questions.** (1) At equal yield, how much water can daily FAO-56 water-balance scheduling save compared with fixed irrigation calendars in Kazakhstan's irrigated regions? (2) How robust is the decision to errors in the inputs (forecast ET₀, rainfall, soil type)? (3) Can a cheap farmer-supplied soil check correct systematic forecast error?
 
-**Contribution.** (a) An open implementation of the FAO-56 balance with Ks in two languages of code (Python reference, JavaScript production) that agree on 675 reference scenarios; (b) a reproducible retrospective study on real weather with an equal-yield baseline; (c) a quantified failure mode (systematic ET₀ bias) and a remedy that is built into the product; (d) a bench-experiment protocol and tooling for ground-truth testing. The author's own part is described under *Author contribution and use of AI*.
+**Contribution.** (a) An open implementation of the FAO-56 balance with Ks in two languages of code (Python reference, JavaScript production) that agree on 1,425 reference scenarios; (b) a reproducible retrospective study on real weather with an equal-yield baseline; (c) a quantified failure mode (systematic ET₀ bias) and a remedy that is built into the product; (d) a bench-experiment protocol and tooling for ground-truth testing. The author's own part is described under *Author contribution and use of AI*.
 
 ## 2 Related work and gap
 
@@ -70,7 +70,7 @@ Random errors had little effect. A systematic ET₀ underestimate accumulates in
 ![Stress days under input errors](../docs/img/sensitivity_stress.svg)
 
 ### 4.4 Validation
-ET₀ implementation vs FAO-56 Example 18: see 3.2 and `../docs/audits/VALIDATION.md`. A comparison with CROPWAT 8.0 on identical inputs is **not yet done [AUTHOR]**. Python and JavaScript engines agree on 675 reference scenarios (relative tolerance 10⁻⁸).
+ET₀ implementation vs FAO-56 Example 18: see 3.2 and `../docs/audits/VALIDATION.md`. A comparison with CROPWAT 8.0 on identical inputs is **not yet done [AUTHOR]**. Python and JavaScript engines agree on 1,425 reference scenarios (relative tolerance 10⁻⁸).
 
 ### 4.5 Bench experiment
 **[AUTHOR: results go here after the experiment — model accuracy (RMSE/MAE/bias), water per pot by group with Welch test and effect size, dry mass, and a photograph of the stand. Do not fill this section with simulated numbers.]**
