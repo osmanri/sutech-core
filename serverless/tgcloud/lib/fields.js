@@ -1,3 +1,4 @@
+import {confidence,confidenceLine,whyCard} from './explain.js';
 import {parseField,calculate,fieldKey,number,METHODS,VERSION,economics,PUMP_MAX_HOURS_PER_DAY,salinity} from './balance.js';
 import {get,put,list,lock,unlock,ownerId,nonce} from './store.js';
 import {weather} from './weather.js';
@@ -166,6 +167,7 @@ export function report(row,lang,details=false) {
   if(r.status==='unsupported')return s+(r.unsupported_reason==='substrate'?tr(lang,'Теплица на субстрате (минвата, кокос): метод водного баланса почвы не подходит. Поливом на субстрате управляют по доле дренажа, обратитесь к агроному.','Субстраттағы жылыжай (минвата, кокос): топырақ су балансы әдісі жарамайды. Субстратта суаруды дренаж үлесімен басқарады, агрономға жүгініңіз.','Greenhouse on a substrate (rockwool, coco): the soil water balance does not apply. Substrate irrigation is managed by the drainage fraction; ask an agronomist.'):tr(lang,'Отапливаемая теплица: оценка по уличной погоде здесь неверна (растения пьют из-за отопления и света, а не уличной жары). Введите измеренный ET₀ теплицы или обратитесь к агроному; пока совет не выдаётся.','Жылытылатын жылыжай: сыртқы ауа райымен бағалау мұнда дұрыс емес (өсімдік жылыту мен жарыққа байланысты су ішеді). Жылыжайдың өлшенген ET₀ мәнін енгізіңіз немесе агрономға жүгініңіз; әзірге кеңес берілмейді.','Heated greenhouse: an estimate from outdoor weather is wrong here (the crop drinks because of heating and light, not outdoor heat). Enter a measured greenhouse ET₀ or ask an agronomist; no advice is given for now.'));
   if(r.status!=='deferred')s+=`<b>${tr(lang,'Подать воды','Берілетін су','Apply water')}: ${volume(r.gross_m3,lang)}</b>\n`;
   if(r.irrigation_days>1)s+=tr(lang,`⚠️ Насос за сутки подаёт не больше ${fmt(r.max_daily_m3,0)} м³ (${PUMP_MAX_HOURS_PER_DAY} ч работы). Объём больше: разделите полив на ${r.irrigation_days} дн., около ${fmt(r.gross_m3/r.irrigation_days,0)} м³ в день.\n`,`⚠️ Сорғы тәулігіне ${fmt(r.max_daily_m3,0)} м³-ден артық бере алмайды (${PUMP_MAX_HOURS_PER_DAY} сағ жұмыс). Көлем одан көп: суаруды ${r.irrigation_days} күнге бөліңіз, күніне шамамен ${fmt(r.gross_m3/r.irrigation_days,0)} м³.\n`,`⚠️ The pump delivers at most ${fmt(r.max_daily_m3,0)} m³ per day (${PUMP_MAX_HOURS_PER_DAY} h of running). The volume is larger: split the watering over ${r.irrigation_days} days, about ${fmt(r.gross_m3/r.irrigation_days,0)} m³ a day.\n`);
+  if(!details&&r.status!=='unsupported')s+=confidenceLine(confidence(row,field,r),lang)+'\n\n';
   s+=tr(lang,'После полива отметьте фактический объём.','Суарғаннан кейін нақты көлемді белгілеңіз.','After watering, record the actual amount.');
   if(row.gap_days)s+=`\n\n${tr(lang,`Пропуск наблюдений: ${row.gap_days} дн. Проверьте влажность почвы перед поливом.`,`Бақылау үзілісі: ${row.gap_days} күн. Суармас бұрын топырақ ылғалын тексеріңіз.`,`Observation gap: ${row.gap_days} days. Check soil moisture before watering.`)}`;
   if(r.leaching_impossible)s+='\n\n'+tr(lang,`🧂 Вода ${fmt(field.water_ec)} дСм/м слишком солёная для этой культуры: обычная промывка невозможна. Нужен агроном.`,`🧂 ${fmt(field.water_ec)} дСм/м су бұл дақыл үшін тым тұзды: әдеттегі шаю мүмкін емес. Агроном қажет.`,`🧂 Water of ${fmt(field.water_ec)} dS/m is too salty for this crop: usual leaching is not possible. An agronomist is needed.`);
@@ -177,6 +179,7 @@ export function report(row,lang,details=false) {
     if(r.cost!==null)s+=`\n${tr(lang,'Электроэнергия на этот полив','Осы суаруға электр шығыны','Electricity for this watering')}: ${fmt(r.cost)} ₸`;
     if(field.field_type==='greenhouse'&&field.greenhouse_et0===null)s+='\n'+tr(lang,'Для теплицы ET0 оценён как 0,70 наружного значения.','Жылыжай ET0 сыртқы мәннің 0,70 бөлігімен бағаланды.','Greenhouse ET0 uses 0.70 of the outdoor value.');
     s+=`\n${VERSION}`;
+    s+='\n\n'+whyCard(row,field,r,lang);
   }
   return s;
 }
