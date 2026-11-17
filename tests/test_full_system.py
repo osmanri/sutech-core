@@ -25,7 +25,7 @@ if hasattr(sys.stdout, "reconfigure"):
     sys.stderr.reconfigure(encoding="utf-8", errors="replace")
 
 # Добавляем директорию bot в sys.path
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 BOT_DIR = os.path.join(BASE_DIR, "bot")
 if BOT_DIR not in sys.path:
     sys.path.insert(0, BOT_DIR)

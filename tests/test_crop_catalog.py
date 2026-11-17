@@ -6,7 +6,7 @@ from pathlib import Path
 
 from bot.water_balance import CROPS, SALT_TOLERANCE, calculate_balance, parse_field
 
-ROOT = Path(__file__).resolve().parent
+ROOT = Path(__file__).resolve().parent.parent
 CATALOG = json.loads((ROOT / 'crops' / 'catalog.json').read_text(encoding='utf-8'))['crops']
 
 

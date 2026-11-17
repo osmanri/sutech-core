@@ -16,7 +16,7 @@ from bot.schemas.field import CropType, FieldResponse, IrrigationMethod, Irrigat
 from bot.services.field_manager import FieldService
 from bot.states.field_states import FieldCallback
 from bot.water_balance import calculate_balance, parse_field
-from test_water_balance import payload
+from tests.test_water_balance import payload
 
 
 class BotAuditTests(unittest.IsolatedAsyncioTestCase):

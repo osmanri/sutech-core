@@ -10,5 +10,5 @@ import unittest
 os.environ.setdefault("BOT_TOKEN", "123456:TEST_TOKEN_NOT_REAL")
 
 if __name__ == "__main__":
-    sys.argv = [sys.argv[0], "discover", "-s", os.path.dirname(os.path.abspath(__file__)), "-p", "test_*.py"] + sys.argv[1:]
+    sys.argv = [sys.argv[0], "discover", "-s", os.path.join(os.path.dirname(os.path.abspath(__file__)), "tests"), "-t", os.path.dirname(os.path.abspath(__file__)), "-p", "test_*.py"] + sys.argv[1:]
     unittest.main(module=None)

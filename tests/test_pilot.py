@@ -11,7 +11,7 @@ from bot import db
 from bot import pilot_store as store
 from bot.handlers import pilot
 from bot.keyboards.inline import get_report_inline_keyboard
-from test_bot_platform import shared_test_dispatcher
+from tests.test_bot_platform import shared_test_dispatcher
 
 
 class PilotTests(unittest.IsolatedAsyncioTestCase):

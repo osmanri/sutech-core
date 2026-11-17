@@ -10,7 +10,7 @@ from bot.field_service import calculate_saved_field, persist_webapp_field
 from bot.field_state import get_field, list_daily_balances, save_daily_balance
 from bot.water_balance import calculate_balance, parse_field
 from bot.daily_monitor import update_all_fields_once
-from test_water_balance import payload
+from tests.test_water_balance import payload
 
 
 class ManagedFieldServiceTests(unittest.IsolatedAsyncioTestCase):

@@ -59,7 +59,7 @@ test('5000 random fields: bot equals an independent FAO-56 re-derivation',()=>{
   }
 });
 test('hand-computed reference cases',()=>{
-  // Wheat day 60, loam, drip, 1 ha, dry start: TAW 187.5, RAW 103.125, ETc 1.15*5, deficit 108.875 (CALCULATION_AUDIT.md)
+  // Wheat day 60, loam, drip, 1 ha, dry start: TAW 187.5, RAW 103.125, ETc 1.15*5, deficit 108.875 (docs/audits/CALCULATION_AUDIT.md)
   const f=parseField({balance_version:2,crop:'wheat',soil_type:'loam',irrigation_type:'drip',area:1,area_unit:'hectare',day_of_growth:60,moisture_condition:'dry',power_price:25,pump_power_kw:22,pump_productivity_m3h:60});
   const r=calculate(f,5,0);
   close(r.taw,187.5,'TAW');close(r.raw,103.125,'RAW');close(r.etc,5.75,'ETc');close(r.deficit,108.875,'Dr');

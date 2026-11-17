@@ -14,8 +14,8 @@ from bot.services.field_manager import FieldService
 from bot.water_balance import BalanceInputError, CROPS, parse_field, calculate_balance
 from bot.handlers import chat_planner
 from bot.i18n import t
-from test_water_balance import payload
-import test_project_assistant as planner_tests
+from tests.test_water_balance import payload
+import tests.test_project_assistant as planner_tests
 
 
 class GuidanceModelTests(unittest.TestCase):

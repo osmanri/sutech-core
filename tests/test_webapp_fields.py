@@ -13,7 +13,7 @@ from bot import db,field_service
 from bot.field_state import (get_field,list_daily_balances,list_irrigation_events,
                              make_field_key,upsert_managed_field)
 from bot.webapp_fields import fields_today,water_field
-import test_bot_platform as platform_tests
+import tests.test_bot_platform as platform_tests
 
 
 class WebappFieldsTests(unittest.IsolatedAsyncioTestCase):

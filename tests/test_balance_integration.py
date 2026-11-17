@@ -10,7 +10,7 @@ from itertools import product
 from bot.balance_weather import parse_daily_weather, fetch_daily_weather
 from bot.handlers.webapp import handle_webapp_data
 from bot.i18n import t
-from test_water_balance import payload
+from tests.test_water_balance import payload
 
 
 class WeatherTests(unittest.TestCase):
@@ -95,7 +95,7 @@ class HandlerTests(unittest.IsolatedAsyncioTestCase):
             fetch.assert_not_awaited(); message.answer.assert_awaited_once()
 
     async def test_all_crop_methods_moisture_languages_units_money_reaches_telegram(self):
-        from test_calculation_audit import PROFILES, APPLICATION, MOISTURE, inputs, reference_balance
+        from tests.test_calculation_audit import PROFILES, APPLICATION, MOISTURE, inputs, reference_balance
         count = 0
         for crop, method, moisture, lang, unit in product(PROFILES, APPLICATION, MOISTURE,
                                                         ('ru', 'kz'), ('hectare', 'sotka')):

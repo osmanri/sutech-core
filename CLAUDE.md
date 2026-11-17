@@ -32,3 +32,10 @@ The owner only sends requests in chat. After a change is committed and pushed:
    the live bot differs from `main`. Merge it into `main` (ignoring CR/LF differences) before deploying anything.
 
 Full plain-language guide for the owner: `docs/HOWTO.md`. Secret `BOT_ENV` (text of `bot/.env`) is already set in GitHub.
+
+## Repository layout (after the tidy-up of 17 November 2026)
+
+- Python tests live in `tests/` (run `python3 run_tests.py`); bot tests in `serverless/test/`; website tests in the `frontend` repository.
+- Documents are in `docs/` (old audits in `docs/audits/`, archive in `docs/archive/`); only README, REPRODUCE, CHANGELOG, CITATION and LICENSE stay in the root.
+- Crops are edited ONLY in `crops/catalog.json`, then `python3 crops/build.py`; the engine copy in `frontend/js/sutech-engine.js` and the generated crop files must be copied to the frontend repository byte for byte (a test enforces it).
+- Add every user-visible change to `CHANGELOG.md`.

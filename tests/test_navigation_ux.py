@@ -14,7 +14,7 @@ from bot.handlers.agronomist import chat_keyboard
 from bot.i18n import t
 from bot.handlers import agronomist, start
 from bot.services.agronomist import AgronomistService
-from test_bot_platform import shared_test_dispatcher
+from tests.test_bot_platform import shared_test_dispatcher
 
 
 class NavigationUXTests(unittest.TestCase):

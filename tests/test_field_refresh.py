@@ -22,7 +22,7 @@ from bot.keyboards.fields_kb import get_field_card_keyboard
 from bot.keyboards.inline import get_report_inline_keyboard
 from bot.services.field_manager import FieldService
 from bot.water_balance import calculate_balance, parse_field
-from test_water_balance import payload
+from tests.test_water_balance import payload
 
 
 class SavedFieldRefreshTests(unittest.IsolatedAsyncioTestCase):

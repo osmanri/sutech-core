@@ -13,7 +13,7 @@ from bot.services.agronomy_scope import in_scope
 from bot.water_balance import parse_field, calculate_balance
 from bot.balance_report import fmt, display_volume
 from bot.i18n import t
-from test_bot_platform import shared_test_dispatcher
+from tests.test_bot_platform import shared_test_dispatcher
 
 
 class ProjectKnowledgeTests(unittest.TestCase):
