@@ -1,0 +1,557 @@
+{
+ "_comment": "Single source of truth for crops. Edit here, then run: python3 crops/build.py. Values: FAO Irrigation and Drainage Paper 56 (Allen et al. 1998) Tables 11, 12, 22, 23. kc = [initial, mid, end]; stages = days [initial, development, mid, late]; root = [minimum, maximum] metres (minimum is a project value); salt = [ECe threshold dS/m, slope %/dS/m] or null (no value in the book). status: 'FAO-56' = every number is a table value; 'mixed' = stages are the project's own.",
+ "rice": {
+  "note": "Rice is handled by a separate flooded-field routine in the engine and is not part of this table."
+ },
+ "crops": [
+  {
+   "key": "wheat",
+   "names": {
+    "ru": "Пшеница",
+    "kz": "Бидай",
+    "en": "Wheat"
+   },
+   "group": "cereals",
+   "p": 0.55,
+   "root": [
+    0.25,
+    1.25
+   ],
+   "kc": [
+    0.3,
+    1.15,
+    0.35
+   ],
+   "stages": [
+    20,
+    25,
+    60,
+    30
+   ],
+   "height_m": 1.0,
+   "salt": [
+    6.0,
+    7.1
+   ],
+   "status": "mixed",
+   "source": "Kc: Table 12 spring wheat; p, roots: Table 22; salt: Table 23",
+   "note": "Stages are the project calendar (between \"Grains (small)\" 20/30/60/40 and \"Barley/Oats/Wheat\" 15/25/50/30 in Table 11)."
+  },
+  {
+   "key": "cotton",
+   "names": {
+    "ru": "Хлопок",
+    "kz": "Мақта",
+    "en": "Cotton"
+   },
+   "group": "fibre",
+   "p": 0.65,
+   "root": [
+    0.25,
+    1.35
+   ],
+   "kc": [
+    0.35,
+    1.18,
+    0.65
+   ],
+   "stages": [
+    30,
+    50,
+    60,
+    55
+   ],
+   "height_m": 1.35,
+   "salt": [
+    7.7,
+    5.2
+   ],
+   "status": "FAO-56",
+   "source": "Tables 11, 12, 22, 23",
+   "note": ""
+  },
+  {
+   "key": "corn",
+   "names": {
+    "ru": "Кукуруза",
+    "kz": "Жүгері",
+    "en": "Maize"
+   },
+   "group": "cereals",
+   "p": 0.55,
+   "root": [
+    0.25,
+    1.35
+   ],
+   "kc": [
+    0.3,
+    1.2,
+    0.5
+   ],
+   "stages": [
+    20,
+    35,
+    40,
+    30
+   ],
+   "height_m": 2.0,
+   "salt": [
+    1.7,
+    12.0
+   ],
+   "status": "mixed",
+   "source": "Kc, p, roots, salt: Tables 12, 22, 23",
+   "note": "Stages are the project calendar for a ~125-day season; Table 11 grain maize is 30/50/60/40 (180 days)."
+  },
+  {
+   "key": "alfalfa",
+   "names": {
+    "ru": "Люцерна",
+    "kz": "Жоңышқа",
+    "en": "Alfalfa"
+   },
+   "group": "forage",
+   "p": 0.55,
+   "root": [
+    0.3,
+    1.5
+   ],
+   "kc": [
+    0.4,
+    1.2,
+    1.15
+   ],
+   "stages": [
+    10,
+    20,
+    20,
+    10
+   ],
+   "height_m": 0.7,
+   "salt": [
+    2.0,
+    7.3
+   ],
+   "status": "FAO-56",
+   "source": "Tables 11 (first cutting cycle), 12 (individual cutting periods), 22, 23",
+   "note": ""
+  },
+  {
+   "key": "melon",
+   "names": {
+    "ru": "Дыня",
+    "kz": "Қауын",
+    "en": "Melon"
+   },
+   "group": "cucurbits",
+   "p": 0.45,
+   "root": [
+    0.25,
+    1.15
+   ],
+   "kc": [
+    0.5,
+    1.05,
+    0.75
+   ],
+   "stages": [
+    25,
+    35,
+    40,
+    20
+   ],
+   "height_m": 0.4,
+   "salt": null,
+   "status": "FAO-56",
+   "source": "Tables 11, 12 (Sweet melons), 22 (Cantaloupe)",
+   "note": "The book gives no salt tolerance for melons: no salinity estimate."
+  },
+  {
+   "key": "tomato",
+   "names": {
+    "ru": "Томат",
+    "kz": "Қызанақ",
+    "en": "Tomato"
+   },
+   "group": "solanaceae",
+   "p": 0.4,
+   "root": [
+    0.25,
+    1.1
+   ],
+   "kc": [
+    0.6,
+    1.15,
+    0.8
+   ],
+   "stages": [
+    30,
+    40,
+    45,
+    30
+   ],
+   "height_m": 0.6,
+   "salt": [
+    0.9,
+    9.0
+   ],
+   "status": "mixed",
+   "source": "Kc, p, roots, salt: Tables 12, 22, 23",
+   "note": "Stages are 5 days longer than Table 11 (30/40/40/25); the farmer can edit them."
+  },
+  {
+   "key": "potato",
+   "names": {
+    "ru": "Картофель",
+    "kz": "Картоп",
+    "en": "Potato"
+   },
+   "group": "roots",
+   "p": 0.35,
+   "root": [
+    0.2,
+    0.5
+   ],
+   "kc": [
+    0.5,
+    1.15,
+    0.75
+   ],
+   "stages": [
+    25,
+    30,
+    45,
+    30
+   ],
+   "height_m": 0.6,
+   "salt": [
+    1.7,
+    12.0
+   ],
+   "status": "FAO-56",
+   "source": "Tables 11, 12, 22, 23",
+   "note": ""
+  },
+  {
+   "key": "sugar_beet",
+   "names": {
+    "ru": "Сахарная свёкла",
+    "kz": "Қант қызылшасы",
+    "en": "Sugar beet"
+   },
+   "group": "roots",
+   "p": 0.55,
+   "root": [
+    0.25,
+    0.95
+   ],
+   "kc": [
+    0.35,
+    1.2,
+    0.7
+   ],
+   "stages": [
+    50,
+    40,
+    50,
+    40
+   ],
+   "height_m": 0.5,
+   "salt": [
+    7.0,
+    5.9
+   ],
+   "status": "mixed",
+   "source": "Table 11 \"Sugarbeet\" Idaho April 50/40/50/40; Table 12; Table 22 (0.7-1.2 m); Table 23",
+   "note": "Kc end 0.70 is the no-irrigation-in-last-month value (up to 1.0 if irrigated or rainy)."
+  },
+  {
+   "key": "sunflower",
+   "names": {
+    "ru": "Подсолнечник",
+    "kz": "Күнбағыс",
+    "en": "Sunflower"
+   },
+   "group": "oil",
+   "p": 0.45,
+   "root": [
+    0.25,
+    1.15
+   ],
+   "kc": [
+    0.35,
+    1.15,
+    0.35
+   ],
+   "stages": [
+    25,
+    35,
+    45,
+    25
+   ],
+   "height_m": 2.0,
+   "salt": null,
+   "status": "FAO-56",
+   "source": "Tables 11, 12 (dense irrigated stand: upper Kc mid), 22 (0.8-1.5 m)",
+   "note": "No salt tolerance values in the book."
+  },
+  {
+   "key": "barley",
+   "names": {
+    "ru": "Ячмень",
+    "kz": "Арпа",
+    "en": "Barley"
+   },
+   "group": "cereals",
+   "p": 0.55,
+   "root": [
+    0.25,
+    1.25
+   ],
+   "kc": [
+    0.3,
+    1.15,
+    0.25
+   ],
+   "stages": [
+    20,
+    30,
+    60,
+    40
+   ],
+   "height_m": 1.0,
+   "salt": [
+    8.0,
+    5.0
+   ],
+   "status": "FAO-56",
+   "source": "Table 11 \"Grains (small)\" Mediterranean April 20/30/60/40; Tables 12, 22, 23",
+   "note": ""
+  },
+  {
+   "key": "cucumber",
+   "names": {
+    "ru": "Огурец",
+    "kz": "Қияр",
+    "en": "Cucumber"
+   },
+   "group": "cucurbits",
+   "p": 0.5,
+   "root": [
+    0.25,
+    0.95
+   ],
+   "kc": [
+    0.6,
+    1.0,
+    0.75
+   ],
+   "stages": [
+    20,
+    30,
+    40,
+    15
+   ],
+   "height_m": 0.3,
+   "salt": [
+    1.1,
+    13.0
+   ],
+   "status": "FAO-56",
+   "source": "Tables 11, 12 (fresh market), 22, 23 (lowest threshold, steepest slope of the ranges)",
+   "note": "Trained on a trellis the book suggests Kc 1.15."
+  },
+  {
+   "key": "pepper",
+   "names": {
+    "ru": "Перец сладкий",
+    "kz": "Тәтті бұрыш",
+    "en": "Sweet pepper"
+   },
+   "group": "solanaceae",
+   "p": 0.3,
+   "root": [
+    0.25,
+    0.75
+   ],
+   "kc": [
+    0.6,
+    1.05,
+    0.9
+   ],
+   "stages": [
+    30,
+    35,
+    40,
+    20
+   ],
+   "height_m": 0.7,
+   "salt": [
+    1.5,
+    14.0
+   ],
+   "status": "FAO-56",
+   "source": "Tables 11 (25/30 initial: 30 taken), 12, 22, 23 (lowest threshold, steepest slope)",
+   "note": "Trained on stakes the book suggests Kc 1.15."
+  },
+  {
+   "key": "eggplant",
+   "names": {
+    "ru": "Баклажан",
+    "kz": "Баялды",
+    "en": "Eggplant"
+   },
+   "group": "solanaceae",
+   "p": 0.45,
+   "root": [
+    0.25,
+    0.95
+   ],
+   "kc": [
+    0.6,
+    1.05,
+    0.9
+   ],
+   "stages": [
+    30,
+    40,
+    40,
+    20
+   ],
+   "height_m": 0.8,
+   "salt": null,
+   "status": "FAO-56",
+   "source": "Tables 11, 12, 22",
+   "note": "No salt tolerance values in the book."
+  },
+  {
+   "key": "cabbage",
+   "names": {
+    "ru": "Капуста",
+    "kz": "Қырыққабат",
+    "en": "Cabbage"
+   },
+   "group": "small vegetables",
+   "p": 0.45,
+   "root": [
+    0.2,
+    0.65
+   ],
+   "kc": [
+    0.7,
+    1.05,
+    0.95
+   ],
+   "stages": [
+    40,
+    60,
+    50,
+    15
+   ],
+   "height_m": 0.4,
+   "salt": [
+    1.0,
+    14.0
+   ],
+   "status": "FAO-56",
+   "source": "Tables 11, 12, 22, 23 (lowest threshold, steepest slope)",
+   "note": ""
+  },
+  {
+   "key": "onion",
+   "names": {
+    "ru": "Лук репчатый",
+    "kz": "Пияз",
+    "en": "Onion (dry)"
+   },
+   "group": "small vegetables",
+   "p": 0.3,
+   "root": [
+    0.2,
+    0.45
+   ],
+   "kc": [
+    0.7,
+    1.05,
+    0.75
+   ],
+   "stages": [
+    15,
+    25,
+    70,
+    40
+   ],
+   "height_m": 0.4,
+   "salt": [
+    1.2,
+    16.0
+   ],
+   "status": "FAO-56",
+   "source": "Tables 11 (dry onion), 12, 22, 23",
+   "note": ""
+  },
+  {
+   "key": "carrot",
+   "names": {
+    "ru": "Морковь",
+    "kz": "Сәбіз",
+    "en": "Carrot"
+   },
+   "group": "small vegetables",
+   "p": 0.35,
+   "root": [
+    0.2,
+    0.75
+   ],
+   "kc": [
+    0.7,
+    1.05,
+    0.95
+   ],
+   "stages": [
+    20,
+    30,
+    50,
+    20
+   ],
+   "height_m": 0.3,
+   "salt": [
+    1.0,
+    14.0
+   ],
+   "status": "FAO-56",
+   "source": "Tables 11 (mid-season 50 taken of 50/30), 12, 22, 23",
+   "note": ""
+  },
+  {
+   "key": "watermelon",
+   "names": {
+    "ru": "Арбуз",
+    "kz": "Қарбыз",
+    "en": "Watermelon"
+   },
+   "group": "cucurbits",
+   "p": 0.4,
+   "root": [
+    0.25,
+    1.15
+   ],
+   "kc": [
+    0.4,
+    1.0,
+    0.75
+   ],
+   "stages": [
+    20,
+    30,
+    30,
+    30
+   ],
+   "height_m": 0.4,
+   "salt": null,
+   "status": "FAO-56",
+   "source": "Tables 11 (\"Water melons\" Italy), 12, 22 (0.8-1.5 m)",
+   "note": "No salt tolerance values in the book."
+  }
+ ]
+}

@@ -1,20 +1,13 @@
+import {CROPS_DATA,SALT_DATA} from './crops-data.js';
 // FAO-56.5 calculation engine, ported from bot/water_balance.py.
 export const VERSION = 'fao56.9';
 // A pump cannot run all 24 hours; a volume above one day's pumping is advised over several days.
 export const PUMP_MAX_HOURS_PER_DAY = 20;
 // FAO-56 Table 19 midpoints: theta_FC and theta_WP lie inside the printed ranges, available water 0.07 / 0.15 / 0.15.
 export const SOILS = {sand:[.12,.05],loam:[.25,.10],clay:[.36,.21]};
-export const CROPS = {
-  wheat:[.55,.25,1.25,[.30,1.15,.35],[20,25,60,30]],
-  cotton:[.65,.25,1.35,[.35,1.18,.65],[30,50,60,55]],
-  corn:[.55,.25,1.35,[.30,1.20,.50],[20,35,40,30]],
-  alfalfa:[.55,.30,1.50,[.40,1.20,1.15],[10,20,20,10]],
-  melon:[.45,.25,1.15,[.50,1.05,.75],[25,35,40,20]],
-  tomato:[.40,.25,1.10,[.60,1.15,.80],[30,40,45,30]],
-  potato:[.35,.20,.50,[.50,1.15,.75],[25,30,45,30]]
-};
-// Salt tolerance, FAO-56 Table 23 (= FAO-29 Table 4): [ECe threshold dS/m, slope b %/dS/m]; conservative end of ranges; none for melon.
-export const SALT_TOLERANCE = {wheat:[6.0,7.1],cotton:[7.7,5.2],corn:[1.7,12.0],alfalfa:[2.0,7.3],tomato:[0.9,9.0],potato:[1.7,12.0],rice:[3.0,12.0]};
+// Crop table and salt tolerance come from crops/catalog.json (FAO-56 Tables 11, 12, 22, 23): edit the catalog and run python3 crops/build.py.
+export const CROPS=CROPS_DATA;
+export const SALT_TOLERANCE=SALT_DATA;
 // Leaching (FAO-29 eq. 9: LR = ECw/(5 ECe_thr - ECw)) and salt yield loss (FAO-56: b (ECe - ECe_thr)). Nothing is invented without ECw.
 export function salinity(field,efficiency) {
   const out={effective_efficiency:efficiency,leaching_fraction:null,leaching_impossible:false,salinity_yield_loss_pct:null},tol=SALT_TOLERANCE[field.crop];
