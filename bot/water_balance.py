@@ -7,7 +7,7 @@ No recommendation is treated as evidence that irrigation actually occurred.
 import math
 from dataclasses import dataclass
 
-CALCULATION_VERSION = 'fao56.6'
+CALCULATION_VERSION = 'fao56.7'
 
 # Default screening model for a film-covered greenhouse when no calibrated
 # indoor ET0 measurement is available. The farmer can still supply a measured
@@ -31,6 +31,10 @@ CROPS = {
     'tomato': (.40, .25, 1.10, (.60, 1.15, .80), (30, 40, 45, 30)),
     'potato': (.35, .20, .50, (.50, 1.15, .75), (25, 30, 45, 30)),
 }
+# Fraction of the soil surface wetted by the irrigation system, FAO-56 Table 20.
+# Trickle 0.3-0.4 (midpoint used; subsurface treated the same). Sprinkler, pivot and
+# furrow are kept at 1.0: no reduction is applied (furrow is 0.3-1.0 in the book).
+WETTED_FRACTION = {'drip': .35, 'subsurface': .35, 'sprinkler': 1., 'pivot': 1., 'furrow': 1.}
 METHODS = {'drip': (5., .90), 'subsurface': (5., .90),
            'sprinkler': (20., .75), 'pivot': (20., .75), 'furrow': (40., .50)}
 
@@ -73,8 +77,10 @@ class FieldInput:
     greenhouse_et0: float | None
 
 
-def crop_parameters(crop, day, stages):
+def crop_parameters(crop, day, stages, method='sprinkler'):
     p, zmin, zmax, (ini, mid, end), _ = CROPS[crop]
+    # FAO-56 equation 60: with partial wetting, Kc ini = fw * Kc ini(Table 12).
+    ini *= WETTED_FRACTION[method]
     initial, development, middle, late = stages
     if day <= initial:
         kc, stage = ini, 'initial'
@@ -135,7 +141,7 @@ def parse_field(data):
             raise BalanceInputError('stages')
         if day > sum(stages):
             raise BalanceInputError('season_ended')
-        kc, zr, p, stage = crop_parameters(crop, day, stages)
+        kc, zr, p, stage = crop_parameters(crop, day, stages, method)
     elif crop == 'other':
         kc = number(data.get('custom_kc'), 'custom_kc', .05, 2)
         zr = number(data.get('custom_root_depth'), 'custom_root_depth', .05, 3)
