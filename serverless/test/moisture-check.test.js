@@ -38,6 +38,9 @@ test('buttons: field card offers the check, answering it updates the screen in t
  assert.ok(JSON.stringify(visible(id).at(-1).reply_markup).includes(`soil:${row.id}`));
  await send(`soil:${row.id}`);
  assert.match(visible(id).at(-1).text,/How moist is the soil/);
+ assert.match(visible(id).at(-1).text,/about \d+ cm deep/);                       // sampling depth for this crop and day
+ assert.match(visible(id).at(-1).text,/Wet:.*Normal:.*Dry:/s);                      // the feel test for each level
+ assert.match(visible(id).at(-1).text,/not a laboratory measurement/);
  await send(`soilset:${row.id}:wet`);
  assert.match(visible(id).at(-1).text,/Balance corrected from your check/);
  assert.equal((await ownedField(id,row.id)).deficit,0);
