@@ -308,26 +308,26 @@ s.addNotes('Финансы. Стенд стоил [сумма]. Фермеру S
 s = slide({ section: 'Бизнес', glow: [7.4, 2.8, 7, -2.2, -2.8, 6.5] });
 title(s, 'Su-Tech ', 'vs конкуренты');
 {
-  const P = { text: '+', options: { color: '81CA2A', fontFace: 'Manrope ExtraBold', fontSize: 28, align: 'center', valign: 'middle' } };
-  const M = { text: '−', options: { color: '8FAE9F', fontFace: 'Manrope ExtraBold', fontSize: 28, align: 'center', valign: 'middle' } };
-  const Q = { text: '?', options: M.options };   // no data (price of the NII system is not published)
+  // only facts confirmed by the sources (Qazinform 28.09.2026, cropx.com, FAO/IAEA study); no judgement marks
   const hd = (t, al) => ({ text: t, options: { bold: true, color: '00382A', fill: { color: '81CA2A' }, fontSize: 13, align: al || 'center', valign: 'middle' } });
-  const rw = (name, vals, hl) => [{ text: name, options: { bold: true, fontSize: hl ? 18 : 14, color: hl ? '81CA2A' : 'FFFFFF', valign: 'middle', fill: hl ? { color: '0E5A3C' } : undefined } }]
-    .concat(vals.map(v => ({ text: v.text, options: Object.assign({}, v.options, hl ? { fill: { color: '0E5A3C' } } : {}) })));
+  const rw = (name, needs, result, hl) => [
+    { text: name, options: { bold: true, fontSize: hl ? 18 : 14, color: hl ? '81CA2A' : 'FFFFFF', valign: 'middle', fill: hl ? { color: '0E5A3C' } : undefined } },
+    { text: needs, options: { fontSize: 12.5, color: 'FFFFFF', valign: 'middle', align: 'left', fill: hl ? { color: '0E5A3C' } : undefined } },
+    { text: result, options: { fontSize: 12.5, color: 'FFFFFF', valign: 'middle', align: 'left', fill: hl ? { color: '0E5A3C' } : undefined } }];
   s.addTable([
-    [hd('Решение', 'left'), hd('без датчиков'), hd('бесплатно для фермера'), hd('совет каждый день'), hd('есть данные с поля')],
-    rw('Su-Tech', [P, P, P, M], true),
-    rw('НИИ земледелия: датчики и метеостанция', [M, Q, P, P]),
-    rw('CropX: датчики в почве, подписка', [M, M, P, P]),
-    rw('CROPWAT ФАО: программа для агронома', [P, P, M, P]),
-  ], { x: 0.6, y: 2.05, w: 12.13, colW: [4.73, 1.85, 1.85, 1.85, 1.85], rowH: [0.65, 0.78, 0.78, 0.78, 0.78],
+    [hd('Решение', 'left'), hd('Что нужно для работы'), hd('Что известно о результатах')],
+    rw('Su-Tech', 'Только телефон (Telegram), бесплатно для фермера', 'Данных с поля пока нет: идёт опыт', true),
+    rw('НИИ земледелия', 'Датчики почвы и среды, цифровая метеостанция, расходомеры', 'Сахарная свёкла: экономия воды 32% от расчётной нормы (Минсельхоз РК, 2026)'),
+    rw('CropX', 'Датчики в почве и облачная платформа', 'По заявлению компании: до 50% меньше воды (сайт CropX)'),
+    rw('CROPWAT ФАО', 'Компьютер с Windows; данные о климате, почве и культуре', 'На данных Турции, Марокко и Пакистана модель верно оценивает водный стресс, нужна калибровка (ФАО/МАГАТЭ)'),
+  ], { x: 0.6, y: 2.05, w: 12.13, colW: [3.1, 4.4, 4.63], rowH: [0.65, 0.78, 0.78, 0.78, 0.78],
        border: { type: 'solid', color: '3E7A62', pt: 1 }, margin: 0.14, objectName: an(3, 'fade') });
 }
 T(s, [{ text: 'Честно: ', options: { bold: true, color: LIME } },
-      { text: 'у НИИ земледелия есть данные с поля: на сахарной свёкле экономия воды 32% от расчётной нормы (Минсельхоз РК, 2026); «?» — нет данных о цене. У нас данных с поля пока нет, поэтому идёт опыт и ищем пилот. Но их системе нужны датчики и метеостанция, а Su-Tech работает на любом телефоне.' }],
+      { text: 'у нас данных с поля пока нет, поэтому идёт опыт и ищем пилот. Но Su-Tech не требует датчиков и работает на любом телефоне. Источники: Минсельхоз РК (Qazinform, 28.09.2026), cropx.com, ФАО (Smith, Kivumbi, Heng).' }],
   { x: 0.6, y: 6.3, w: 12.1, h: 0.6, fontSize: 12.5, color: PALE }, 4);
 s._after();
-s.addNotes('Главный конкурент в Казахстане — система НИИ земледелия: датчики, метеостанция, расходомеры. На сахарной свёкле, по данным Минсельхоза, экономия воды составила 32 процента от расчётной нормы. У них есть данные с поля, у нас пока нет — это честно. Но им нужны датчики и метеостанция. Su-Tech работает на любом телефоне.');
+s.addNotes('Сравниваю только то, что подтверждено источниками. НИИ земледелия: комплекс из датчиков, метеостанции и расходомеров; на сахарной свёкле, по данным Минсельхоза, экономия воды составила 32 процента от расчётной нормы. CropX: датчики в почве, по заявлению самой компании — до 50 процентов меньше воды. CROPWAT — программа ФАО: на полевых данных она верно оценивает водный стресс, но требует калибровки. У всех есть данные с поля, у нас пока нет — это честно. Su-Tech работает на любом телефоне и не требует датчиков.');
 
 // ===== 12. SWOT =====
 s = slide({ section: 'Бизнес', glow: [2.8, 1.4, 7.5, 8.6, -2.6, 6] });
