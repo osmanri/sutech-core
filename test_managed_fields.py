@@ -100,7 +100,7 @@ class ManagedFieldServiceTests(unittest.IsolatedAsyncioTestCase):
                 self.assertEqual(refreshed['savings'], result['savings'])
                 self.assertEqual(refreshed['deficit'], result['deficit'])
                 self.assertEqual(refreshed['gross_m3'], result['gross_m3'])
-                self.assertEqual(refreshed['economics_version'], 'fao56.8')
+                self.assertEqual(refreshed['economics_version'], 'fao56.9')
         self.assertEqual(list_daily_balances(field_id, user_id=42), journal)
         self.assertEqual(get_field(field_id)['accumulated_deficit'], accumulated)
 
