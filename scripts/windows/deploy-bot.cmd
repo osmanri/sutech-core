@@ -1,6 +1,6 @@
 @echo off
 REM Double-click to publish the Telegram bot (Windows). Needs Git, Node.js 22 and a filled bot\.env
-cd /d "%~dp0"
+cd /d "%~dp0\.."
 git fetch origin && git checkout claude/project-competition-review-f8o9yv && git pull || goto :fail
 git submodule update --init || goto :fail
 if not exist bot\.env (echo bot\.env not found - put your keys there first & goto :fail)

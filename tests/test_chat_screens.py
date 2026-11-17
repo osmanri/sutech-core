@@ -224,7 +224,7 @@ class ChatScreenTests(unittest.IsolatedAsyncioTestCase):
         self.assertFalse(is_navigation(message(1,text='Why are tomato leaves yellow?')))
 
     async def test_production_menu_routes_leave_one_screen_in_each_language(self):
-        from test_bot_platform import shared_test_dispatcher
+        from tests.test_bot_platform import shared_test_dispatcher
         from bot.handlers import agronomist, start
         from bot.chat_screens import screens
         from bot import user_state

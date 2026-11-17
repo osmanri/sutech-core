@@ -70,7 +70,7 @@ Random errors had little effect. A systematic ET₀ underestimate accumulates in
 ![Stress days under input errors](../docs/img/sensitivity_stress.svg)
 
 ### 4.4 Validation
-ET₀ implementation vs FAO-56 Example 18: see 3.2 and `VALIDATION.md`. A comparison with CROPWAT 8.0 on identical inputs is **not yet done [AUTHOR]**. Python and JavaScript engines agree on 675 reference scenarios (relative tolerance 10⁻⁸).
+ET₀ implementation vs FAO-56 Example 18: see 3.2 and `../docs/audits/VALIDATION.md`. A comparison with CROPWAT 8.0 on identical inputs is **not yet done [AUTHOR]**. Python and JavaScript engines agree on 675 reference scenarios (relative tolerance 10⁻⁸).
 
 ### 4.5 Bench experiment
 **[AUTHOR: results go here after the experiment — model accuracy (RMSE/MAE/bias), water per pot by group with Welch test and effect size, dry mass, and a photograph of the stand. Do not fill this section with simulated numbers.]**
