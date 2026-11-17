@@ -53,3 +53,16 @@ test('polish: rounded volumes, localized units and names, stage and roots, first
   const csv=fieldCsv(x.row);
   assert.match(csv,/^# Su-Tech field export\. Engine fao56\.9/);assert.match(csv,/crop,cotton/);assert.match(csv,/watering: time,applied_m3/);assert.match(csv,/soil_check: time,day,level/);assert.match(csv,/,dry,118\.2,65\.4,118\.2/);
 });
+
+import {selfCheck,selfCheckLines} from '../tgcloud/lib/explain.js';
+test('self-check: compares model and farmer answers, flags a steady bias, changes nothing, nothing without checks',()=>{
+  const none=mk();assert.equal(selfCheck(none.row,none.r),null);assert.deepEqual(selfCheckLines(none.row,none.r,'en'),[]);
+  const raw=mk().r.raw;
+  const drier=mk({},{checks:[1,2,3,4].map(i=>({time:NOW-i*86400000,before:raw*.2,value_mm:raw*.8}))});
+  const c=selfCheck(drier.row,drier.r);assert.equal(c.n,4);assert.equal(c.bias,'model_wetter');assert.ok(Math.abs(c.abs_mm-raw*.6)<1e-9);
+  const text=selfCheckLines(drier.row,drier.r,'en').join(' ');assert.match(text,/drier than the bot calculated/);assert.match(text,/changes nothing by itself/);
+  assert.match(whyCard(drier.row,drier.f,drier.r,'en'),/Field self-check/);
+  const mixed=mk({},{checks:[{time:NOW-3,before:raw*.2,value_mm:raw*.8},{time:NOW-2,before:raw*.8,value_mm:raw*.2},{time:NOW-1,before:raw*.5,value_mm:raw*.5}]});assert.equal(selfCheck(mixed.row,mixed.r).bias,'none');
+  const two=mk({},{checks:[{time:NOW-2,before:0,value_mm:raw},{time:NOW-1,before:0,value_mm:raw}]});assert.equal(selfCheck(two.row,two.r).bias,'none');   // fewer than 3: no suggestion
+  const wetter=mk({},{checks:[1,2,3].map(i=>({time:NOW-i,before:raw*.9,value_mm:0}))});assert.equal(selfCheck(wetter.row,wetter.r).bias,'model_drier');
+});
