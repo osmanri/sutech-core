@@ -15,6 +15,10 @@ CALCULATION_VERSION = 'fao56.6'
 # 70% radiation transmission. Outdoor precipitation never reaches the crop.
 GREENHOUSE_ET0_FACTOR = .70
 
+# A pump cannot run all 24 hours: leave time for maintenance and electricity outages.
+# A volume above one day's pumping is advised over several days instead of "today".
+PUMP_MAX_HOURS_PER_DAY = 20.
+
 SOILS = {'sand': (.12, .05), 'loam': (.33, .18), 'clay': (.45, .30)}
 # p, minimum root depth, maximum root depth, Kc initial/mid/end, stage days
 CROPS = {
@@ -178,7 +182,7 @@ def calculate_economics(ai_gross_volume, current_deficit_mm, area_ha,
     if any(v is None for v in (power_price, pump_power_kw, pump_productivity_m3h)):
         return dict(traditional_m3=trad_gross_volume, ai_time_hours=None,
                     traditional_time_hours=None, cost=None, traditional_cost=None,
-                    savings=None, saved_kwh=None)
+                    savings=None, saved_kwh=None, max_daily_m3=None, irrigation_days=None)
 
     tariff = number(power_price, 'power_price', 0, 10000)
     pump_power = number(pump_power_kw, 'pump_power_kw', .000001, 100000)
@@ -189,9 +193,12 @@ def calculate_economics(ai_gross_volume, current_deficit_mm, area_ha,
     trad_cost = trad_time_hours * pump_power * tariff
     savings = trad_cost - ai_cost
     saved_kwh = (trad_time_hours - ai_time_hours) * pump_power
+    max_daily_m3 = pump_productivity * PUMP_MAX_HOURS_PER_DAY
+    irrigation_days = max(1, math.ceil(ai_gross_volume / max_daily_m3 - 1e-9)) if ai_gross_volume > 0 else 0
     return dict(traditional_m3=trad_gross_volume, ai_time_hours=ai_time_hours,
                 traditional_time_hours=trad_time_hours, cost=ai_cost,
-                traditional_cost=trad_cost, savings=savings, saved_kwh=saved_kwh)
+                traditional_cost=trad_cost, savings=savings, saved_kwh=saved_kwh,
+                max_daily_m3=max_daily_m3, irrigation_days=irrigation_days)
 
 
 def calculate_balance(field, et0, rain):
