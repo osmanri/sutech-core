@@ -21,7 +21,7 @@ import csv
 import random
 from statistics import mean
 
-from research.simulate import (KY, LOCATIONS, ROOT, YEARS, best_safe_calendar, calendar_decider, fetch_power,
+from research.simulate import (apply_study_engine, KY, LOCATIONS, ROOT, YEARS, best_safe_calendar, calendar_decider, fetch_power,
                                mean_daily_demand, run_season, season_weather, sutech_decider, truth_differs)
 
 SCENARIOS = {
@@ -84,4 +84,5 @@ def write(rows: list[dict]) -> list[str]:
 
 
 if __name__ == "__main__":
+    apply_study_engine()
     print("\n".join(write(run())))
