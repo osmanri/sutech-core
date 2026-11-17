@@ -75,7 +75,7 @@ let s = slide({ section: 'Проблема', blank: true, photo: 'aral', glow: [
 }
 [['72%', 'farm', 'пресной воды мира забирает сельское хозяйство', 'ФАО, AQUASTAT 2025'],
  ['до 50%', 'drop-half', 'воды в Казахстане теряется по дороге — в оросительных каналах', 'Astana Times, 2026'],
- ['−78%', 'grains', 'лимит посевов риса в Туркестанской области: с 16 000 до 3 500 га', 'Dunyo.info, январь 2026']].forEach(([num, ic, txt, from], i) => {
+ ['−78%', 'grains', 'лимит посевов риса в Туркестанской области: с 16 000 до 3 500 га', 'Минводресурсов РК, январь 2026']].forEach(([num, ic, txt, from], i) => {
   const x = 0.75 + i * 4.1;
   icon(s, ic, 'white', x, 2.75, 0.95);
   T(s, num, { x, y: 3.85, w: 3.6, h: 0.95, fontSize: 46, color: LIME, valign: 'middle', head: true });
@@ -291,26 +291,26 @@ title(s, 'Su-Tech ', 'vs конкуренты');
 {
   const X = 0.6, Y = 2.05, colW = [4.73, 1.85, 1.85, 1.85, 1.85], hdrH = 0.65, rowH = 0.78;
   const xs = colW.reduce((a, w, i) => a.concat(a[i] + w), [X]);
-  const rows = [['Su-Tech', '+++-', true], ['НИИ земледелия: датчики и метеостанция', '--++', false],
+  const rows = [['Su-Tech', '+++-', true], ['НИИ земледелия: датчики и метеостанция', '-?++', false],
     ['CropX: датчики в почве, подписка', '--++', false], ['CROPWAT ФАО: программа для агронома', '++-+', false]];
   s.addShape(pres.shapes.RECTANGLE, { x: X, y: Y, w: 12.13, h: hdrH, fill: { color: LIME }, line: { color: LIME, width: 0 } });
-  ['Решение', 'без датчиков', 'бесплатно для фермера', 'совет каждый день', 'проверено на поле'].forEach((h, i) =>
+  ['Решение', 'без датчиков', 'бесплатно для фермера', 'совет каждый день', 'есть данные с поля'].forEach((h, i) =>
     T(s, h, { x: xs[i] + 0.14, y: Y, w: colW[i] - 0.28, h: hdrH, align: i ? 'center' : 'left', valign: 'middle', fontSize: 13, bold: true, color: DEEP }));
   rows.forEach(([name, marks, hl], r) => {
     const y = Y + hdrH + r * rowH;
     if (hl) s.addShape(pres.shapes.RECTANGLE, { x: X, y, w: 12.13, h: rowH, fill: { color: '0E5A3C' }, line: { color: '0E5A3C', width: 0 } });
     T(s, name, { x: X + 0.14, y, w: colW[0] - 0.28, h: rowH, valign: 'middle', fontSize: hl ? 18 : 14, bold: true, color: hl ? LIME : WHITE });
     [...marks].forEach((m, c) =>
-      T(s, m === '+' ? '+' : '−', { x: xs[c + 1], y, w: colW[c + 1], h: rowH, align: 'center', valign: 'middle', fontSize: 28, color: m === '+' ? LIME : MUTED, head: true }));
+      T(s, m === '+' ? '+' : m === '?' ? '?' : '−', { x: xs[c + 1], y, w: colW[c + 1], h: rowH, align: 'center', valign: 'middle', fontSize: 28, color: m === '+' ? LIME : MUTED, head: true }));
     hline(s, X, X + 12.13, y + rowH, '3E7A62', 1);
   });
   xs.slice(1, -1).forEach(x => vline(s, x, Y + hdrH, Y + hdrH + rows.length * rowH, '3E7A62', 1));
 }
 T(s, [{ text: 'Честно: ', options: { bold: true, color: LIME } },
-      { text: 'у НИИ земледелия есть поле — −32% воды на сахарной свёкле. У нас пока нет, поэтому идёт опыт и ищем пилот. Но их системе нужны датчики и метеостанция, а Su-Tech работает на любом телефоне.' }],
+      { text: 'у НИИ земледелия есть данные с поля: экономия воды до 32% (предварительно); «?» — нет данных о цене. У нас данных с поля пока нет, поэтому идёт опыт и ищем пилот. Но их системе нужны датчики и метеостанция, а Su-Tech работает на любом телефоне.' }],
   { x: 0.6, y: 6.3, w: 12.1, h: 0.6, fontSize: 12.5, color: PALE });
 s._after();
-s.addNotes('Главный конкурент в Казахстане — система НИИ земледелия: датчики, метеостанция, расходомеры. На сахарной свёкле она сэкономила 32 процента воды. У них есть поле, у нас пока нет — это честно. Но им нужны датчики и метеостанция. Su-Tech работает на любом телефоне.');
+s.addNotes('Главный конкурент в Казахстане — система НИИ земледелия: датчики, метеостанция, расходомеры. По их предварительным данным, она экономит до 32 процентов воды. У них есть данные с поля, у нас пока нет — это честно. Но им нужны датчики и метеостанция. Su-Tech работает на любом телефоне.');
 
 // 12. SWOT
 s = slide({ section: 'Бизнес', glow: [2.8, 1.4, 7.5, 8.6, -2.6, 6] });
