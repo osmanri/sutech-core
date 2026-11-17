@@ -21,7 +21,7 @@ from collections.abc import Iterator
 from statistics import mean
 from typing import Any
 
-from research.simulate import (KY, LOCATIONS, ROOT, YEARS, best_safe_calendar, calendar_decider, fetch_power,
+from research.simulate import (apply_study_engine, KY, LOCATIONS, ROOT, YEARS, best_safe_calendar, calendar_decider, fetch_power,
                                mean_daily_demand, run_season, season_weather, sutech_decider)
 
 REPLICATES = 20
@@ -87,5 +87,6 @@ def run(crop="cotton", method="drip", soil="loam", out=None):
 
 
 if __name__ == "__main__":
+    apply_study_engine()
     for method in ("drip", "furrow"):
         print("\n".join(run(method=method)), end="\n\n")
