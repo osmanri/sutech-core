@@ -17,7 +17,7 @@ class ServerlessRuntimeGuardTests(unittest.TestCase):
         assert_legacy_runtime_allowed({'SU_TECH_ENABLE_LEGACY_BOT': '1'})
 
     def test_guard_runs_before_database_bot_or_webhook_initialization(self):
-        tree = ast.parse(Path(__file__).with_name('bot').joinpath('main.py').read_text(encoding='utf8'))
+        tree = ast.parse(Path(__file__).resolve().parent.parent.joinpath('bot').joinpath('main.py').read_text(encoding='utf8'))
         entry = next(n for n in tree.body if isinstance(n, ast.AsyncFunctionDef) and n.name == 'main')
         call = entry.body[0].value
         self.assertIsInstance(call, ast.Call)

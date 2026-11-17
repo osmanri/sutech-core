@@ -10,7 +10,7 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - run: python -m unittest test_water_balance test_water_stress test_et0 test_experiment test_hardware_bridge test_research_simulation test_calculation_audit
+      - run: python -m unittest tests.test_water_balance tests.test_water_stress tests.test_et0 tests.test_experiment tests.test_hardware_bridge tests.test_research_simulation tests.test_calculation_audit
       - name: Whole suite incl. the Telegram bot (dummy token, no network)
         run: pip install -r bot/requirements.txt && python run_tests.py
   firmware:

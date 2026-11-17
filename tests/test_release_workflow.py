@@ -19,7 +19,7 @@ from bot.field_state import (
     record_irrigation,
 )
 from bot.water_balance import calculate_balance, parse_field
-from test_water_balance import payload
+from tests.test_water_balance import payload
 
 
 class LegacyDatabaseMigrationTests(unittest.TestCase):

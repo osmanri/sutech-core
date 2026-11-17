@@ -9,7 +9,7 @@ from pathlib import Path
 
 class RenderEntrypointTests(unittest.TestCase):
     def test_bot_main_imports_from_render_root_directory(self):
-        bot_directory = Path(__file__).resolve().parent / "bot"
+        bot_directory = Path(__file__).resolve().parent.parent / "bot"
         environment = os.environ.copy()
         environment.pop("PYTHONPATH", None)
         environment["BOT_TOKEN"] = "123456:TEST_TOKEN"

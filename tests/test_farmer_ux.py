@@ -7,8 +7,8 @@ from bot.handlers import fields, webapp
 from bot.keyboards.inline import get_report_inline_keyboard
 from bot.states.field_states import FieldCallback
 from bot.field_state import get_field
-import test_bot_platform as platform_fixture
-import test_field_refresh as refresh_fixture
+import tests.test_bot_platform as platform_fixture
+import tests.test_field_refresh as refresh_fixture
 
 
 class FarmerUXTests(unittest.IsolatedAsyncioTestCase):

@@ -10,6 +10,23 @@
 
 ---
 
+
+## Карта репозитория
+
+| Папка / файл | Что там |
+|---|---|
+| `serverless/` | Живой бот (JavaScript на Telegram Serverless), его тесты, сборка Mini App |
+| `frontend/` | Сайт и Mini App (отдельный репозиторий `sutech-frontend`, подключён как submodule) |
+| `bot/` | Эталонный расчётный движок на Python (`water_balance.py`, `et0.py`), на нём считается исследование; старый Python-бот отключён |
+| `crops/` | Каталог культур: единственный источник правды (`catalog.json`, `build.py`) |
+| `research/` | Компьютерное исследование на реальной погоде и его результаты |
+| `experiment/`, `firmware/` | Опыт с горшками (протокол, предрегистрация, сбор данных) и стенд на Arduino |
+| `paper/` | Научная статья (черновик) и список литературы |
+| `docs/` | Метод, сверка коэффициентов, планы, справка для агронома, материалы для презентации; `docs/audits/` старые аудиты, `docs/archive/` архив |
+| `tests/` | Тесты Python (`python run_tests.py`); тесты бота лежат в `serverless/test/` |
+| `scripts/windows/` | Удобные скрипты для Windows |
+| `REPRODUCE.md`, `CHANGELOG.md`, `CITATION.cff`, `LICENSE` | Как воспроизвести, что менялось, как цитировать, лицензия (MIT) |
+
 ## Зачем это
 
 Фермеру нужно знать три вещи: **поливать ли сейчас, сколько воды подать и сколько будет стоить работа насоса**. Su-Tech берёт погоду и параметры поля (культура, почва, способ полива, возраст растения) и отвечает на эти вопросы — с объяснением каждого шага, чтобы агроном мог проверить расчёт.
@@ -64,7 +81,7 @@ flowchart LR
 
 ## Проверка расчёта
 
-- ET₀ по Пенману–Монтейту (`bot/et0.py`) сверена с примером 18 из FAO-56 (Брюссель, 6 июля): получилось 3,88 мм/сут, эталон ≈ 3,9. Промежуточные величины подтверждены независимым источником, итоговое значение ещё сверяется с печатной книгой. См. [VALIDATION.md](VALIDATION.md).
+- ET₀ по Пенману–Монтейту (`bot/et0.py`) сверена с примером 18 из FAO-56 (Брюссель, 6 июля): получилось 3,88 мм/сут, эталон ≈ 3,9. Промежуточные величины подтверждены независимым источником, итоговое значение ещё сверяется с печатной книгой. См. [docs/audits/VALIDATION.md](docs/audits/VALIDATION.md).
 - Водный баланс сезона замыкается с точностью 10⁻¹² мм на всех 500 прогонах.
 - Движки на Python и JavaScript сверяются на 675 эталонных сценариях.
 
@@ -95,7 +112,7 @@ python experiment/analyze.py data/log.csv --pot-area-cm2 177 --outcomes data/out
 git clone --recurse-submodules https://github.com/osmanri/sutech-core.git && cd sutech-core
 
 # Python: расчёты, симуляция, эксперимент
-python -m unittest test_water_balance test_water_stress test_et0 test_experiment test_hardware_bridge test_research_simulation
+python -m unittest tests.test_water_balance tests.test_water_stress tests.test_et0 tests.test_experiment tests.test_hardware_bridge tests.test_research_simulation
 
 # Воспроизвести исследование (погода лежит в research/data, интернет не нужен)
 python -m research.simulate && python -m research.sensitivity && python -m research.plots

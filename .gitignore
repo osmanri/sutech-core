@@ -20,3 +20,6 @@ tmp/ai-test-deps/
 tmp/ai-test-env/
 tmp/ai-chat-tests.log
 firmware/host_test/test_firmware
+
+# Scratch folders
+tmp/
