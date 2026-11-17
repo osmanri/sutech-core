@@ -8,7 +8,7 @@ from unittest.mock import AsyncMock, patch
 from bot import db
 from bot.field_service import calculate_saved_field, persist_webapp_field
 from bot.field_state import get_field, list_daily_balances, save_daily_balance
-from bot.water_balance import calculate_balance, parse_field
+from bot.water_balance import calculate_balance, parse_field, CALCULATION_VERSION
 from bot.daily_monitor import update_all_fields_once
 from tests.test_water_balance import payload
 
@@ -100,7 +100,7 @@ class ManagedFieldServiceTests(unittest.IsolatedAsyncioTestCase):
                 self.assertEqual(refreshed['savings'], result['savings'])
                 self.assertEqual(refreshed['deficit'], result['deficit'])
                 self.assertEqual(refreshed['gross_m3'], result['gross_m3'])
-                self.assertEqual(refreshed['economics_version'], 'fao56.9')
+                self.assertEqual(refreshed['economics_version'], CALCULATION_VERSION)
         self.assertEqual(list_daily_balances(field_id, user_id=42), journal)
         self.assertEqual(get_field(field_id)['accumulated_deficit'], accumulated)
 

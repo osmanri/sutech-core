@@ -1,6 +1,6 @@
 import {CROPS_DATA,SALT_DATA} from './crops-data.js';
 // FAO-56.5 calculation engine, ported from bot/water_balance.py.
-export const VERSION = 'fao56.9';
+export const VERSION = 'fao56.10';
 // A pump cannot run all 24 hours; a volume above one day's pumping is advised over several days.
 export const PUMP_MAX_HOURS_PER_DAY = 20;
 // FAO-56 Table 19 midpoints: theta_FC and theta_WP lie inside the printed ranges, available water 0.07 / 0.15 / 0.15.
@@ -91,21 +91,25 @@ export function greenhouseUnsupported(field) {
   if(field.greenhouse_heated&&(field.greenhouse_et0===null||field.greenhouse_et0===undefined))return 'heated_needs_measurement';
   return null;
 }
+// Recheck saved results too: older engine versions could advise rice on unsupported media.
+export function applicableResult(field,result) {
+  const reason=greenhouseUnsupported(field);
+  return reason?{...result,status:'unsupported',unsupported_reason:reason,net_m3:0,gross_m3:0,...economics(0,result.deficit,field)}:result;
+}
 export function calculate(field,et0,rain) {
   et0=number(et0,'et0',0,50);rain=number(rain,'rain',0,3000);
   if(field.field_type==='greenhouse'){et0=field.greenhouse_et0??et0*.70;rain=0;}
   if(field.crop==='rice'){
     const seepage={clay:3,loam:6,sand:12}[field.soil],etc=Math.round(et0*1.25*100)/100,peff=rain<5?0:rain*.85;
     const net_mm=Math.max(0,etc+seepage-peff),efficiency=.50,net_m3=net_mm*10*field.area_ha,gross_m3=net_m3/efficiency;
-    return {status:'rice',is_rice:true,water_layer_cm:12,seepage,etc,et0,rain,peff,net_mm,efficiency,net_m3,gross_m3,raw:0,deficit:net_mm,threshold:net_mm,...economics(gross_m3,net_mm,field)};
+    return applicableResult(field,{status:'rice',unsupported_reason:null,is_rice:true,water_layer_cm:12,seepage,etc,et0,rain,peff,net_mm,efficiency,net_m3,gross_m3,raw:0,deficit:net_mm,threshold:net_mm,...economics(gross_m3,net_mm,field)});
   }
   const [taw,raw]=capacity(field.soil,field.zr,field.p),peff=rain<5?0:rain*.75,ks=stress(field.yesterday,taw,raw,field.p),etc=et0*field.kc*ks;
   const unbounded=field.yesterday+(etc-peff),deficit=Math.min(taw,Math.max(0,unbounded));
   const [tech_threshold,efficiency]=METHODS[field.method],threshold=Math.min(tech_threshold,raw);
   const status=deficit-raw>1e-9?'critical':deficit>=threshold||Math.abs(deficit-threshold)<=1e-9?'irrigate':'deferred';
-  const unsupported_reason=greenhouseUnsupported(field);
-  const net_m3=status==='deferred'||unsupported_reason?0:deficit*10*field.area_ha,salt=salinity(field,efficiency),gross_m3=net_m3/salt.effective_efficiency;
-  return {status:unsupported_reason?'unsupported':status,unsupported_reason,taw,raw,deficit,unbounded,overflow:Math.max(0,unbounded-taw),rain_excess:Math.max(0,-unbounded),et0,rain,peff,etc,ks,kc:field.kc,zr:field.zr,p:field.p,threshold,tech_threshold,efficiency,net_m3,gross_m3,leaching_fraction:salt.leaching_fraction,leaching_impossible:salt.leaching_impossible,salinity_yield_loss_pct:salt.salinity_yield_loss_pct,...economics(gross_m3,deficit,field)};
+  const net_m3=status==='deferred'?0:deficit*10*field.area_ha,salt=salinity(field,efficiency),gross_m3=net_m3/salt.effective_efficiency;
+  return applicableResult(field,{status,unsupported_reason:null,taw,raw,deficit,unbounded,overflow:Math.max(0,unbounded-taw),rain_excess:Math.max(0,-unbounded),et0,rain,peff,etc,ks,kc:field.kc,zr:field.zr,p:field.p,threshold,tech_threshold,efficiency,net_m3,gross_m3,leaching_fraction:salt.leaching_fraction,leaching_impossible:salt.leaching_impossible,salinity_yield_loss_pct:salt.salinity_yield_loss_pct,...economics(gross_m3,deficit,field)});
 }
 export function fieldKey(payload,field) {
   const lat=number(payload.lat??payload.latitude,'latitude',-90,90),lon=number(payload.lon??payload.longitude,'longitude',-180,180);

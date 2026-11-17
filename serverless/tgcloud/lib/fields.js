@@ -1,5 +1,5 @@
 import {checkNudge,needsCheck,confidence,confidenceLine,whyCard,volumeRounded,firstDayNote,detailsBlock} from './explain.js';
-import {calculate,fieldKey,number,METHODS,VERSION,economics,PUMP_MAX_HOURS_PER_DAY,salinity} from './balance.js';
+import {calculate,fieldKey,number,METHODS,VERSION,economics,PUMP_MAX_HOURS_PER_DAY,salinity,applicableResult} from './balance.js';
 import {get,put,list,lock,unlock,ownerId,nonce} from './store.js';
 import {weather} from './weather.js';
 import {parseField,cleanExpert,KEYS} from './expert.js';
@@ -9,7 +9,7 @@ export async function ownedField(id,fieldId) {
   if(!row)throw new Error('not_found');return row;
 }
 export function currentResult(row) {
-  const field=parseField(row.payload),base=row.result;
+  const field=parseField(row.payload),base=applicableResult(field,row.result);
   if(field.crop==='rice'||base.status==='unsupported')return base;
   const deficit=row.deficit,threshold=Math.min(METHODS[field.method][0],base.raw);
   const status=deficit-base.raw>1e-9?'critical':deficit>=threshold||Math.abs(deficit-threshold)<1e-9?'irrigate':'deferred';
@@ -131,6 +131,7 @@ export async function waterField(id,fieldId,applied,expected,revision=null) {
   const guard=`field:${fieldId}`,token=await lock(guard,30);if(!token)throw new Error('busy');
   try {
     const row=await ownedField(id,fieldId);
+    if(currentResult(row).status==='unsupported')throw new Error('unsupported');
     if(Math.abs(row.deficit-expected)>1e-8||(revision!==null&&row.revision!==revision))throw new Error('balance_changed');
     migrate(row,row.last_day);
     const f=parseField(row.payload),before=row.deficit,net_mm=applied*METHODS[f.method][1]/(10*f.area_ha);

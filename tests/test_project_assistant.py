@@ -10,7 +10,7 @@ from aiogram.types import Message, Chat, User, Update, CallbackQuery, Location
 from bot.handlers import agronomist, chat_planner, webapp
 from bot.services.agronomist import system_prompt
 from bot.services.agronomy_scope import in_scope
-from bot.water_balance import parse_field, calculate_balance
+from bot.water_balance import parse_field, calculate_balance, CALCULATION_VERSION
 from bot.balance_report import fmt, display_volume
 from bot.i18n import t
 from tests.test_bot_platform import shared_test_dispatcher
@@ -23,7 +23,7 @@ class ProjectKnowledgeTests(unittest.TestCase):
             for value in [expected,'### 7. Бизнес-модель','### Источники','CALCULATION',
                           '/plan','R385','YF-S401','Arduino','0.70','40m3','100farms/5000ha',
                           'not a measured field trial','cannot operate a pump']:
-                if value == 'CALCULATION': value = 'fao56.9'
+                if value == 'CALCULATION': value = CALCULATION_VERSION
                 self.assertIn(value,prompt)
             self.assertLess(len(prompt),32000,'Keep complete knowledge within bounded request size')
 

@@ -1,4 +1,4 @@
-# Метод расчёта Su-Tech (версия движка fao56.9)
+# Метод расчёта Su-Tech (версия движка fao56.10)
 
 Документ для агронома: что именно считает бот, по каким формулам, откуда числа и что **не проверено**. Код: `bot/water_balance.py` (Python, на нём считается исследование) и `serverless/tgcloud/lib/balance.js` (живой бот; сайт использует его точную копию `sutech-frontend/js/sutech-engine.js`). Совпадение Python и JS проверяется тестом по 1425 эталонным сценариям (`serverless/test/balance-fixtures.json`, создаётся `serverless/generate-reference.py`) и независимым пересчётом по определениям FAO-56 на 5 000 случайных полях (`serverless/test/independent-audit.test.js`).
 
