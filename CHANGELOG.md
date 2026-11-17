@@ -3,6 +3,7 @@
 Dates are 2026. The engine version is the `VERSION` constant of `serverless/tgcloud/lib/balance.js` (the same string as `CALCULATION_VERSION` in `bot/water_balance.py`).
 
 ## 0.9.0, 17 November
+- **Theme switch removed (website).** The Mini App no longer has a light/dark/auto picker: the page always follows the device (or Telegram). A choice saved by an earlier version is ignored and cleared.
 - **Documentation and site brought in step with the bot.** README feature list, agronomist brief (new section on checking and correcting the bot), jury Q&A (expert mode, self-check, no scheduler), about page in EN/RU/KZ. No engine change, so the study numbers are unchanged.
 - **Soil-check reminder without a scheduler.** The Telegram Serverless platform has no way to run code on a schedule, so the bot cannot message farmers by itself. Instead, a field not checked for more than 7 days (or never) is marked 🔔 in «My fields», and its card says how long ago it was checked and asks for a check (replacing the generic request, so it is not repeated).
 - **Short setup in the bot chat: five questions + «We assumed».** Crop, area, location, planting date (date like 15.05 or 15.05.2026, or days), irrigation method; the rest has safe defaults (loam, normal moisture, open field, no salinity, no pump). The last screen lists every assumption and has «Refine» buttons for soil (with a rough rolling test), moisture, greenhouse/field, salinity and pump. The Mini App form is unchanged.
