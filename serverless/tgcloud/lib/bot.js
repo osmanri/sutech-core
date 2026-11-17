@@ -6,6 +6,7 @@ import {screen,navigate,home,homeKeys,languages,aiKeys,button,keyboard,back,igno
 import {generate,aiHistory} from './ai.js';
 import {calculateField,ownedField,refresh,report,currentResult,waterField,card,checkMoisture,SOIL_LEVELS} from './fields.js';
 import {parseField} from './balance.js';
+import {fieldCsv} from './explain.js';
 import {planScreen,planInput} from './planner.js';
 import {pilot,feedback,p} from './pilot.js';
 import {rememberMessage} from './screens.js';
@@ -129,7 +130,7 @@ export async function action(id,data) {
    return show(tr(lang,'Сколько воды подали на самом деле? Введите объём в м³. Например: 0.2\n\nПодтверждайте только выполненный полив.','Нақты қанша су берілді? Көлемді м³-пен жазыңыз. Мысалы: 0.2\n\nТек орындалған суаруды растаңыз.','How much water did you actually apply? Enter m³, for example: 0.2.\n\nRecord only completed irrigation.'),keyboard([[button(t(lang,'btn_cancel'),`field:${value}`)]]));
   }
   if(type==='export'){
-   const csv='date,applied_m3,deficit_before_mm,deficit_after_mm\r\n'+(row.events??[]).map(e=>[new Date(e.time).toISOString(),e.applied_m3,e.before,e.after].join(',')).join('\r\n');
+   const csv=fieldCsv(row);
    const bytes=new Uint8Array([...csv].map(c=>c.charCodeAt(0)));const doc=await api.sendDocument({chat_id:id,document:new InputFile(bytes,'Su-Tech-irrigation.csv',{type:'text/csv'})});
    u.attachments=[...(u.attachments??[]),doc.message_id];await saveUser(id,u);
   }
