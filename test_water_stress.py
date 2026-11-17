@@ -32,7 +32,7 @@ class StressCoefficient(unittest.TestCase):
         r = calculate_balance(parse_field(PAYLOAD), 5., 0.)
         self.assertEqual(r['ks'], 1.)
         self.assertAlmostEqual(r['deficit'], 108.875)
-        self.assertEqual(CALCULATION_VERSION, 'fao56.7')
+        self.assertEqual(CALCULATION_VERSION, 'fao56.8')
 
 
 if __name__ == '__main__':

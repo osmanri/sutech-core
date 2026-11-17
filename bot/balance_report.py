@@ -55,6 +55,18 @@ def display_volume(lang, cubic_metres):
     return escape(f'{number} {unit}')
 
 
+def salinity_notes(lang, field, result):
+    """Leaching and salt-loss lines, only from measured salinity (engine: water_balance.salinity)."""
+    lines = []
+    if result.get('leaching_impossible'):
+        lines.append(t(lang, 'balance_salt_impossible', ecw=fmt(field.water_ec)))
+    elif result.get('leaching_fraction') is not None:
+        lines.append(t(lang, 'balance_salt_leach', ecw=fmt(field.water_ec), lr=fmt(result['leaching_fraction'] * 100)))
+    if result.get('salinity_yield_loss_pct') is not None:
+        lines.append(t(lang, 'balance_salt_loss', ece=fmt(field.soil_ec), loss=fmt(result['salinity_yield_loss_pct'])))
+    return '\n'.join(lines)
+
+
 def pump_limit_note(lang, result):
     """Warn when one day of pumping cannot deliver the advised volume (engine: PUMP_MAX_HOURS_PER_DAY)."""
     days = result.get('irrigation_days')
@@ -97,6 +109,9 @@ def format_balance_report(lang, field, result, weather):
     note = pump_limit_note(lang, result)
     if note:
         text += '\n\n' + note
+    notes = salinity_notes(lang, field, result)
+    if notes:
+        text += '\n\n' + notes
     if field.saline:
         text += '\n\n' + t(lang, 'decision_saline')
     if field.field_type == 'greenhouse':

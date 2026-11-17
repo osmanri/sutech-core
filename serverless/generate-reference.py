@@ -34,6 +34,7 @@ for crop in [*CROPS,'rice','other']:
   for method in METHODS:
    p=dict(balance_version=2,crop=crop,soil_type=soil,irrigation_type=method,area='0.1',area_unit='hectare',day_of_growth=random.randint(0,50),moisture_condition=random.choice(['recent','normal','dry']),field_type=random.choice(['open','greenhouse']),is_saline='no',custom_kc=.9,custom_root_depth=.5,custom_p=.4)
    if random.choice([0,1]):p.update(power_price=25,pump_power_kw=2,pump_productivity_m3h=20)
+   if random.choice([0,1]):p.update(water_ec=round(random.uniform(0.2,6),2),soil_ec=round(random.uniform(0.5,12),2))
    for et0,rain in [(0,0),(6.4,0),(5,4.9),(3,5),(10,50)]:
     fixtures.append(dict(payload=p,et0=et0,rain=rain,result=calculate_balance(parse_field(p),et0,rain)))
 out=root/'serverless/test';out.mkdir(exist_ok=True)

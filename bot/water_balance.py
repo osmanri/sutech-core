@@ -7,7 +7,7 @@ No recommendation is treated as evidence that irrigation actually occurred.
 import math
 from dataclasses import dataclass
 
-CALCULATION_VERSION = 'fao56.7'
+CALCULATION_VERSION = 'fao56.8'
 
 # Default screening model for a film-covered greenhouse when no calibrated
 # indoor ET0 measurement is available. The farmer can still supply a measured
@@ -31,6 +31,14 @@ CROPS = {
     'tomato': (.40, .25, 1.10, (.60, 1.15, .80), (30, 40, 45, 30)),
     'potato': (.35, .20, .50, (.50, 1.15, .75), (25, 30, 45, 30)),
 }
+# Salt tolerance: FAO-56 Table 23 (= FAO-29 Table 4): ECe threshold (dS/m) above which yield falls,
+# and slope b (% yield loss per dS/m). Where the book gives a range the conservative end is used
+# (lowest threshold, steepest slope). No values for melon in the book: no salinity estimate for it.
+SALT_TOLERANCE = {
+    'wheat': (6.0, 7.1), 'cotton': (7.7, 5.2), 'corn': (1.7, 12.0), 'alfalfa': (2.0, 7.3),
+    'tomato': (0.9, 9.0), 'potato': (1.7, 12.0), 'rice': (3.0, 12.0),
+}
+
 # Fraction of the soil surface wetted by the irrigation system, FAO-56 Table 20.
 # Trickle 0.3-0.4 (midpoint used; subsurface treated the same). Sprinkler, pivot and
 # furrow are kept at 1.0: no reduction is applied (furrow is 0.3-1.0 in the book).
@@ -75,6 +83,8 @@ class FieldInput:
     pump_power_kw: float | None
     pump_productivity_m3h: float | None
     greenhouse_et0: float | None
+    water_ec: float | None = None   # ECw of the irrigation water, dS/m (laboratory value)
+    soil_ec: float | None = None    # ECe of the root zone, dS/m (saturation extract, laboratory value)
 
 
 def crop_parameters(crop, day, stages, method='sprinkler'):
@@ -167,10 +177,41 @@ def parse_field(data):
     pump_power = optional('pump_power_kw', .000001, 100000)
     pump_productivity = optional('pump_productivity_m3h', .000001, 1000000)
     greenhouse_et0 = optional('greenhouse_et0', 0, 50)
+    water_ec = optional('water_ec', 0, 25)
+    soil_ec = optional('soil_ec', 0, 50)
     return FieldInput(crop, soil, area if unit == 'hectare' else area / 100, method,
                       int(day), yesterday, moisture_condition, stages, kc, zr, p, stage, field_type,
                       data.get('is_saline') == 'yes', power, pump_power,
-                      pump_productivity, greenhouse_et0)
+                      pump_productivity, greenhouse_et0, water_ec, soil_ec)
+
+
+def salinity(field, efficiency):
+    """Leaching and salt yield loss from measured salinity (FAO-29 eq. 9 and FAO-56 eq. 87-90).
+
+    Needs the irrigation water salinity ECw (dS/m). The leaching requirement for surface-type irrigation is
+    LR = ECw / (5 ECe_threshold - ECw) (FAO-29, checked on its worked example 3). Usual irrigation losses
+    already leach: the applied volume is net / min(efficiency, 1 - LR), the larger of the two needs.
+    The yield loss needs the measured root-zone ECe: b * (ECe - threshold) percent.
+    Without ECw nothing is invented: every value is None and the volume is unchanged.
+    """
+    out = dict(effective_efficiency=efficiency, leaching_fraction=None, leaching_impossible=False, salinity_yield_loss_pct=None)
+    tolerance = SALT_TOLERANCE.get(field.crop)
+    if tolerance is None:
+        return out
+    threshold, slope = tolerance
+    if field.water_ec is not None:
+        if 5 * threshold - field.water_ec <= 0:
+            out['leaching_impossible'] = True   # the water is too salty for this crop to be leached in the usual way
+        else:
+            lr = field.water_ec / (5 * threshold - field.water_ec)
+            out['leaching_fraction'] = lr
+            if lr < 1:
+                out['effective_efficiency'] = min(efficiency, 1 - lr)
+            else:
+                out['leaching_impossible'] = True
+    if field.soil_ec is not None:
+        out['salinity_yield_loss_pct'] = min(100., max(0., slope * (field.soil_ec - threshold)))
+    return out
 
 
 def calculate_economics(ai_gross_volume, current_deficit_mm, area_ha,
@@ -248,7 +289,8 @@ def calculate_balance(field, et0, rain):
     status = 'critical' if above_raw else 'irrigate' if at_threshold else 'deferred'
     potential_net = deficit * 10 * field.area_ha
     net = potential_net if status != 'deferred' else 0.
-    gross = net / efficiency
+    salt = salinity(field, efficiency)
+    gross = net / salt['effective_efficiency']
     economy = calculate_economics(gross, deficit, field.area_ha, field.power_price,
                                   field.pump_power_kw, field.pump_productivity_m3h)
     return dict(status=status, taw=taw, raw=raw, deficit=deficit, unbounded=unbounded,
@@ -256,4 +298,6 @@ def calculate_balance(field, et0, rain):
                 et0=et0, rain=rain, peff=peff, etc=etc, ks=ks, kc=field.kc, zr=field.zr, p=field.p,
                 threshold=threshold, tech_threshold=tech_threshold,
                 efficiency=efficiency, net_m3=net, gross_m3=gross,
+                leaching_fraction=salt['leaching_fraction'], leaching_impossible=salt['leaching_impossible'],
+                salinity_yield_loss_pct=salt['salinity_yield_loss_pct'],
                 **economy)

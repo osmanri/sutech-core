@@ -1,4 +1,4 @@
-import {parseField,calculate,fieldKey,number,METHODS,VERSION,economics,PUMP_MAX_HOURS_PER_DAY} from './balance.js';
+import {parseField,calculate,fieldKey,number,METHODS,VERSION,economics,PUMP_MAX_HOURS_PER_DAY,salinity} from './balance.js';
 import {get,put,list,lock,unlock,ownerId,nonce} from './store.js';
 import {weather} from './weather.js';
 import {tr,t,esc,fmt,volume} from './i18n.js';
@@ -11,8 +11,8 @@ export function currentResult(row) {
   if(field.crop==='rice')return base;
   const deficit=row.deficit,threshold=Math.min(METHODS[field.method][0],base.raw);
   const status=deficit-base.raw>1e-9?'critical':deficit>=threshold||Math.abs(deficit-threshold)<1e-9?'irrigate':'deferred';
-  const gross_m3=status==='deferred'?0:deficit*10*field.area_ha/METHODS[field.method][1];
-  return {...base,deficit,threshold,status,gross_m3,net_m3:gross_m3*METHODS[field.method][1],...economics(gross_m3,deficit,field)};
+  const salt=salinity(field,METHODS[field.method][1]),net_m3=status==='deferred'?0:deficit*10*field.area_ha,gross_m3=net_m3/salt.effective_efficiency;
+  return {...base,deficit,threshold,status,gross_m3,net_m3,leaching_fraction:salt.leaching_fraction,leaching_impossible:salt.leaching_impossible,salinity_yield_loss_pct:salt.salinity_yield_loss_pct,...economics(gross_m3,deficit,field)};
 }
 const DAY_MS=86400000;
 const addDays=(iso,n)=>new Date(Date.parse(iso+'T00:00:00Z')+n*DAY_MS).toISOString().slice(0,10);
@@ -68,7 +68,7 @@ function recompute(row,w) {
   row.result=today.result;row.deficit=today.end;row.last_day=w.day;row.weather=forecast;
   row.payload.day_of_growth=diffDays(w.day,row.planting);row.gap_days=gaps;row.version=VERSION;
 }
-const PHYSICAL=['crop','soil_type','irrigation_type','field_type','is_saline','greenhouse_et0','custom_kc','custom_root_depth','custom_p','stage_days','area','area_unit'];
+const PHYSICAL=['crop','soil_type','irrigation_type','field_type','is_saline','greenhouse_et0','water_ec','soil_ec','custom_kc','custom_root_depth','custom_p','stage_days','area','area_unit'];
 const COSTS=['power_price','pump_power_kw','pump_productivity_m3h'];
 const same=(a,b)=>JSON.stringify(a??null)===JSON.stringify(b??null)||(a!==null&&b!==null&&a!==undefined&&b!==undefined&&a!==''&&b!==''&&Number(a)===Number(b));
 function freshRow(fieldId,key,payload,w,parsed) {
@@ -167,6 +167,9 @@ export function report(row,lang,details=false) {
   if(r.irrigation_days>1)s+=tr(lang,`⚠️ Насос за сутки подаёт не больше ${fmt(r.max_daily_m3,0)} м³ (${PUMP_MAX_HOURS_PER_DAY} ч работы). Объём больше: разделите полив на ${r.irrigation_days} дн., около ${fmt(r.gross_m3/r.irrigation_days,0)} м³ в день.\n`,`⚠️ Сорғы тәулігіне ${fmt(r.max_daily_m3,0)} м³-ден артық бере алмайды (${PUMP_MAX_HOURS_PER_DAY} сағ жұмыс). Көлем одан көп: суаруды ${r.irrigation_days} күнге бөліңіз, күніне шамамен ${fmt(r.gross_m3/r.irrigation_days,0)} м³.\n`,`⚠️ The pump delivers at most ${fmt(r.max_daily_m3,0)} m³ per day (${PUMP_MAX_HOURS_PER_DAY} h of running). The volume is larger: split the watering over ${r.irrigation_days} days, about ${fmt(r.gross_m3/r.irrigation_days,0)} m³ a day.\n`);
   s+=tr(lang,'После полива отметьте фактический объём.','Суарғаннан кейін нақты көлемді белгілеңіз.','After watering, record the actual amount.');
   if(row.gap_days)s+=`\n\n${tr(lang,`Пропуск наблюдений: ${row.gap_days} дн. Проверьте влажность почвы перед поливом.`,`Бақылау үзілісі: ${row.gap_days} күн. Суармас бұрын топырақ ылғалын тексеріңіз.`,`Observation gap: ${row.gap_days} days. Check soil moisture before watering.`)}`;
+  if(r.leaching_impossible)s+='\n\n'+tr(lang,`🧂 Вода ${fmt(field.water_ec)} дСм/м слишком солёная для этой культуры: обычная промывка невозможна. Нужен агроном.`,`🧂 ${fmt(field.water_ec)} дСм/м су бұл дақыл үшін тым тұзды: әдеттегі шаю мүмкін емес. Агроном қажет.`,`🧂 Water of ${fmt(field.water_ec)} dS/m is too salty for this crop: usual leaching is not possible. An agronomist is needed.`);
+  else if(r.leaching_fraction!==null&&r.leaching_fraction!==undefined)s+='\n\n'+tr(lang,`🧂 Вода для промывки солей: вода ${fmt(field.water_ec)} дСм/м, доля промывки ${fmt(r.leaching_fraction*100)}%. Объём увеличен, чтобы вымывать соли (FAO-29).`,`🧂 Тұзды шаю суы: су ${fmt(field.water_ec)} дСм/м, шаю үлесі ${fmt(r.leaching_fraction*100)}%. Тұзды шаю үшін көлем арттырылды (FAO-29).`,`🧂 Leaching water: irrigation water ${fmt(field.water_ec)} dS/m, leaching fraction ${fmt(r.leaching_fraction*100)}%. The volume is increased to wash out salts (FAO-29).`);
+  if(r.salinity_yield_loss_pct!==null&&r.salinity_yield_loss_pct!==undefined)s+='\n\n'+tr(lang,`🧂 При солёности почвы ${fmt(field.soil_ec)} дСм/м ожидаемая потеря урожая от соли около ${fmt(r.salinity_yield_loss_pct)}% (FAO-56, табл. 23).`,`🧂 Топырақ тұздылығы ${fmt(field.soil_ec)} дСм/м болғанда тұздан өнім шамамен ${fmt(r.salinity_yield_loss_pct)}% кемиді (FAO-56, 23-кесте).`,`🧂 At a soil salinity of ${fmt(field.soil_ec)} dS/m the expected salt yield loss is about ${fmt(r.salinity_yield_loss_pct)}% (FAO-56, Table 23).`);
   if(field.saline)s+='\n\n'+tr(lang,'Засолённая почва: промывной режим определяет агроном.','Тұзданған топырақ: шаю режимін агроном анықтайды.','Saline soil: an agronomist must set the leaching regime.');
   if(details){
     s+=`\n\n<b>FAO-56</b>\nET0: ${fmt(r.et0)} mm/day\nKc: ${fmt(field.kc)}${r.ks!==undefined&&r.ks<1?` · Ks: ${fmt(r.ks)}`:''}\nETc: ${fmt(r.etc)} mm/day\n${tr(lang,'Осадки','Жауын-шашын','Rain')}: ${fmt(r.rain)} mm\n${tr(lang,'Дефицит','Тапшылық','Deficit')}: ${fmt(row.deficit)} mm\nTAW: ${fmt(r.taw??0)} mm · RAW: ${fmt(r.raw)} mm\n${esc(t(lang,'report_irrig_'+field.method))}: η = ${fmt(r.efficiency*100)}%`;

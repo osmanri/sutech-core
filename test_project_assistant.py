@@ -23,7 +23,7 @@ class ProjectKnowledgeTests(unittest.TestCase):
             for value in [expected,'### 7. Бизнес-модель','### Источники','CALCULATION',
                           '/plan','R385','YF-S401','Arduino','0.70','40m3','100farms/5000ha',
                           'not a measured field trial','cannot operate a pump']:
-                if value == 'CALCULATION': value = 'fao56.7'
+                if value == 'CALCULATION': value = 'fao56.8'
                 self.assertIn(value,prompt)
             self.assertLess(len(prompt),32000,'Keep complete knowledge within bounded request size')
 
