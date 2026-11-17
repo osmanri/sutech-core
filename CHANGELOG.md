@@ -7,7 +7,7 @@ Dates are 2026. The engine version is the `VERSION` constant of `serverless/tgcl
 - **Coefficients checked against FAO-56 Tables 11, 12, 19, 20, 22, 23** (`docs/COEFFICIENT_CHECK.md`); fixed soil θFC/θWP of loam and clay (outside the Table 19 ranges, available water unchanged) and the initial Kc of melon.
 - **Crop catalog** `crops/catalog.json`: 17 crops from one file, generated Python/JS tables and Mini App list; ten new crops (sugar beet, sunflower, barley, cucumber, sweet pepper, eggplant, cabbage, onion, carrot, watermelon).
 - **Website:** project page, browser demo (the bot's own engine), results page, privacy page, liquid-glass design in the logo colours; Mini App publishes from `main`.
-- **Bot:** soil-check screen with sampling depth and a feel test; "My data" screen with delete-my-data (double confirmation).
+- **Bot:** each advice shows a confidence level (high / medium / low) and what raises it; "Why this?" lists the assumptions, where each number comes from and what changes if the crop or soil differ from the table; soil-check screen with sampling depth and a feel test; "My data" screen with delete-my-data (double confirmation).
 - **Research:** study with a wrong model (real crop Kc ±15 %, soil water ±20 %): `research/results/misspecified.md`. The published study runs without the drip wetted-fraction correction so its numbers reproduce (`REPRODUCE.md`).
 - **Project hygiene:** MIT licence, `CITATION.cff`, pre-registration draft, automatic deploy and daily backup workflows, tests moved to `tests/`, documents to `docs/`.
 
