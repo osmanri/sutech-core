@@ -14,6 +14,13 @@ request unless asked. The sibling repository `sutech-frontend` (the website) fol
 
 At the start of a session check `git status` and `git log origin/<branch>..HEAD` so nothing is left unpushed.
 
+## Authorship of commits (owner's instruction, 17 November 2026)
+
+- Every commit is authored and committed as `Osman <osmanchelovek@gmail.com>` (set `git config user.name` / `user.email` in each clone).
+- Never add `Co-Authored-By: Claude`, `Claude-Session` or "Generated with Claude Code" lines to commit messages or pull request descriptions.
+- On 17 November 2026 the history of this repository and of `sutech-frontend` was rewritten so that older commits carry the same author. The state before the rewrite is kept in the branches `backup/before-author-rewrite-20261117-main` and `-branch` (delete them when no longer needed).
+- This is about commit metadata only. The honesty rule below still applies: the paper and the website say that the code was written with an AI assistant.
+
 ## Honesty rules
 
 - Do not invent statistics, quotes or results; unknown values stay `[in brackets]` until the owner supplies them.
