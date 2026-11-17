@@ -37,3 +37,19 @@ test('the field report shows the confidence line; the explanation adds assumptio
   const sub=mk({crop:'tomato',field_type:'greenhouse',greenhouse_medium:'substrate'});
   assert.doesNotMatch(report(sub.row,'en'),/Confidence: high/);
 });
+
+import {fieldCsv,volumeRounded,firstDayNote,detailsBlock} from '../tgcloud/lib/explain.js';
+test('polish: rounded volumes, localized units and names, stage and roots, first-day note, agronomist CSV',()=>{
+  const x=mk({area:2},{checks:[{time:NOW,day:'2026-07-01',level:'dry',value_mm:118.2,before:65.4,after:118.2}],events:[{time:NOW,applied_m3:700,before:118.2,after:0}]});
+  assert.match(volumeRounded(1453.44,'en'),/^1453 m³|1453/);assert.doesNotMatch(volumeRounded(1453.44,'en'),/\./);
+  assert.match(volumeRounded(12.345,'en'),/12\.3/);
+  const ru=report(x.row,'ru',true);
+  assert.match(ru,/га/);assert.doesNotMatch(ru,/ ha\b/);assert.doesNotMatch(ru,/loam|mm\/day/);assert.match(ru,/Суглинок|суглинок/i);assert.match(ru,/мм\/сут/);
+  assert.match(ru,/Стадия: развитие|Стадия:/);assert.match(ru,/корни \d/);assert.match(ru,/Open-Meteo/);
+  assert.match(report(mk({crop:'wheat'}).row,'en',true),/Stage: (initial|development|mid-season|late season)/);
+  const big=mk({moisture_condition:'dry'});
+  assert.match(firstDayNote(big.f,big.r,'ru'),/накопленный дефицит/);
+  const sprinkler=mk({irrigation_type:'furrow',moisture_condition:'dry'});assert.equal(firstDayNote(sprinkler.f,sprinkler.r,'ru'),'');
+  const csv=fieldCsv(x.row);
+  assert.match(csv,/^# Su-Tech field export\. Engine fao56\.9/);assert.match(csv,/crop,cotton/);assert.match(csv,/watering: time,applied_m3/);assert.match(csv,/soil_check: time,day,level/);assert.match(csv,/,dry,118\.2,65\.4,118\.2/);
+});

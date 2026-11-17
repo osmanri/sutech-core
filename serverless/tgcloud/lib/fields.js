@@ -1,4 +1,4 @@
-import {confidence,confidenceLine,whyCard} from './explain.js';
+import {confidence,confidenceLine,whyCard,volumeRounded,firstDayNote,detailsBlock} from './explain.js';
 import {parseField,calculate,fieldKey,number,METHODS,VERSION,economics,PUMP_MAX_HOURS_PER_DAY,salinity} from './balance.js';
 import {get,put,list,lock,unlock,ownerId,nonce} from './store.js';
 import {weather} from './weather.js';
@@ -163,9 +163,9 @@ export function report(row,lang,details=false) {
   const state={critical:tr(lang,'Полив нужен: запас влаги ниже порога','Суару қажет: ылғал қоры шектен төмен','Water now: moisture is below the threshold'),
     irrigate:tr(lang,'Сегодня нужен полив','Бүгін суару қажет','Irrigation is needed today'),
     deferred:tr(lang,'Сегодня можно не поливать','Бүгін суармаса болады','No irrigation needed today'),rice:tr(lang,'Расчёт для риса','Күрішке арналған есеп','Rice water estimate'),unsupported:tr(lang,'Совет по поливу не выдаётся','Суару кеңесі берілмейді','No irrigation advice is given')}[r.status];
-  let s=`<b>${esc(state)}</b>\n${esc(t(lang,'report_crop_'+field.crop))} · ${fmt(field.area_ha,6)} ha\n${esc(row.last_day)} · ${esc(row.weather.timezone??'')}\n\n`;
+  let s=`<b>${esc(state)}</b>\n${esc(t(lang,'report_crop_'+field.crop))} · ${fmt(field.area_ha,6)} ${tr(lang,'га','га','ha')}\n${esc(row.last_day)} · ${esc(row.weather.timezone??'')}\n\n`;
   if(r.status==='unsupported')return s+(r.unsupported_reason==='substrate'?tr(lang,'Теплица на субстрате (минвата, кокос): метод водного баланса почвы не подходит. Поливом на субстрате управляют по доле дренажа, обратитесь к агроному.','Субстраттағы жылыжай (минвата, кокос): топырақ су балансы әдісі жарамайды. Субстратта суаруды дренаж үлесімен басқарады, агрономға жүгініңіз.','Greenhouse on a substrate (rockwool, coco): the soil water balance does not apply. Substrate irrigation is managed by the drainage fraction; ask an agronomist.'):tr(lang,'Отапливаемая теплица: оценка по уличной погоде здесь неверна (растения пьют из-за отопления и света, а не уличной жары). Введите измеренный ET₀ теплицы или обратитесь к агроному; пока совет не выдаётся.','Жылытылатын жылыжай: сыртқы ауа райымен бағалау мұнда дұрыс емес (өсімдік жылыту мен жарыққа байланысты су ішеді). Жылыжайдың өлшенген ET₀ мәнін енгізіңіз немесе агрономға жүгініңіз; әзірге кеңес берілмейді.','Heated greenhouse: an estimate from outdoor weather is wrong here (the crop drinks because of heating and light, not outdoor heat). Enter a measured greenhouse ET₀ or ask an agronomist; no advice is given for now.'));
-  if(r.status!=='deferred')s+=`<b>${tr(lang,'Подать воды','Берілетін су','Apply water')}: ${volume(r.gross_m3,lang)}</b>\n`;
+  if(r.status!=='deferred')s+=`<b>${tr(lang,'Подать воды','Берілетін су','Apply water')}: ${volumeRounded(r.gross_m3,lang)}</b>\n`+firstDayNote(field,r,lang);
   if(r.irrigation_days>1)s+=tr(lang,`⚠️ Насос за сутки подаёт не больше ${fmt(r.max_daily_m3,0)} м³ (${PUMP_MAX_HOURS_PER_DAY} ч работы). Объём больше: разделите полив на ${r.irrigation_days} дн., около ${fmt(r.gross_m3/r.irrigation_days,0)} м³ в день.\n`,`⚠️ Сорғы тәулігіне ${fmt(r.max_daily_m3,0)} м³-ден артық бере алмайды (${PUMP_MAX_HOURS_PER_DAY} сағ жұмыс). Көлем одан көп: суаруды ${r.irrigation_days} күнге бөліңіз, күніне шамамен ${fmt(r.gross_m3/r.irrigation_days,0)} м³.\n`,`⚠️ The pump delivers at most ${fmt(r.max_daily_m3,0)} m³ per day (${PUMP_MAX_HOURS_PER_DAY} h of running). The volume is larger: split the watering over ${r.irrigation_days} days, about ${fmt(r.gross_m3/r.irrigation_days,0)} m³ a day.\n`);
   if(!details&&r.status!=='unsupported')s+=confidenceLine(confidence(row,field,r),lang)+'\n\n';
   s+=tr(lang,'После полива отметьте фактический объём.','Суарғаннан кейін нақты көлемді белгілеңіз.','After watering, record the actual amount.');
@@ -175,9 +175,7 @@ export function report(row,lang,details=false) {
   if(r.salinity_yield_loss_pct!==null&&r.salinity_yield_loss_pct!==undefined)s+='\n\n'+tr(lang,`🧂 При солёности почвы ${fmt(field.soil_ec)} дСм/м ожидаемая потеря урожая от соли около ${fmt(r.salinity_yield_loss_pct)}% (FAO-56, табл. 23).`,`🧂 Топырақ тұздылығы ${fmt(field.soil_ec)} дСм/м болғанда тұздан өнім шамамен ${fmt(r.salinity_yield_loss_pct)}% кемиді (FAO-56, 23-кесте).`,`🧂 At a soil salinity of ${fmt(field.soil_ec)} dS/m the expected salt yield loss is about ${fmt(r.salinity_yield_loss_pct)}% (FAO-56, Table 23).`);
   if(field.saline)s+='\n\n'+tr(lang,'Засолённая почва: промывной режим определяет агроном.','Тұзданған топырақ: шаю режимін агроном анықтайды.','Saline soil: an agronomist must set the leaching regime.');
   if(details){
-    s+=`\n\n<b>FAO-56</b>\nET0: ${fmt(r.et0)} mm/day\nKc: ${fmt(field.kc)}${r.ks!==undefined&&r.ks<1?` · Ks: ${fmt(r.ks)}`:''}\nETc: ${fmt(r.etc)} mm/day\n${tr(lang,'Осадки','Жауын-шашын','Rain')}: ${fmt(r.rain)} mm\n${tr(lang,'Дефицит','Тапшылық','Deficit')}: ${fmt(row.deficit)} mm\nTAW: ${fmt(r.taw??0)} mm · RAW: ${fmt(r.raw)} mm\n${esc(t(lang,'report_irrig_'+field.method))}: η = ${fmt(r.efficiency*100)}%`;
-    if(r.cost!==null)s+=`\n${tr(lang,'Электроэнергия на этот полив','Осы суаруға электр шығыны','Electricity for this watering')}: ${fmt(r.cost)} ₸`;
-    if(field.field_type==='greenhouse'&&field.greenhouse_et0===null)s+='\n'+tr(lang,'Для теплицы ET0 оценён как 0,70 наружного значения.','Жылыжай ET0 сыртқы мәннің 0,70 бөлігімен бағаланды.','Greenhouse ET0 uses 0.70 of the outdoor value.');
+    s+='\n\n'+detailsBlock(row,field,r,lang);
     s+=`\n${VERSION}`;
     s+='\n\n'+whyCard(row,field,r,lang);
   }

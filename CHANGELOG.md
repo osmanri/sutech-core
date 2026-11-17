@@ -3,6 +3,7 @@
 Dates are 2026. The engine version is the `VERSION` constant of `serverless/tgcloud/lib/balance.js` (the same string as `CALCULATION_VERSION` in `bot/water_balance.py`).
 
 ## 0.9.0, 17 November
+- **Report polish for agronomists.** Details card shows the growth stage, day, root depth, localized soil name and units, weather source, rounded numbers; volume is rounded sensibly; a note explains a large first-day volume on drip (accumulated deficit); field CSV export now includes parameters, engine version, waterings and soil checks.
 - **Engine fao56.9.** Pump daily limit (20 h/day: a larger volume is advised over several days); initial Kc scaled by the wetted fraction for drip (FAO-56 eq. 60); salinity: leaching water (FAO-29 eq. 9) and salt yield loss (FAO-56 Table 23) from laboratory ECw/ECe, nothing invented without them; greenhouse on a substrate or heated without a measured ET0 gets no advice, with the reason.
 - **Coefficients checked against FAO-56 Tables 11, 12, 19, 20, 22, 23** (`docs/COEFFICIENT_CHECK.md`); fixed soil θFC/θWP of loam and clay (outside the Table 19 ranges, available water unchanged) and the initial Kc of melon.
 - **Crop catalog** `crops/catalog.json`: 17 crops from one file, generated Python/JS tables and Mini App list; ten new crops (sugar beet, sunflower, barley, cucumber, sweet pepper, eggplant, cabbage, onion, carrot, watermelon).
