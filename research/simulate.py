@@ -47,6 +47,22 @@ from bot.et0 import et0_penman_monteith  # noqa: E402
 from bot.water_balance import (CROPS, METHODS, calculate_balance, parse_field,  # noqa: E402
                                root_zone_capacity, stress_coefficient)
 
+# The published study (README, results, site, slides) was computed before the engine applied FAO-56 eq. 60 (initial Kc x
+# wetted fraction for drip, engine fao56.7+). To keep every published number reproducible, the study scripts switch that
+# correction off when they RUN (apply_study_engine in their entry point; importing this module changes nothing).
+# SUTECH_STUDY_WETTED_FRACTION=on runs the same study with the current engine
+# (drip saving then rises: cotton 25 -> 31 %, maize 15 -> 20 %; furrow unchanged).
+import os  # noqa: E402
+from bot import water_balance as _engine  # noqa: E402
+
+
+def apply_study_engine() -> None:
+    """Called by the study entry points only: the published numbers use no drip wetted-fraction correction."""
+    if os.environ.get("SUTECH_STUDY_WETTED_FRACTION", "off") != "on":
+        _engine.WETTED_FRACTION.update({key: 1.0 for key in _engine.WETTED_FRACTION})
+        field_for.cache_clear()
+
+
 WEATHER_DIR = ROOT / "research" / "data" / "weather"
 LOCATIONS = {  # irrigated-agriculture regions of Kazakhstan (city coordinates)
     "Turkestan": (43.30, 68.25), "Shymkent": (42.32, 69.60), "Kyzylorda": (44.85, 65.50),
@@ -420,6 +436,7 @@ def write_outputs(rows: list[dict], summary: list[dict], out_dir: Path) -> None:
 
 
 def main() -> None:
+    apply_study_engine()
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--out", type=Path, default=ROOT / "research" / "results")
     ap.add_argument("--source", choices=sorted(SOURCES), default="power")

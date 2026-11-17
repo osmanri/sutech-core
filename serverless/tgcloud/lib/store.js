@@ -61,3 +61,14 @@ export async function reserveAI(id) {
   const count=await db.get('SELECT COUNT(*) AS n FROM ai_usage_v2 WHERE owner=:owner AND created>:since',{':owner':id,':since':time-86400000});
   throw new Error(count.n>=20?'daily_limit':'cooldown');
 }
+
+// Erase everything stored about one Telegram user: profile, fields, reports, weather snapshots, feedback.
+// The last 24 hours of AI-request timestamps (no text, only time and the numeric Telegram id) are kept, because they
+// are the daily quota window: deleting them would let anyone reset the limit. They are no longer counted after 24 hours.
+export async function eraseUserData(id) {
+  const owner=ownerId(id);
+  const before=await db.get('SELECT COUNT(*) AS n FROM records WHERE owner=:owner',{':owner':owner});
+  await db.run('DELETE FROM records WHERE owner=:owner',{':owner':owner});
+  await db.run('DELETE FROM ai_usage_v2 WHERE owner=:owner AND created<=:since',{':owner':owner,':since':now()-86400000});
+  return before?.n??0;
+}

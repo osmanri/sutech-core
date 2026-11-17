@@ -1,0 +1,24 @@
+cff-version: 1.2.0
+message: "If you use Su-Tech, please cite it as below."
+title: "Su-Tech: explainable irrigation advice from the FAO-56 water balance with a weekly soil check"
+type: software
+authors:
+  - family-names: Tolobek
+    given-names: Osman
+version: "0.9.0"
+date-released: "2026-11-17"
+license: MIT
+repository-code: "https://github.com/osmanri/sutech-core"
+url: "https://t.me/Su_Tech_bot"
+keywords:
+  - irrigation scheduling
+  - FAO-56
+  - water balance
+  - decision support
+  - Kazakhstan
+abstract: >-
+  Su-Tech is a Telegram bot and Mini App that gives a farmer daily irrigation advice (whether to irrigate, how many
+  cubic metres, what the pump costs) from the weather at the field, using the FAO-56 root-zone water balance.
+  All coefficients are checked against the FAO tables (docs/COEFFICIENT_CHECK.md). The results are from a
+  computer study on real weather (model against model), not field measurements. The code was written with an AI
+  assistant; the idea, the checking of formulas, the Arduino test bench and the experiment are the author's.
