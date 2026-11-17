@@ -24,7 +24,6 @@
 | `paper/` | Научная статья (черновик) и список литературы |
 | `docs/` | Метод, сверка коэффициентов, планы, справка для агронома, материалы для презентации; `docs/audits/` старые аудиты, `docs/archive/` архив |
 | `tests/` | Тесты Python (`python run_tests.py`); тесты бота лежат в `serverless/test/` |
-| `scripts/windows/` | Удобные скрипты для Windows |
 | `REPRODUCE.md`, `CHANGELOG.md`, `CITATION.cff`, `LICENSE` | Как воспроизвести, что менялось, как цитировать, лицензия (MIT) |
 
 ## Зачем это
