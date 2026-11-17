@@ -4,8 +4,8 @@ import {tr,t,a,esc,volume,fmt,language} from './i18n.js';
 import {STRINGS,AI_STRINGS} from './copy.js';
 import {screen,navigate,home,homeKeys,languages,aiKeys,button,keyboard,back,ignoreDelete,APP_URL} from './ui.js';
 import {generate,aiHistory} from './ai.js';
-import {calculateField,ownedField,refresh,report,currentResult,waterField,card,checkMoisture,SOIL_LEVELS} from './fields.js';
-import {parseField} from './balance.js';
+import {calculateField,ownedField,refresh,report,currentResult,waterField,card,checkMoisture,setExpert,SOIL_LEVELS} from './fields.js';
+import {parseField,LIMITS} from './expert.js';
 import {fieldCsv} from './explain.js';
 import {planScreen,planInput} from './planner.js';
 import {pilot,feedback,p} from './pilot.js';
@@ -19,8 +19,22 @@ const fieldButtons=(row,lang)=>keyboard([
  ...(currentResult(row).gross_m3>0?[[button(tr(lang,'Отметить полив','Суаруды белгілеу','Record watering'),`water:${row.id}`)]]:[]),
  ...(parseField(row.payload).crop!=='rice'?[[button(tr(lang,'Проверил влажность почвы','Топырақ ылғалын тексердім','I checked the soil moisture'),`soil:${row.id}`)]]:[]),
  [button(t(lang,'btn_field_update'),`field:${row.id}`),button(t(lang,'btn_export_field'),`export:${row.id}`)],
+ [button(tr(lang,'🧑‍🌾 Режим эксперта','🧑‍🌾 Сарапшы режимі','🧑‍🌾 Expert mode'),`expert:${row.id}`)],
  [button(tr(lang,'Удалить поле','Алқапты жою','Delete field'),`delete:${row.id}`)],
  [button(t(lang,'btn_fields'),'fields')],back(lang)]);
+const NAME={p:['p (доля доступной воды до стресса)','p (күйзеліске дейінгі қолжетімді су үлесі)','p (share of available water before stress)'],root_depth:['Глубина корней, м','Тамыр тереңдігі, м','Root depth, m'],kc_factor:['Множитель Kc','Kc көбейткіші','Kc multiplier']};
+export async function expertScreen(id,lang,row,show,notice='') {
+ const f=parseField(row.payload);
+ if(!f.fao)return show(tr(lang,'Для этой культуры режим эксперта недоступен (рис или своя культура: значения вводятся при создании поля).','Бұл дақыл үшін сарапшы режимі қолжетімсіз (күріш немесе өз дақылыңыз: мәндер алқап құрғанда енгізіледі).','Expert mode is not available for this crop (rice or a custom crop: the values are entered when the field is created).'),keyboard([[button(t(lang,'btn_cancel'),`field:${row.id}`)]]));
+ const fmtv=n=>String(Math.round(n*100)/100);
+ const rows=['p','root_depth','kc_factor'].map(k=>{const v=k==='p'?f.p:k==='root_depth'?f.zr:(f.expert.kc_factor??1),d=k==='p'?f.fao.p:k==='root_depth'?f.fao.zr:1;
+  return `• ${tr(lang,...NAME[k])}: ${fmtv(v)}${f.manual.includes(k)?` ✏️ (FAO ${fmtv(d)})`:''}`;});
+ const text=(notice?notice+'\n\n':'')+tr(lang,'<b>Режим эксперта</b>\nЗначения для этого поля. Изменённое помечается «вручную» и считается от сегодняшнего дня; прошлые дни не пересчитываются.\n','<b>Сарапшы режимі</b>\nОсы алқап үшін мәндер. Өзгертілгені «қолмен» деп белгіленеді және бүгіннен бастап есептеледі; өткен күндер қайта есептелмейді.\n','<b>Expert mode</b>\nValues for this field. Anything changed is marked “manual” and applies from today; past days are not recalculated.\n')+'\n'+rows.join('\n');
+ return show(text,keyboard([
+  ...['p','root_depth','kc_factor'].map(k=>[button(tr(lang,...NAME[k]),`exset:${row.id}:${k}`)]),
+  ...(f.manual.length?[[button(tr(lang,'↩️ Вернуть значения FAO','↩️ FAO мәндерін қайтару','↩️ Back to FAO values'),`exreset:${row.id}`)]]:[]),
+  [button(t(lang,'btn_cancel'),`field:${row.id}`)]]));
+}
 export async function deliverCalculation(id,payload) {
  const u=await user(id);const generation=u.generation;
  await put(`pending:${id}`,id,'pending',{payload});
@@ -119,6 +133,17 @@ export async function action(id,data) {
   const row=await checkMoisture(id,fid,level);
   return show(tr(lang,'✅ Баланс скорректирован по вашей проверке.','✅ Баланс сіздің тексеруіңіз бойынша түзетілді.','✅ Balance corrected from your check.')+'\n\n'+report(row,lang),fieldButtons(row,lang));
  }
+ const [exk,exid,exkey]=data.split(':');
+ if(exk==='expert'){const row=await ownedField(id,exid);return expertScreen(id,lang,row,show);}
+ if(exk==='exset'){
+  const [lo,hi]=LIMITS[exkey]??[];if(lo===undefined)return home(id,lang,u.generation);
+  u.mode='expert';u.expert={id:exid,key:exkey};await saveUser(id,u);
+  return show(tr(lang,`Введите значение: ${NAME[exkey][0]}. От ${lo} до ${hi}. Например: ${exkey==='kc_factor'?'1.1':exkey==='p'?'0.5':'0.8'}`,`Мәнді енгізіңіз: ${NAME[exkey][1]}. ${lo}-ден ${hi}-ге дейін. Мысалы: ${exkey==='kc_factor'?'1.1':exkey==='p'?'0.5':'0.8'}`,`Enter a value: ${NAME[exkey][2]}. From ${lo} to ${hi}. For example: ${exkey==='kc_factor'?'1.1':exkey==='p'?'0.5':'0.8'}`),keyboard([[button(t(lang,'btn_cancel'),`expert:${exid}`)]]));
+ }
+ if(exk==='exreset'){
+  let row=await ownedField(id,exid);for(const k of Object.keys(row.payload.expert??{}))row=await setExpert(id,exid,k,null);
+  return expertScreen(id,lang,row,show,tr(lang,'✅ Возвращены значения FAO-56.','✅ FAO-56 мәндері қайтарылды.','✅ FAO-56 values restored.'));
+ }
  const [type,value]=data.split(':');
  if(type==='vote'){await feedback(id,value,data.split(':')[2]==='y');const row=await ownedField(id,value);return show(p(lang,'thanks')+'\n\n'+report(row,lang),fieldButtons(row,lang));}
  if(['field','explain','water','delete','confirmdelete','export'].includes(type)){
@@ -192,6 +217,12 @@ export async function message(m,ctx) {
  if(u.mode==='plan'){
   const input=m.location?`${m.location.latitude} ${m.location.longitude}`:text;
   const payload=await planInput(id,input);if(payload)return deliverCalculation(id,payload);return;
+ }
+ if(u.mode==='expert'&&u.expert){
+  try{
+   const row=await setExpert(id,u.expert.id,u.expert.key,String(text).replace(',','.'));u.mode='home';u.expert=null;await saveUser(id,u);await navigate(id);
+   return expertScreen(id,u.lang,row,(tx,kb)=>screen(id,tx,kb),tr(u.lang,'✅ Сохранено, отмечено «вручную».','✅ Сақталды, «қолмен» деп белгіленді.','✅ Saved, marked “manual”.'));
+  }catch(e){const [lo,hi]=LIMITS[u.expert.key];return screen(id,e.message==='busy'?tr(u.lang,'Поле занято, повторите.','Алқап бос емес, қайталаңыз.','The field is busy, try again.'):tr(u.lang,`Введите число от ${lo} до ${hi}.`,`${lo}-ден ${hi}-ге дейінгі санды енгізіңіз.`,`Enter a number from ${lo} to ${hi}.`),keyboard([[button(t(u.lang,'btn_cancel'),`expert:${u.expert.id}`)]]),u.generation);}
  }
  if(u.mode==='water'){
   try{const f=await waterField(id,u.water.id,text,u.water.expected,u.water.revision);await navigate(id);return screen(id,report(f,u.lang),fieldButtons(f,u.lang));}
