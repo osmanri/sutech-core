@@ -83,7 +83,8 @@ queries to that user. A payload's `user_id` never determines the owner.
 - Field recommendations refresh when opened. Background scheduled notifications
   from the Python monitor have not been ported: the documented platform API has
   no scheduler. A gap between observations is shown, not filled with invented
-  daily weather.
+  daily weather. Instead, a field not checked for more than 7 days is marked 🔔 in
+  My fields and its card asks for a soil-moisture check.
 - Opt-in offer participation and report feedback remain available under More
   and on field cards. Deleting participation preserves fields and calculations.
 - Deep analysis is selected for the next question/photo. If the stronger model

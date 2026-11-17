@@ -6,7 +6,7 @@ import {screen,navigate,home,homeKeys,languages,aiKeys,button,keyboard,back,igno
 import {generate,aiHistory} from './ai.js';
 import {calculateField,ownedField,refresh,report,currentResult,waterField,card,checkMoisture,setExpert,SOIL_LEVELS} from './fields.js';
 import {parseField,LIMITS} from './expert.js';
-import {fieldCsv} from './explain.js';
+import {fieldCsv,needsCheck} from './explain.js';
 import {planScreen,planInput} from './planner.js';
 import {pilot,feedback,p} from './pilot.js';
 import {rememberMessage} from './screens.js';
@@ -54,7 +54,7 @@ export async function deliverCalculation(id,payload) {
 }
 async function fieldsScreen(id,lang,page=0,generation=null) {
  const fields=await list(id,'field',8,page*8);
- const rows=fields.map(f=>[button(`${t(lang,'report_crop_'+f.payload.crop)} · ${fmt(parseField(f.payload).area_ha,6)} ha`,`field:${f.id}`)]);
+ const rows=fields.map(f=>[button(`${needsCheck(f)?'🔔 ':''}${t(lang,'report_crop_'+f.payload.crop)} · ${fmt(parseField(f.payload).area_ha,6)} ha`,`field:${f.id}`)]);
  if(page>0||fields.length===8)rows.push([...(page>0?[button('‹',`fields:${page-1}`)]:[]),...(fields.length===8?[button('›',`fields:${page+1}`)]:[])]);
  rows.push([{text:t(lang,'btn_recalculate'),web_app:{url:APP_URL+'?lang='+lang}}],back(lang));
  await screen(id,fields.length?`<b>${esc(t(lang,'btn_fields'))}</b>`:tr(lang,'Пока нет сохранённых полей. Добавьте участок через расчёт.','Сақталған алқап жоқ. Есеп арқылы алқап қосыңыз.','No saved fields yet. Add a field using the calculator.'),keyboard(rows),generation);
