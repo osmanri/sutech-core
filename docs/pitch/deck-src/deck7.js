@@ -17,7 +17,7 @@ pres.theme = { headFontFace: THEME.headFontFace, bodyFontFace: THEME.bodyFontFac
 const C = pres.SchemeColor;
 const WHITE = C.background1, DEEP = C.text1, LIME = C.accent1, PALE = C.accent4, MUTED = C.accent6;
 const HEAD = '+mj-lt', RED = 'E53935';
-const TOTAL = 15;
+const TOTAL = 16;
 let uid = 0, shown = 0;
 const an = (g, kind = 'rise') => `a${g}|${kind}|o${++uid}`;
 
@@ -244,6 +244,27 @@ credit(s, 'Фото: PSSP, «Irrigation canals of Faisalabad», CC BY 2.0, Wikim
 s._after();
 s.addNotes('Главный результат. Su-Tech сравнивается не с плохим графиком, а с лучшим возможным: урожай не ниже 98 процентов. Даже против него Su-Tech тратит на 15–28 процентов меньше воды — в каждом из 25 сезонов. Честно: это компьютерная модель на реальной погоде, поэтому идёт эксперимент.');
 
+// ===== 9. ПОЛЬЗА — what the farmer, the akimat and nature gain =====
+s = slide({ section: 'Доказательства', glow: [-2.6, -2.2, 7.5, 7.6, 3.0, 6.5] });
+title(s, 'В чём ', 'польза');
+[['drop', '−3 800 м³', 'воды с гектара за сезон при том же урожае', 'хлопок, капля: 11 321 вместо 15 117 м³/га'], ['coins', '≈35 000 ₸', 'за электричество насоса с гектара за сезон', 'пример: насос 22 кВт, 60 м³/ч, 25 ₸/кВт·ч'], ['chart-line-up', '100%', 'урожая вместо 84–90% у графика с той же водой', '0 дней стресса против 38–65']].forEach(([ic, num, txt, note], i) => {
+  const x = 0.75 + i * 4.1, g = i + 2;
+  icon(s, ic, 'lime', x, 2.0, 0.6, g);
+  T(s, num, { x, y: 2.7, w: 3.7, h: 0.9, valign: 'middle', fontFace: HEAD, fontSize: 40, color: LIME, wrap: false }, g, 'zoom');
+  T(s, txt, { x, y: 3.65, w: 3.5, h: 0.75, fontSize: 15, bold: true }, g);
+  T(s, note, { x, y: 4.45, w: 3.5, h: 0.45, fontSize: 10.5, color: PALE }, g);
+  if (i < 2) sep(s, x + 3.8, 2.0, x + 3.8, 4.9, g);
+});
+sep(s, 0.6, 5.2, 12.73, 5.2, 5);
+[['farm', 'Фермеру', 'меньше счёт за насос, урожай не страдает'], ['users-three', 'Акимату', 'проще уложиться в лимиты воды 2026 года'], ['plant', 'Природе', 'меньше воды из рек, меньше уходит в глубину']].forEach(([ic, h, d], i) => {
+  const x = 0.75 + i * 4.1, g = 6 + i;
+  icon(s, ic, 'white', x, 5.45, 0.42, g);
+  T(s, [{ text: h, options: { bold: true, color: LIME, breakLine: true } }, { text: d }], { x: x + 0.6, y: 5.38, w: 3.2, h: 0.8, fontSize: 12.5 }, g);
+});
+T(s, 'Модель FAO-56 на реальной погоде, а не измерение на поле · сравнение с лучшим графиком при одинаковом урожае', { x: 0.6, y: 6.55, w: 12.1, h: 0.25, fontSize: 9.5, color: PALE }, 9, 'fade');
+s._after();
+s.addNotes('В чём польза. Первое: при том же урожае Su-Tech тратит меньше воды — для хлопка на капле это около 3 800 кубометров с гектара за сезон, и насосу не нужно их качать: при обычном насосе это примерно 35 тысяч тенге за электричество с гектара. Второе: если фермер поливает по средней норме, но не по погоде, Su-Tech даёт не экономию, а урожай — сто процентов вместо 84–90. Третье: при лимитах воды сэкономленные кубометры можно отдать другому полю. Всё это модель на реальной погоде, поэтому идёт опыт.');
+
 // ===== 9. СЛАБОЕ МЕСТО — two photos side by side =====
 s = slide({ section: 'Доказательства', blank: true, photo: 'split', glow: [6.0, 1.0, 4, 6.2, 1.2, 4] });
 s.addText([{ text: 'СЛАБОЕ МЕСТО ' }, { text: 'И РЕШЕНИЕ', options: { color: LIME } }], { x: 0.6, y: 1.0, w: 12.13, h: 0.85, fontFace: HEAD, fontSize: 38, color: WHITE, margin: 0, valign: 'top' });
@@ -270,7 +291,7 @@ sep(s, 6.67, 2.1, 6.67, 6.6, 2);
 sep(s, 0.6, 4.35, 12.73, 4.35, 2);
 [['Стоимость стенда (MVP)', '[__ ₸]', null, 'Arduino, помпа, расходомер, весы, датчики', LIME],
  ['Цена для фермера', '0 ₸', null, 'нужен только Telegram', LIME],
- ['Модель заработка', 'B2G & B2B', 'handshake', '[акиматам — сводка сэкономленной воды; хозяйствам — автоматика насосов]', WHITE],
+ ['Модель заработка', 'Freemium', 'handshake', 'расчёт полива — 0 ₸ · PRO $10/мес: ИИ-агроном по фото · комплект автоматики насоса — $100', WHITE],
  ['Рынок', '702 300 га', 'farm', 'уже на водосбережении (1 сен 2026) · цель — 1,3 млн га к 2030 · Astana Times', WHITE]].forEach(([k, v, ic, d, col], i) => {
   const x = i % 2 ? 7.05 : 0.8, y = i < 2 ? 2.2 : 4.6, g = i + 3;
   T(s, k.toUpperCase(), { x, y, w: 5.4, h: 0.3, fontSize: 10.5, bold: true, color: PALE, charSpacing: 2 }, g);
@@ -280,7 +301,7 @@ sep(s, 0.6, 4.35, 12.73, 4.35, 2);
 });
 credit(s, 'Фото: Wikideas1, Wikimedia Commons, CC0', 6.88);
 s._after();
-s.addNotes('Финансы. Стенд стоил [сумма]. Фермеру Su-Tech бесплатен — нужен только Telegram. Зарабатывать проект может так: [выбранная модель]. Рынок: 702 тысячи гектаров уже на водосберегающих технологиях, к 2030 году цель — 1,3 миллиона.');
+s.addNotes('Финансы. Стенд стоил [сумма]. Фермеру Su-Tech бесплатен — нужен только Telegram. Модель заработка — freemium: расчёт полива бесплатный, PRO за 10 долларов в месяц — ИИ-агроном по фото, и комплект автоматики насоса за 100 долларов. Рынок: 702 тысячи гектаров уже на водосберегающих технологиях, к 2030 году цель — 1,3 миллиона.');
 
 // ===== 11. VS КОНКУРЕНТЫ =====
 s = slide({ section: 'Бизнес', glow: [7.4, 2.8, 7, -2.2, -2.8, 6.5] });
@@ -342,10 +363,10 @@ s.addNotes('Слайд скрыт. Вставить только настоящ�
 s = slide({ section: 'Команда', photo: 'steppe', glow: [-2.2, 1.2, 7, 6.8, 1.2, 7.5] });
 title(s, 'Дорожная ', 'карта');
 s.addShape(pres.shapes.RECTANGLE, { x: 1.0, y: 4.1, w: 11.33, h: 0.05, fill: { color: WHITE, transparency: 75 }, line: { type: 'none' }, objectName: 'road-track' });
-s.addShape(pres.shapes.RECTANGLE, { x: 1.0, y: 4.1, w: 5.45, h: 0.05, fill: { color: LIME }, line: { type: 'none' }, objectName: an(2, 'wipe') });
+s.addShape(pres.shapes.RECTANGLE, { x: 1.0, y: 4.1, w: 4.1, h: 0.05, fill: { color: LIME }, line: { type: 'none' }, objectName: an(2, 'wipe') });
 [['сен 2026', 'Бот и Mini App', 1], ['окт 2026', 'ИИ-агроном, serverless', 1], ['ноя 2026', 'Проверка формул, исследование', 1],
- ['дек 2026', 'Опыт с горшками', 0], ['мар 2027', 'Junior Water Prize', 0], ['лето 2027', 'Пилот на поле', 0]].forEach(([d, t, done], i) => {
-  const cx = 1.3 + i * 2.146, g = i + 3, up = i % 2 === 0;
+ ['дек 2026', 'Опыт с горшками', 0], ['мар 2027', 'Junior Water Prize', 0], ['лето 2027', 'Пилот: 5 хозяйств', 0], ['осень 2027', 'PRO-подписка и рост', 0]].forEach(([d, t, done], i) => {
+  const cx = 1.3 + i * 1.788, g = i + 3, up = i % 2 === 0;
   if (done) {
     s.addShape(pres.shapes.OVAL, { x: cx - 0.24, y: 3.88, w: 0.48, h: 0.48, fill: { color: LIME }, line: { type: 'none' }, objectName: an(g, 'zoom') });
     icon(s, 'check', 'deep', cx - 0.14, 3.98, 0.28, g, 'zoom');
