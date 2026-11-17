@@ -62,4 +62,5 @@ def write(rows: list[dict]) -> list[str]:
 
 
 if __name__ == "__main__":
+    sim.apply_study_engine()
     print("\n".join(write(run())))

@@ -3,7 +3,7 @@ import path from 'node:path';
 import {fileURLToPath} from 'node:url';
 const root=fileURLToPath(new URL('.',import.meta.url));
 const dist=path.join(root,'dist');fs.mkdirSync(dist,{recursive:true});
-for(const item of ['index.html','about.html','demo.html','results.html','css','img','js','vendor','data'])fs.cpSync(path.join(root,'../frontend',item),path.join(dist,item),{recursive:true});
+for(const item of ['index.html','about.html','demo.html','results.html','privacy.html','css','img','js','vendor','data'])fs.cpSync(path.join(root,'../frontend',item),path.join(dist,item),{recursive:true});
 const appFile=path.join(dist,'js/app.js');let app=fs.readFileSync(appFile,'utf8');
 if(!app.includes("window.SuTechServerless.request('analyze',")||app.includes('sutech-core.onrender.com'))throw new Error('Review Mini App transport before deployment');
 fs.copyFileSync(path.join(root,'web/transport.js'),path.join(dist,'js/serverless-transport.js'));
