@@ -55,6 +55,19 @@ def display_volume(lang, cubic_metres):
     return escape(f'{number} {unit}')
 
 
+def pump_limit_note(lang, result):
+    """Warn when one day of pumping cannot deliver the advised volume (engine: PUMP_MAX_HOURS_PER_DAY)."""
+    days = result.get('irrigation_days')
+    if not days or days <= 1:
+        return ''
+    try:
+        from water_balance import PUMP_MAX_HOURS_PER_DAY
+    except ImportError:
+        from bot.water_balance import PUMP_MAX_HOURS_PER_DAY
+    return t(lang, 'balance_pump_limit', max_daily=fmt(result['max_daily_m3']), hours=fmt(PUMP_MAX_HOURS_PER_DAY),
+             days=days, per_day=fmt(result['gross_m3'] / days))
+
+
 def format_balance_report(lang, field, result, weather):
     """One decision card; formulas and economics live in its saved explanation."""
     status = result['status']
@@ -81,6 +94,9 @@ def format_balance_report(lang, field, result, weather):
         date=escape(report_date),
         timezone=escape(str(weather.get('timezone', ''))),
     )
+    note = pump_limit_note(lang, result)
+    if note:
+        text += '\n\n' + note
     if field.saline:
         text += '\n\n' + t(lang, 'decision_saline')
     if field.field_type == 'greenhouse':
