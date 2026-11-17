@@ -34,6 +34,7 @@ export async function planScreen(id,error=false) {
  if(key==='confirm')text+='\n\n'+esc([t(lang,'report_crop_'+d.values.crop),d.values.area+' ha',`${d.values.latitude}, ${d.values.longitude}`,d.values.day_of_growth+' d',label(lang,'soil_type',d.values.soil_type),label(lang,'moisture_condition',d.values.moisture_condition),t(lang,'report_irrig_'+d.values.irrigation_type),label(lang,'field_type',d.values.field_type)].join('\n'));
  const cb=v=>`p:${u.generation}:${d.step}:${v}`;
  const rows=(ENUMS[key]??[]).map(v=>[button(label(lang,key,v),cb(v))]);
+ if(key==='crop'){const pairs=[];for(let i=0;i<rows.length;i+=2)pairs.push(rows.slice(i,i+2).flat());rows.splice(0,rows.length,...pairs);}  // 19 crops: two per row
  if(['pump','greenhouse_et0'].includes(key))rows.push([button(phrase(lang,key==='pump'?'skip':'estimate'),cb('skip'))]);
  if(key==='confirm')rows.push([button(phrase(lang,'calculate'),cb('calculate'))]);
  if(d.step>0)rows.push([button(phrase(lang,'back'),cb('back'))]);
