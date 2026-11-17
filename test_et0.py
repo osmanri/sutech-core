@@ -82,7 +82,7 @@ class Invariants(unittest.TestCase):
 
 class RootZoneCapacity(unittest.TestCase):
     def test_taw_raw_follow_fao56_eq_82_83(self):
-        # TAW = 1000 (theta_FC - theta_WP) Zr ; RAW = p TAW   -> loam: 1000*(0.33-0.18)*1.0 = 150 mm
+        # TAW = 1000 (theta_FC - theta_WP) Zr ; RAW = p TAW   -> loam: 1000*(0.25-0.10)*1.0 = 150 mm
         taw, raw = root_zone_capacity("loam", 1.0, 0.55)
         self.assertAlmostEqual(taw, 150.0)
         self.assertAlmostEqual(raw, 82.5)
