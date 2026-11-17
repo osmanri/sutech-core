@@ -2,6 +2,7 @@
 // Object names carry animation hints for animate.py:
 //   "!!name"          Morph matches it across slides      "aN|kind|name"  entrance animation, stagger group N
 const pptxgen = require('pptxgenjs');
+const nodePath = require('path');
 const { applyTheme } = require(process.argv[2] + '/scripts/apply_theme.js');
 const OUT = process.env.OUT || 'Su-Tech.pptx';
 const THEME = {
@@ -89,8 +90,8 @@ let s = slide({ section: 'Проблема', blank: true, photo: 'aral', glow: [
   const TW = 7.84, BADGE = 1.1, GAP = 0.25, TX = (13.333 - (TW + GAP + BADGE)) / 2;
   T(s, [{ text: 'ПРОБЛЕМА ' }, { text: 'ВОДЫ', options: { color: RED } }],
     { x: TX, y: 1.0, w: TW + 0.4, h: 1.2, valign: 'middle', fontFace: HEAD, fontSize: 64, wrap: false, objectName: 'title-problem' });
-  s.addShape(pres.shapes.OVAL, { x: TX + TW + GAP, y: 1.05, w: BADGE, h: BADGE, fill: { color: RED }, line: { type: 'none' }, objectName: '!!dropbg' });
-  s.addImage({ path: 'm/drop-white.png', x: TX + TW + GAP + 0.22, y: 1.27, w: 0.66, h: 0.66, altText: '', objectName: '!!dropicon' });
+  // blue double-drop icon (Flaticon), centred where the old red badge was; no badge behind it
+  s.addImage({ path: nodePath.join(__dirname, 'icons', 'drops-duo.png'), x: TX + TW + GAP - 0.05, y: 1.0, w: 1.2, h: 1.2, altText: '', objectName: '!!dropicon' });
 }
 [['72%', 'farm', 'пресной воды мира забирает сельское хозяйство', 'ФАО, AQUASTAT 2025'],
  ['до 50%', 'drop-half', 'воды в Казахстане теряется по дороге — в оросительных каналах', 'Astana Times, январь 2026'],
@@ -103,7 +104,7 @@ let s = slide({ section: 'Проблема', blank: true, photo: 'aral', glow: [
   if (i < 2) sep(s, x + 3.8, 2.75, x + 3.8, 6.3, g);
 });
 T(s, 'Осман Толобек · [школа, город] · Samsung Solve for Tomorrow', { x: 0.6, y: 6.55, w: 9, h: 0.28, fontSize: 12.5, color: PALE }, 5, 'fade');
-credit(s, 'Фото: «Graveyard of Ships (Aral sea)», Mirfayzbek Abdullayev, Wikimedia Commons, CC0', 6.86);
+credit(s, 'Фото: «Graveyard of Ships (Aral sea)», Mirfayzbek Abdullayev, Wikimedia Commons, CC0 · Иконка капель: Flaticon', 6.86);
 s._after();
 s.addNotes('Здравствуйте! Меня зовут Осман Толобек, мой проект — Su-Tech. Это Аральское море: корабли стоят посреди пустыни. Сельское хозяйство забирает 72 процента пресной воды мира. В Казахстане до половины воды теряется ещё в каналах. В 2026 году ввели лимиты, посевы риса в Туркестанской области сокращают на 78 процентов.');
 
@@ -404,7 +405,7 @@ T(s, 'Спасибо! · Осман Толобек · [контакт]', { x: 0.
 s.addShape(pres.shapes.ROUNDED_RECTANGLE, { x: 8.5, y: 1.15, w: 4.23, h: 5.3, rectRadius: 0.3, fill: { color: WHITE }, line: { type: 'none' }, objectName: an(3) });
 s.addImage({ path: 'm/qr-demo.png', x: 8.92, y: 1.57, w: 3.4, h: 3.4, altText: 'QR-код: бот Su-Tech в демо-режиме', objectName: an(3) });
 T(s, 't.me/Su_Tech_bot → /demo', { x: 8.5, y: 5.25, w: 4.23, h: 0.5, align: 'center', fontSize: 16, bold: true, color: DEEP }, 3);
-T(s, 'Фото (Wikimedia Commons): Mirfayzbek Abdullayev — Аральское море; Wilfredor — сухая земля; Benoît Prieur — канал (все CC0); Alabama Extension — хлопок (CC0); Wikideas1 — полив (CC0); PSSP — каналы Файсалабада (CC BY 2.0).', { x: 0.75, y: 6.78, w: 11.5, h: 0.25, fontSize: 8.5, color: MUTED });
+T(s, 'Фото (Wikimedia Commons): Mirfayzbek Abdullayev — Аральское море; Wilfredor — сухая земля; Benoît Prieur — канал (все CC0); Alabama Extension — хлопок (CC0); Wikideas1 — полив (CC0); PSSP — каналы Файсалабада (CC BY 2.0); иконка капель — Flaticon.', { x: 0.75, y: 6.78, w: 11.5, h: 0.25, fontSize: 8.5, color: MUTED });
 s._after();
 s.addNotes('Наведите камеру на QR-код — бот откроется в демо и покажет весь расчёт по шагам. Мы ищем первое хозяйство для пилота: если вы знаете фермера, который готов попробовать, подойдите ко мне после защиты. Спасибо!');
 

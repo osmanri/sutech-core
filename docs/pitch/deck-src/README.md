@@ -22,4 +22,4 @@ python prep_canva.py && node deck-canva.js
 In Canva: Create a design → Import file → `Su-Tech-Canva.pptx`. PowerPoint animations are not imported; add them in Canva (Animate).
 
 Photo credits (all from Wikimedia Commons): see the last slide. The logo and the bot screenshots are the author's own.
-Icons: Phosphor Icons (MIT). Fonts: Manrope and Inter (SIL OFL).
+Icons: Phosphor Icons (MIT). The blue double-drop icon next to the title of slide 1 (`icons/drops-duo.png`) is from Flaticon (free licence: keep the credit on slides 1 and 16; [add the author's name shown on the icon's Flaticon page, icon id 315339]). Fonts: Manrope and Inter (SIL OFL).
