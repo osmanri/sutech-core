@@ -7,7 +7,7 @@ No recommendation is treated as evidence that irrigation actually occurred.
 import math
 from dataclasses import dataclass
 
-CALCULATION_VERSION = 'fao56.8'
+CALCULATION_VERSION = 'fao56.9'
 
 # Default screening model for a film-covered greenhouse when no calibrated
 # indoor ET0 measurement is available. The farmer can still supply a measured
@@ -85,6 +85,8 @@ class FieldInput:
     greenhouse_et0: float | None
     water_ec: float | None = None   # ECw of the irrigation water, dS/m (laboratory value)
     soil_ec: float | None = None    # ECe of the root zone, dS/m (saturation extract, laboratory value)
+    greenhouse_medium: str = 'soil'      # 'soil' or 'substrate' (rockwool, coco)
+    greenhouse_heated: bool = False
 
 
 def crop_parameters(crop, day, stages, method='sprinkler'):
@@ -177,12 +179,17 @@ def parse_field(data):
     pump_power = optional('pump_power_kw', .000001, 100000)
     pump_productivity = optional('pump_productivity_m3h', .000001, 1000000)
     greenhouse_et0 = optional('greenhouse_et0', 0, 50)
+    greenhouse_medium = data.get('greenhouse_medium', 'soil')
+    greenhouse_heated = data.get('greenhouse_heated', 'no')
+    if greenhouse_medium not in ('soil', 'substrate') or greenhouse_heated not in ('yes', 'no'):
+        raise BalanceInputError('greenhouse')
     water_ec = optional('water_ec', 0, 25)
     soil_ec = optional('soil_ec', 0, 50)
     return FieldInput(crop, soil, area if unit == 'hectare' else area / 100, method,
                       int(day), yesterday, moisture_condition, stages, kc, zr, p, stage, field_type,
                       data.get('is_saline') == 'yes', power, pump_power,
-                      pump_productivity, greenhouse_et0, water_ec, soil_ec)
+                      pump_productivity, greenhouse_et0, water_ec, soil_ec,
+                      greenhouse_medium, greenhouse_heated == 'yes')
 
 
 def salinity(field, efficiency):
@@ -212,6 +219,22 @@ def salinity(field, efficiency):
     if field.soil_ec is not None:
         out['salinity_yield_loss_pct'] = min(100., max(0., slope * (field.soil_ec - threshold)))
     return out
+
+
+def greenhouse_unsupported(field):
+    """Reason why no advice is given for a greenhouse, or None.
+
+    The balance describes water in a soil root zone driven by outdoor weather. It does not describe a
+    substrate (rockwool, coco: managed by drainage fraction) nor a heated greenhouse where the crop's water
+    use follows heating and light, not outdoor weather, unless the farmer supplies a measured ET0.
+    """
+    if field.field_type != 'greenhouse':
+        return None
+    if field.greenhouse_medium == 'substrate':
+        return 'substrate'
+    if field.greenhouse_heated and field.greenhouse_et0 is None:
+        return 'heated_needs_measurement'
+    return None
 
 
 def calculate_economics(ai_gross_volume, current_deficit_mm, area_ha,
@@ -293,11 +316,16 @@ def calculate_balance(field, et0, rain):
     gross = net / salt['effective_efficiency']
     economy = calculate_economics(gross, deficit, field.area_ha, field.power_price,
                                   field.pump_power_kw, field.pump_productivity_m3h)
+    reason = greenhouse_unsupported(field)
+    if reason:
+        status, net, gross = 'unsupported', 0., 0.
+        economy = calculate_economics(0., deficit, field.area_ha, field.power_price,
+                                      field.pump_power_kw, field.pump_productivity_m3h)
     return dict(status=status, taw=taw, raw=raw, deficit=deficit, unbounded=unbounded,
                 overflow=max(0., unbounded-taw), rain_excess=max(0., -unbounded),
                 et0=et0, rain=rain, peff=peff, etc=etc, ks=ks, kc=field.kc, zr=field.zr, p=field.p,
                 threshold=threshold, tech_threshold=tech_threshold,
                 efficiency=efficiency, net_m3=net, gross_m3=gross,
-                leaching_fraction=salt['leaching_fraction'], leaching_impossible=salt['leaching_impossible'],
+                unsupported_reason=reason, leaching_fraction=salt['leaching_fraction'], leaching_impossible=salt['leaching_impossible'],
                 salinity_yield_loss_pct=salt['salinity_yield_loss_pct'],
                 **economy)
