@@ -1,6 +1,6 @@
 import unittest
 from dataclasses import replace
-from bot.water_balance import parse_field, calculate_balance, calculate_economics, BalanceInputError, CROPS, METHODS, SOILS
+from bot.water_balance import parse_field, calculate_balance, calculate_economics, BalanceInputError, CROPS, METHODS, SOILS, WETTED_FRACTION
 from bot.balance_report import format_balance_report, format_balance_explanation, fmt
 
 
@@ -68,13 +68,13 @@ class BalanceTests(unittest.TestCase):
             start = parse_field(payload(crop=crop,day_of_growth=0))
             mid = parse_field(payload(crop=crop,day_of_growth=stages[0]+stages[1]))
             end = parse_field(payload(crop=crop,day_of_growth=sum(stages)))
-            self.assertEqual(start.kc,kcs[0]); self.assertEqual(start.zr,zmin)
+            self.assertAlmostEqual(start.kc,kcs[0]*WETTED_FRACTION[start.method]); self.assertEqual(start.zr,zmin)  # FAO-56 eq. 60
             self.assertAlmostEqual(mid.kc,kcs[1]); self.assertAlmostEqual(mid.zr,zmax)
             self.assertAlmostEqual(end.kc,kcs[2]); self.assertAlmostEqual(end.zr,zmax)
             with self.assertRaises(BalanceInputError):
                 parse_field(payload(crop=crop,day_of_growth=sum(stages)+1))
         custom = parse_field(payload(day_of_growth=20,stage_days=[10,20,40,20]))
-        self.assertAlmostEqual(custom.kc,.725)
+        self.assertAlmostEqual(custom.kc,(CROPS['wheat'][3][0] * WETTED_FRACTION['drip'] + CROPS['wheat'][3][1]) / 2)  # eq. 60 on drip
 
     def test_bad_inputs_and_missing_fields(self):
         for key in ['soil_type','day_of_growth','moisture_condition','balance_version']:
