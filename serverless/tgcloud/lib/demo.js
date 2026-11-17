@@ -1,6 +1,6 @@
 // Jury demo: a fixed model scenario computed live by the production balance engine.
 // Nothing is stored and no weather request is made, so it works offline and cannot pollute a user's fields.
-import {parseField,calculate,SOILS,METHODS,VERSION} from './balance.js';
+import {parseField,calculate,SOILS,METHODS,VERSION,PUMP_MAX_HOURS_PER_DAY} from './balance.js';
 import {tr,esc,fmt} from './i18n.js';
 import {button,keyboard,back,APP_URL} from './ui.js';
 import {language} from './i18n.js';
@@ -30,6 +30,7 @@ export function demoScreen(lang) {
    `<b>${esc(decision)}</b>`,
    `<b>${tr(lang,'Подать воды','Берілетін су','Apply water')}: ${kz0(r.gross_m3,0)} m³</b>`,
    `${tr(lang,'Насос','Сорғы','Pump')}: ${kz0(r.ai_time_hours)} h · ${kz0(r.cost,0)} ₸`,
+   ...(r.irrigation_days>1?[`⚠️ ${tr(lang,`Насос подаёт не больше ${kz0(r.max_daily_m3,0)} м³ за ${PUMP_MAX_HOURS_PER_DAY} ч в сутки: полив разделён на ${r.irrigation_days} дн.`,`Сорғы ${PUMP_MAX_HOURS_PER_DAY} сағатта ${kz0(r.max_daily_m3,0)} м³-ден артық бермейді: суару ${r.irrigation_days} күнге бөлінді.`,`The pump delivers at most ${kz0(r.max_daily_m3,0)} m³ in ${PUMP_MAX_HOURS_PER_DAY} h a day: the watering is split over ${r.irrigation_days} days.`)}`]:[]),
    '',
    `<i>${tr(lang,'Это расчёт по модели, а не измерение на реальном поле.','Бұл нақты алқаптағы өлшеу емес, модель есебі.','This is a model calculation, not a measurement on a real field.')}</i>`
   ].join('\n');
