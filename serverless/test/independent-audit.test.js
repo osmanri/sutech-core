@@ -7,7 +7,9 @@ import {currentResult} from '../tgcloud/lib/fields.js';
 import {volume} from '../tgcloud/lib/i18n.js';
 
 // --- reference implementation (FAO-56 chapter 8 + project rules stated in the docs) ---
-function refKc([ini,mid,end],[a,b,c,d],day){
+const WET={drip:.35,subsurface:.35};                       // FAO-56 Table 20 (trickle 0.3-0.4, midpoint)
+function refKc([ini0,mid,end],[a,b,c,d],day,method){
+  const ini=ini0*(WET[method]??1);                           // FAO-56 eq. 60: Kc ini = fw * Kc ini(Table 12)
   if(day<=a)return ini;                                   // initial stage: constant
   if(day<=a+b)return ini+(day-a)/b*(mid-ini);             // FAO-56 eq. 66, linear development
   if(day<=a+b+c)return mid;
@@ -52,7 +54,7 @@ test('5000 random fields: bot equals an independent FAO-56 re-derivation',()=>{
     for(const k of ['taw','raw','ks','etc','peff','deficit','net_m3','gross_m3'])close(bot[k],r[k],`${k} ${ctx}`);
     assert.equal(bot.status,r.status,ctx);
     if(r.cost===null)assert.equal(bot.cost,null);else close(bot.cost,r.cost,`cost ${ctx}`);
-    close(f.kc,refKc(CROPS[f.crop][3],CROPS[f.crop][4],f.day),'Kc');
+    close(f.kc,refKc(CROPS[f.crop][3],CROPS[f.crop][4],f.day,f.method),'Kc');
     assert.equal(f.area_ha,p.area_unit==='hectare'?p.area:p.area/100,'1 sotka = 0.01 ha');
   }
 });

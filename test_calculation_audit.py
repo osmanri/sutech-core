@@ -39,11 +39,20 @@ def inputs(**changes):
     return data
 
 
-def reference_growth(crop, day, stages=None):
+# FAO-56 Table 20 (trickle 0.3-0.4, midpoint) and equation 60: Kc ini = fw * Kc ini(Table 12).
+WETTED = {'drip': F('0.35'), 'subsurface': F('0.35')}
+
+
+def actual_method(field):
+    return field.method
+
+
+def reference_growth(crop, day, stages=None, method='sprinkler'):
     p, low, high, coefficients, default_days = PROFILES[crop]
     durations = stages or default_days
     ini, development, middle, late = durations
     first, peak, last = map(F, coefficients)
+    first *= WETTED.get(method, 1)
     root = F(low) + (F(high) - F(low)) * min(F(day, ini + development), 1)
     if day <= ini:
         kc = first
@@ -57,7 +66,7 @@ def reference_growth(crop, day, stages=None):
 
 
 def reference_balance(data, et0, rain):
-    kc, root, p = reference_growth(data['crop'], data['day_of_growth'], data.get('stage_days'))
+    kc, root, p = reference_growth(data['crop'], data['day_of_growth'], data.get('stage_days'), data['irrigation_type'])
     taw = 1000 * SOIL_STORAGE[data['soil_type']] * root
     raw = p * taw
     previous = raw * MOISTURE[data['moisture_condition']]
@@ -123,7 +132,7 @@ class CalculationAudit(unittest.TestCase):
             for calendar in [profile[-1], (1, 2, 3, 4), (30, 50, 60, 55)]:
                 for day in range(sum(calendar)+1):
                     actual = parse_field(inputs(crop=crop, stage_days=list(calendar), day_of_growth=day))
-                    kc, root, p = reference_growth(crop, day, calendar)
+                    kc, root, p = reference_growth(crop, day, calendar, actual_method(actual))
                     self.assertAlmostEqual(actual.kc, float(kc), places=12)
                     self.assertAlmostEqual(actual.zr, float(root), places=12)
                     self.assertEqual(actual.p, float(p))
