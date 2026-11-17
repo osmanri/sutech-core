@@ -1,7 +1,8 @@
 import {confidence,confidenceLine,whyCard,volumeRounded,firstDayNote,detailsBlock} from './explain.js';
-import {parseField,calculate,fieldKey,number,METHODS,VERSION,economics,PUMP_MAX_HOURS_PER_DAY,salinity} from './balance.js';
+import {calculate,fieldKey,number,METHODS,VERSION,economics,PUMP_MAX_HOURS_PER_DAY,salinity} from './balance.js';
 import {get,put,list,lock,unlock,ownerId,nonce} from './store.js';
 import {weather} from './weather.js';
+import {parseField,cleanExpert,KEYS} from './expert.js';
 import {tr,t,esc,fmt,volume} from './i18n.js';
 export async function ownedField(id,fieldId) {
   ownerId(id);const row=await get(`field:${String(fieldId)}`,id);
@@ -90,6 +91,7 @@ export async function calculateField(id,payload) {
       // saved draft); only a change of the field itself restarts the balance.
       if(PHYSICAL.some(k=>!same(existing.payload[k],payload[k]))){
         // The farmer corrected the field itself: start the balance again from the new inputs.
+        if(existing.payload.expert)clean.expert=existing.payload.expert;
         const row=freshRow(existing.id,key,clean,w,parsed);
         Object.assign(row,{events:existing.events??[],checks:existing.checks??[],reset_at:Date.now(),revision:(existing.revision??1)+1,submit:'reset'});
         await put(`field:${row.id}`,id,'field',row);await saveCalculation(id,row);return row;
@@ -180,4 +182,20 @@ export function report(row,lang,details=false) {
     s+='\n\n'+whyCard(row,field,r,lang);
   }
   return s;
+}
+
+// Expert mode: set one override (value) or remove it (null). Past closed days stay as they were; the change applies from today.
+export async function setExpert(id,fieldId,key,value) {
+  if(!KEYS.includes(key))throw new Error('bad_key');
+  const guard=`field:${fieldId}`,token=await lock(guard,45);if(!token)throw new Error('busy');
+  try {
+    const row=await ownedField(id,fieldId),was=cleanExpert(row.payload.expert),next={...was};
+    if(value===null)delete next[key];else next[key]=cleanExpert({[key]:value})[key];
+    const w=await weather(row.payload.latitude,row.payload.longitude);migrate(row,w.day);
+    row.payload.expert=next;if(!Object.keys(next).length)delete row.payload.expert;
+    parseField(row.payload);
+    row.expert_log=[...(row.expert_log??[]),{time:Date.now(),key,from:was[key]??null,to:next[key]??null}].slice(-100);
+    recompute(row,w);row.revision++;
+    await put(`field:${fieldId}`,id,'field',row);return row;
+  } finally {await unlock(guard,token);}
 }
