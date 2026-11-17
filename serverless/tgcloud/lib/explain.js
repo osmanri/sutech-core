@@ -62,6 +62,7 @@ export function whyCard(row,field,r,lang) {
   return [`<b>${tr(lang,'Почему так? Допущения и источники','Неге осылай? Болжамдар мен дереккөздер','Why this? Assumptions and sources')}</b>`,confidenceLine(c,lang),'',
     `<b>${tr(lang,'Мы предположили','Біз болжадық','We assumed')}</b>`,...assumptions(row,field,r,lang).map(x=>'• '+x),'',
     `<b>${tr(lang,'Откуда числа','Сандар қайдан','Where the numbers come from')}</b>`,...sources(field,lang).map(x=>'• '+x),'',
+    ...(selfCheckLines(row,r,lang).length?[`<b>${tr(lang,'Самопроверка по полю','Алқап бойынша өзін-өзі тексеру','Field self-check')}</b>`,...selfCheckLines(row,r,lang).map(x=>'• '+x),'']:[]),
     `<b>${tr(lang,'А если мы ошиблись','Ал егер қателессек','What if we are wrong')}</b>`,...sensitivity(field,r,lang).map(x=>'• '+x)].join('\n');
 }
 
@@ -108,4 +109,21 @@ export function fieldCsv(row) {
   L.push('');L.push('soil_check: time,day,level,value_mm,deficit_before_mm,deficit_after_mm');
   for(const c of row.checks??[])L.push([new Date(c.time).toISOString(),c.day,c.level,c.value_mm,c.before,c.after].map(cell).join(','));
   return L.join('\r\n')+'\r\n';
+}
+
+// Self-check from the farmer's soil checks: how far the model was from what the farmer found. Only reports; never changes the field.
+// error > 0 means the soil was drier than the model said (the model was too wet).
+export function selfCheck(row,r) {
+  const cs=(row.checks??[]).filter(c=>Number.isFinite(c.before)&&Number.isFinite(c.value_mm)&&!(row.reset_at&&c.time<row.reset_at)).slice(-4);
+  if(!cs.length||!(r.raw>0))return null;
+  const errs=cs.map(c=>c.value_mm-c.before),mean=errs.reduce((a,b)=>a+b,0)/errs.length,abs=errs.reduce((a,b)=>a+Math.abs(b),0)/errs.length;
+  const share=abs/r.raw,same=errs.length>=3&&(errs.every(e=>e>0.1*r.raw)||errs.every(e=>e<-0.1*r.raw));
+  return {n:cs.length,mean_mm:mean,abs_mm:abs,share,bias:same?(mean>0?'model_wetter':'model_drier'):'none'};
+}
+export function selfCheckLines(row,r,lang) {
+  const c=selfCheck(row,r);if(!c)return [];
+  const L=[tr(lang,`За последние ${c.n} проверок бот отличался от вашего ответа в среднем на ${r1(c.abs_mm)} мм (${fmt(Math.round(c.share*100))}% запаса RAW).`,`Соңғы ${c.n} тексеру бойынша бот сіздің жауабыңыздан орта есеппен ${r1(c.abs_mm)} мм-ге (RAW қорының ${fmt(Math.round(c.share*100))}%) ерекшеленді.`,`Over the last ${c.n} checks the bot differed from your answer by ${r1(c.abs_mm)} mm on average (${fmt(Math.round(c.share*100))}% of the RAW stock).`)];
+  if(c.bias==='model_wetter')L.push(tr(lang,'Почва каждый раз оказывалась суше, чем считал бот. Если так и дальше, культура, возможно, расходует больше воды, чем в таблице: агроном может поднять множитель Kc в режиме эксперта. Бот сам ничего не меняет.','Топырақ әр жолы бот есептегеннен құрғақ болды. Солай жалғасса, дақыл кестеден көп су жұмсауы мүмкін: агроном сарапшы режимінде Kc көбейткішін көтере алады. Бот өзі ештеңе өзгертпейді.','The soil was drier than the bot calculated each time. If this continues, the crop may use more water than the table says: an agronomist can raise the Kc multiplier in expert mode. The bot changes nothing by itself.'));
+  if(c.bias==='model_drier')L.push(tr(lang,'Почва каждый раз оказывалась влажнее, чем считал бот. Если так и дальше, расход воды культурой, возможно, ниже табличного: агроном может снизить множитель Kc в режиме эксперта. Бот сам ничего не меняет.','Топырақ әр жолы бот есептегеннен ылғалды болды. Солай жалғасса, дақыл суды кестеден аз жұмсауы мүмкін: агроном сарапшы режимінде Kc көбейткішін төмендете алады. Бот өзі ештеңе өзгертпейді.','The soil was wetter than the bot calculated each time. If this continues, the crop may use less water than the table says: an agronomist can lower the Kc multiplier in expert mode. The bot changes nothing by itself.'));
+  return L;
 }
