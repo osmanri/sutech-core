@@ -1,6 +1,7 @@
 """Known-answer checks for the retrospective simulation (synthetic weather, no network)."""
 import random
 import unittest
+from datetime import date, timedelta
 
 from bot.water_balance import CROPS
 from research.simulate import (best_safe_calendar, bootstrap_ci, KY, calendar_decider, mean_daily_demand, run_season, safe_multiplier,
@@ -89,3 +90,29 @@ class Simulation(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TruthMisspecification(unittest.TestCase):
+    """research/misspecified.py: the real crop and soil may differ from the bot's parameters."""
+
+    def weather(self, crop='cotton'):
+        from research.simulate import season_weather
+        return season_weather({(date(2021, 5, 1) + timedelta(days=i)).isoformat(): (6.0, 0.0) for i in range(200)}, crop, 2021)
+
+    def test_default_truth_equals_model_and_context_restores_it(self):
+        from research.simulate import _TRUTH, calendar_decider, run_season, truth_differs
+        base = run_season('cotton', 'loam', 'drip', self.weather(), calendar_decider(3, 20))
+        with truth_differs(1.15, 0.8):
+            self.assertEqual(_TRUTH, {'kc_mult': 1.15, 'taw_mult': 0.8})
+            stressed = run_season('cotton', 'loam', 'drip', self.weather(), calendar_decider(3, 20))
+        self.assertEqual(_TRUTH, {'kc_mult': 1.0, 'taw_mult': 1.0})
+        self.assertAlmostEqual(base.etm * 1.15, stressed.etm)           # real crop uses 15 % more
+        self.assertGreaterEqual(stressed.stress_days, base.stress_days)  # and the same dose is no longer enough
+        again = run_season('cotton', 'loam', 'drip', self.weather(), calendar_decider(3, 20))
+        self.assertEqual((again.gross_mm, again.eta, again.stress_days), (base.gross_mm, base.eta, base.stress_days))
+
+    def test_water_balance_still_closes_with_a_wrong_model(self):
+        from research.simulate import calendar_decider, run_season, truth_differs
+        with truth_differs(0.85, 1.2):
+            s = run_season('corn', 'loam', 'furrow', self.weather('corn'), calendar_decider(10, 60))
+        self.assertLess(abs(s.closure_error()), 1e-9)
