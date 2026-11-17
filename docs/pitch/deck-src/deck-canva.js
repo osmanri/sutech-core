@@ -289,30 +289,29 @@ s.addNotes('Финансы. Стенд стоил [сумма]. Фермеру S
 s = slide({ section: 'Бизнес', glow: [7.4, 2.8, 7, -2.2, -2.8, 6.5] });
 title(s, 'Su-Tech ', 'vs конкуренты');
 {
-  // plus/minus marks in the mentor's style; four real criteria, every mark follows the sources (Qazinform 28.09.2026, cropx.com and store.cropx.com, FAO software page, FAO/IAEA study)
-  const X = 0.6, Y = 2.05, colW = [4.73, 1.85, 1.85, 1.85, 1.85], hdrH = 0.65, rowH = 0.78;
+  // plus/minus marks in the mentor's style: five criteria that matter to a small farm, every mark follows the sources
+  const X = 0.6, Y = 2.05, colW = [3.88, 1.65, 1.65, 1.65, 1.65, 1.65], hdrH = 0.65, rowH = 0.95;
   const xs = colW.reduce((a, w, i) => a.concat(a[i] + w), [X]);
-  // '?' = the price of the NII system is not published
-  const rows = [['Su-Tech', '+++-', true], ['НИИ земледелия: датчики и метеостанция', '-?++', false],
-    ['CropX: зарубежная система с датчиками', '---+', false], ['CROPWAT ФАО: программа для компьютера', '++-+', false]];
+  const rows = [['Su-Tech', '+++++', true], ['CropX: система с датчиками в почве', '--++-', false],
+    ['CROPWAT ФАО: программа для компьютера', '++---', false]];
   s.addShape(pres.shapes.RECTANGLE, { x: X, y: Y, w: 12.13, h: hdrH, fill: { color: LIME }, line: { color: LIME, width: 0 } });
-  ['Название', 'без датчиков', 'бесплатно для фермера', 'отечественный продукт', 'есть данные с поля'].forEach((h, i) =>
+  ['Название', 'без датчиков', 'бесплатно', 'работает на телефоне', 'погоду берёт сам', 'сделан в Казахстане'].forEach((h, i) =>
     T(s, h, { x: xs[i] + 0.14, y: Y, w: colW[i] - 0.28, h: hdrH, align: i ? 'center' : 'left', valign: 'middle', fontSize: 13, bold: true, color: DEEP }));
   rows.forEach(([name, marks, hl], r) => {
     const y = Y + hdrH + r * rowH;
     if (hl) s.addShape(pres.shapes.RECTANGLE, { x: X, y, w: 12.13, h: rowH, fill: { color: '0E5A3C' }, line: { color: '0E5A3C', width: 0 } });
     T(s, name, { x: X + 0.14, y, w: colW[0] - 0.28, h: rowH, valign: 'middle', fontSize: hl ? 18 : 14, bold: true, color: hl ? LIME : WHITE });
     [...marks].forEach((m, c) =>
-      T(s, m === '+' ? '+' : m === '?' ? '?' : '−', { x: xs[c + 1], y, w: colW[c + 1], h: rowH, align: 'center', valign: 'middle', fontSize: 28, color: m === '+' ? LIME : MUTED, head: true }));
+      T(s, m === '+' ? '+' : '−', { x: xs[c + 1], y, w: colW[c + 1], h: rowH, align: 'center', valign: 'middle', fontSize: 32, color: m === '+' ? LIME : MUTED, head: true }));
     hline(s, X, X + 12.13, y + rowH, '3E7A62', 1);
   });
   xs.slice(1, -1).forEach(x => vline(s, x, Y + hdrH, Y + hdrH + rows.length * rowH, '3E7A62', 1));
 }
 T(s, [{ text: 'Пояснения: ', options: { bold: true, color: LIME } },
-      { text: 'цена: Su-Tech бесплатен; CropX — датчик $500–695 + подписка $300 (магазин CropX); CROPWAT бесплатен (ФАО); цена системы НИИ не опубликована («?»). Данные с поля: НИИ — сахарная свёкла, −32% от расчётной нормы (Минсельхоз РК, 2026); CropX — заявление компании; CROPWAT — ФАО/МАГАТЭ; у Su-Tech пока нет, идёт опыт.' }],
-  { x: 0.6, y: 6.3, w: 12.1, h: 0.6, fontSize: 12.5, color: PALE });
+      { text: 'CropX — датчик $500–695 + подписка $300 (магазин CropX), приложение для iOS и Android; CROPWAT — программа для Windows, данные о климате вводит человек (ФАО). Для сравнения: комплекс Казахского НИИ земледелия (датчики, метеостанция, расходомеры) дал 32% экономии воды на сахарной свёкле от расчётной нормы (Минсельхоз РК, 2026). У Su-Tech данных с поля пока нет: идёт опыт.' }],
+  { x: 0.6, y: 5.78, w: 12.1, h: 1.15, fontSize: 12.5, color: PALE });
 s._after();
-s.addNotes('Сравнение по четырём настоящим признакам, каждый подтверждён источниками. Без датчиков: комплекс НИИ земледелия включает датчики почвы и среды, метеостанцию и расходомеры; у CropX датчики в почве; Su-Tech и CROPWAT работают без датчиков. Бесплатно: Su-Tech бесплатен; CropX — датчик от 500 долларов и подписка 300 долларов; CROPWAT бесплатен; цена системы НИИ не опубликована. Отечественный продукт: Su-Tech и комплекс Казахского НИИ земледелия — казахстанские, CropX и CROPWAT — нет. Данные с поля: НИИ — сахарная свёкла, 32 процента от расчётной нормы; CropX — по заявлению компании; CROPWAT — исследование ФАО и МАГАТЭ. У нас данных с поля пока нет — это честно, поэтому идёт опыт.');
+s.addNotes('Сравнение по пяти признакам, которые важны малому хозяйству, и каждый подтверждён источниками. Без датчиков: CropX работает по датчикам в почве, Su-Tech и CROPWAT — нет. Бесплатно: Su-Tech и CROPWAT бесплатны, у CropX датчик от 500 долларов и подписка 300 долларов. На телефоне: Su-Tech работает в Telegram, у CropX есть приложение, CROPWAT — программа для Windows. Погоду берёт сам: Su-Tech берёт прогноз сам, в CROPWAT данные о климате вводит человек. Сделан в Казахстане: Su-Tech — казахстанский, CropX и CROPWAT — нет. Казахский НИИ земледелия — комплекс из датчиков, метеостанции и расходомеров; на сахарной свёкле, по данным Минсельхоза, экономия воды 32 процента от расчётной нормы. У нас данных с поля пока нет — это честно, поэтому идёт опыт.');
 
 // 12. SWOT
 s = slide({ section: 'Бизнес', glow: [2.8, 1.4, 7.5, 8.6, -2.6, 6] });
