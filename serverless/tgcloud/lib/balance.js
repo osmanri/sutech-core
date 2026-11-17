@@ -1,5 +1,7 @@
 // FAO-56.5 calculation engine, ported from bot/water_balance.py.
 export const VERSION = 'fao56.6';
+// A pump cannot run all 24 hours; a volume above one day's pumping is advised over several days.
+export const PUMP_MAX_HOURS_PER_DAY = 20;
 export const SOILS = {sand:[.12,.05],loam:[.33,.18],clay:[.45,.30]};
 export const CROPS = {
   wheat:[.55,.25,1.25,[.30,1.15,.35],[20,25,60,30]],
@@ -63,10 +65,11 @@ export function parseField(data) {
 export function economics(gross,deficit,field) {
   const traditional_m3=deficit*10*field.area_ha/METHODS.furrow[1];
   if([field.power_price,field.pump_power_kw,field.pump_productivity_m3h].some(x=>x===null))
-    return {traditional_m3,ai_time_hours:null,traditional_time_hours:null,cost:null,traditional_cost:null,savings:null,saved_kwh:null};
+    return {traditional_m3,ai_time_hours:null,traditional_time_hours:null,cost:null,traditional_cost:null,savings:null,saved_kwh:null,max_daily_m3:null,irrigation_days:null};
   const ai_time_hours=gross/field.pump_productivity_m3h,traditional_time_hours=traditional_m3/field.pump_productivity_m3h;
   const cost=ai_time_hours*field.pump_power_kw*field.power_price,traditional_cost=traditional_time_hours*field.pump_power_kw*field.power_price;
-  return {traditional_m3,ai_time_hours,traditional_time_hours,cost,traditional_cost,savings:traditional_cost-cost,saved_kwh:(traditional_time_hours-ai_time_hours)*field.pump_power_kw};
+  const max_daily_m3=field.pump_productivity_m3h*PUMP_MAX_HOURS_PER_DAY,irrigation_days=gross>0?Math.max(1,Math.ceil(gross/max_daily_m3-1e-9)):0;
+  return {traditional_m3,ai_time_hours,traditional_time_hours,cost,traditional_cost,savings:traditional_cost-cost,saved_kwh:(traditional_time_hours-ai_time_hours)*field.pump_power_kw,max_daily_m3,irrigation_days};
 }
 export function calculate(field,et0,rain) {
   et0=number(et0,'et0',0,50);rain=number(rain,'rain',0,3000);

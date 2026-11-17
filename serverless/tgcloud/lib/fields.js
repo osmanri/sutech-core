@@ -1,4 +1,4 @@
-import {parseField,calculate,fieldKey,number,METHODS,VERSION,economics} from './balance.js';
+import {parseField,calculate,fieldKey,number,METHODS,VERSION,economics,PUMP_MAX_HOURS_PER_DAY} from './balance.js';
 import {get,put,list,lock,unlock,ownerId,nonce} from './store.js';
 import {weather} from './weather.js';
 import {tr,t,esc,fmt,volume} from './i18n.js';
@@ -164,6 +164,7 @@ export function report(row,lang,details=false) {
     deferred:tr(lang,'Сегодня можно не поливать','Бүгін суармаса болады','No irrigation needed today'),rice:tr(lang,'Расчёт для риса','Күрішке арналған есеп','Rice water estimate')}[r.status];
   let s=`<b>${esc(state)}</b>\n${esc(t(lang,'report_crop_'+field.crop))} · ${fmt(field.area_ha,6)} ha\n${esc(row.last_day)} · ${esc(row.weather.timezone??'')}\n\n`;
   if(r.status!=='deferred')s+=`<b>${tr(lang,'Подать воды','Берілетін су','Apply water')}: ${volume(r.gross_m3,lang)}</b>\n`;
+  if(r.irrigation_days>1)s+=tr(lang,`⚠️ Насос за сутки подаёт не больше ${fmt(r.max_daily_m3,0)} м³ (${PUMP_MAX_HOURS_PER_DAY} ч работы). Объём больше: разделите полив на ${r.irrigation_days} дн., около ${fmt(r.gross_m3/r.irrigation_days,0)} м³ в день.\n`,`⚠️ Сорғы тәулігіне ${fmt(r.max_daily_m3,0)} м³-ден артық бере алмайды (${PUMP_MAX_HOURS_PER_DAY} сағ жұмыс). Көлем одан көп: суаруды ${r.irrigation_days} күнге бөліңіз, күніне шамамен ${fmt(r.gross_m3/r.irrigation_days,0)} м³.\n`,`⚠️ The pump delivers at most ${fmt(r.max_daily_m3,0)} m³ per day (${PUMP_MAX_HOURS_PER_DAY} h of running). The volume is larger: split the watering over ${r.irrigation_days} days, about ${fmt(r.gross_m3/r.irrigation_days,0)} m³ a day.\n`);
   s+=tr(lang,'После полива отметьте фактический объём.','Суарғаннан кейін нақты көлемді белгілеңіз.','After watering, record the actual amount.');
   if(row.gap_days)s+=`\n\n${tr(lang,`Пропуск наблюдений: ${row.gap_days} дн. Проверьте влажность почвы перед поливом.`,`Бақылау үзілісі: ${row.gap_days} күн. Суармас бұрын топырақ ылғалын тексеріңіз.`,`Observation gap: ${row.gap_days} days. Check soil moisture before watering.`)}`;
   if(field.saline)s+='\n\n'+tr(lang,'Засолённая почва: промывной режим определяет агроном.','Тұзданған топырақ: шаю режимін агроном анықтайды.','Saline soil: an agronomist must set the leaching regime.');
