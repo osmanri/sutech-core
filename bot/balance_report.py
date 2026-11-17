@@ -88,7 +88,9 @@ def format_balance_report(lang, field, result, weather):
     else:
         decision = status
     reason = decision
-    if status == 'deferred' and result.get('peff', 0) > 0:
+    if status == 'unsupported':
+        reason = result['unsupported_reason']
+    elif status == 'deferred' and result.get('peff', 0) > 0:
         reason = 'rain'
     raw_date = str(weather.get('date', ''))
     try:
