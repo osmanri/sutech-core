@@ -1,5 +1,5 @@
 // FAO-56.5 calculation engine, ported from bot/water_balance.py.
-export const VERSION = 'fao56.7';
+export const VERSION = 'fao56.8';
 // A pump cannot run all 24 hours; a volume above one day's pumping is advised over several days.
 export const PUMP_MAX_HOURS_PER_DAY = 20;
 // FAO-56 Table 19 midpoints: theta_FC and theta_WP lie inside the printed ranges, available water 0.07 / 0.15 / 0.15.
@@ -13,6 +13,20 @@ export const CROPS = {
   tomato:[.40,.25,1.10,[.60,1.15,.80],[30,40,45,30]],
   potato:[.35,.20,.50,[.50,1.15,.75],[25,30,45,30]]
 };
+// Salt tolerance, FAO-56 Table 23 (= FAO-29 Table 4): [ECe threshold dS/m, slope b %/dS/m]; conservative end of ranges; none for melon.
+export const SALT_TOLERANCE = {wheat:[6.0,7.1],cotton:[7.7,5.2],corn:[1.7,12.0],alfalfa:[2.0,7.3],tomato:[0.9,9.0],potato:[1.7,12.0],rice:[3.0,12.0]};
+// Leaching (FAO-29 eq. 9: LR = ECw/(5 ECe_thr - ECw)) and salt yield loss (FAO-56: b (ECe - ECe_thr)). Nothing is invented without ECw.
+export function salinity(field,efficiency) {
+  const out={effective_efficiency:efficiency,leaching_fraction:null,leaching_impossible:false,salinity_yield_loss_pct:null},tol=SALT_TOLERANCE[field.crop];
+  if(!tol)return out;
+  const [thr,b]=tol;
+  if(field.water_ec!==null&&field.water_ec!==undefined){
+    if(5*thr-field.water_ec<=0)out.leaching_impossible=true;
+    else{const lr=field.water_ec/(5*thr-field.water_ec);out.leaching_fraction=lr;if(lr<1)out.effective_efficiency=Math.min(efficiency,1-lr);else out.leaching_impossible=true;}
+  }
+  if(field.soil_ec!==null&&field.soil_ec!==undefined)out.salinity_yield_loss_pct=Math.min(100,Math.max(0,b*(field.soil_ec-thr)));
+  return out;
+}
 // Fraction of the soil surface wetted, FAO-56 Table 20: trickle 0.3-0.4 (midpoint, subsurface the same); others unreduced.
 export const WETTED_FRACTION = {drip:.35,subsurface:.35,sprinkler:1,pivot:1,furrow:1};
 export const METHODS = {drip:[5,.90],subsurface:[5,.90],sprinkler:[20,.75],pivot:[20,.75],furrow:[40,.50]};
@@ -64,7 +78,7 @@ export function parseField(data) {
     yesterday:capacity(soil,profile.zr,profile.p)[1]*factors[data.moisture_condition],
     moisture_condition:data.moisture_condition,field_type,saline:saline==='yes',
     power_price:opt('power_price',0,10000),pump_power_kw:opt('pump_power_kw',.000001,100000),
-    pump_productivity_m3h:opt('pump_productivity_m3h',.000001,1e6),greenhouse_et0:opt('greenhouse_et0',0,50)};
+    pump_productivity_m3h:opt('pump_productivity_m3h',.000001,1e6),greenhouse_et0:opt('greenhouse_et0',0,50),water_ec:opt('water_ec',0,25),soil_ec:opt('soil_ec',0,50)};
 }
 export function economics(gross,deficit,field) {
   const traditional_m3=deficit*10*field.area_ha/METHODS.furrow[1];
@@ -87,8 +101,8 @@ export function calculate(field,et0,rain) {
   const unbounded=field.yesterday+(etc-peff),deficit=Math.min(taw,Math.max(0,unbounded));
   const [tech_threshold,efficiency]=METHODS[field.method],threshold=Math.min(tech_threshold,raw);
   const status=deficit-raw>1e-9?'critical':deficit>=threshold||Math.abs(deficit-threshold)<=1e-9?'irrigate':'deferred';
-  const net_m3=status==='deferred'?0:deficit*10*field.area_ha,gross_m3=net_m3/efficiency;
-  return {status,taw,raw,deficit,unbounded,overflow:Math.max(0,unbounded-taw),rain_excess:Math.max(0,-unbounded),et0,rain,peff,etc,ks,kc:field.kc,zr:field.zr,p:field.p,threshold,tech_threshold,efficiency,net_m3,gross_m3,...economics(gross_m3,deficit,field)};
+  const net_m3=status==='deferred'?0:deficit*10*field.area_ha,salt=salinity(field,efficiency),gross_m3=net_m3/salt.effective_efficiency;
+  return {status,taw,raw,deficit,unbounded,overflow:Math.max(0,unbounded-taw),rain_excess:Math.max(0,-unbounded),et0,rain,peff,etc,ks,kc:field.kc,zr:field.zr,p:field.p,threshold,tech_threshold,efficiency,net_m3,gross_m3,leaching_fraction:salt.leaching_fraction,leaching_impossible:salt.leaching_impossible,salinity_yield_loss_pct:salt.salinity_yield_loss_pct,...economics(gross_m3,deficit,field)};
 }
 export function fieldKey(payload,field) {
   const lat=number(payload.lat??payload.latitude,'latitude',-90,90),lon=number(payload.lon??payload.longitude,'longitude',-180,180);
