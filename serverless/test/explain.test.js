@@ -66,3 +66,15 @@ test('self-check: compares model and farmer answers, flags a steady bias, change
   const two=mk({},{checks:[{time:NOW-2,before:0,value_mm:raw},{time:NOW-1,before:0,value_mm:raw}]});assert.equal(selfCheck(two.row,two.r).bias,'none');   // fewer than 3: no suggestion
   const wetter=mk({},{checks:[1,2,3].map(i=>({time:NOW-i,before:raw*.9,value_mm:0}))});assert.equal(selfCheck(wetter.row,wetter.r).bias,'model_drier');
 });
+
+import {checkAge,needsCheck,checkNudge,CHECK_DUE_DAYS} from '../tgcloud/lib/explain.js';
+test('manual reminder: fields not checked for more than 7 days are flagged, with the age; rice and unsupported are not',()=>{
+  const never=mk();assert.equal(checkAge(never.row,NOW),null);assert.ok(needsCheck(never.row,NOW));assert.match(checkNudge(never.row,'en',NOW),/not been checked yet/);
+  const fresh=mk({},{checks:[{time:NOW-3*86400000,level:'normal'}]});assert.equal(checkAge(fresh.row,NOW),3);assert.ok(!needsCheck(fresh.row,NOW));assert.equal(checkNudge(fresh.row,'en',NOW),'');
+  const old=mk({},{checks:[{time:NOW-(CHECK_DUE_DAYS+2)*86400000,level:'dry'}]});assert.match(checkNudge(old.row,'ru',NOW),/9 дн\. назад/);
+  const reset=mk({},{checks:[{time:NOW-86400000}],reset_at:NOW});assert.equal(checkAge(reset.row,NOW),null);   // a check from before a restart does not count
+  const rice=mk({crop:'rice'});assert.ok(!needsCheck(rice.row,NOW));
+  assert.ok(!needsCheck(mk({crop:'tomato',field_type:'greenhouse',greenhouse_medium:'substrate'}).row,NOW));
+  const card=report(never.row,'en');assert.match(card,/🔔/);assert.equal((card.match(/Confirm soil moisture/g)??[]).length,0,'no duplicate request');
+  assert.doesNotMatch(report(fresh.row,'en'),/🔔/);
+});
