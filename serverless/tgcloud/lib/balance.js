@@ -2,13 +2,14 @@
 export const VERSION = 'fao56.6';
 // A pump cannot run all 24 hours; a volume above one day's pumping is advised over several days.
 export const PUMP_MAX_HOURS_PER_DAY = 20;
-export const SOILS = {sand:[.12,.05],loam:[.33,.18],clay:[.45,.30]};
+// FAO-56 Table 19 midpoints: theta_FC and theta_WP lie inside the printed ranges, available water 0.07 / 0.15 / 0.15.
+export const SOILS = {sand:[.12,.05],loam:[.25,.10],clay:[.36,.21]};
 export const CROPS = {
   wheat:[.55,.25,1.25,[.30,1.15,.35],[20,25,60,30]],
   cotton:[.65,.25,1.35,[.35,1.18,.65],[30,50,60,55]],
   corn:[.55,.25,1.35,[.30,1.20,.50],[20,35,40,30]],
   alfalfa:[.55,.30,1.50,[.40,1.20,1.15],[10,20,20,10]],
-  melon:[.45,.25,1.15,[.45,1.05,.75],[25,35,40,20]],
+  melon:[.45,.25,1.15,[.50,1.05,.75],[25,35,40,20]],
   tomato:[.40,.25,1.10,[.60,1.15,.80],[30,40,45,30]],
   potato:[.35,.20,.50,[.50,1.15,.75],[25,30,45,30]]
 };
