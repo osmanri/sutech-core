@@ -1,9 +1,7 @@
 """ET0 validation against FAO-56 Example 18 (Uccle/Brussels, 6 July) and basic invariants.
 
-Reference values es = 1.997 kPa and Ra = 41.088 MJ m-2 day-1 were confirmed against the
-R package ETo vignette, which uses the same data. The final ET0 = 3.9 mm/day and
-Rn = 13.28 MJ m-2 day-1 are the values recalled from FAO-56 Example 18 and have NOT yet
-been checked against the printed book: verify them in the FAO-56 PDF (Chapter 4).
+Checked against the text of FAO-56 Chapter 4 (fao.org) on 17 November 2026: es = 1.997 kPa, Ra = 41.09
+MJ m-2 day-1, Rs = 22.07, Rn = 13.28 MJ m-2 day-1 and ET0 = 3.88, rounded by the book to 3.9 mm/day.
 """
 
 import unittest

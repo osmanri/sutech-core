@@ -10,3 +10,6 @@ Done with the `scientific-thinking-literature-review` workflow, **three web sear
 
 Still to verify against primary text: R3 (authors, year, journal), R5 (authors, year), R6 (the 32–35% figure and country), R4 (extension claims are not peer-reviewed), Example 18 ET₀ value in FAO-56.
 Searches that found nothing: published evaluations of messaging-bot irrigation tools; farmer soil check as correction of forecast bias.
+
+## Verification pass, 17 November 2026
+R3: Vozhehova et al. 2018, J. Water Land Dev. 39:147-152 (Ukraine field data, not Czech); R5: Ferreira et al. 2020, Pesq. Agropec. Bras. 55 (IrriMobile; +8 % and +19 %); R6: Nangia 2016 conference presentation (Uzbekistan pilots, 32-35 %, secondary summary only). Example 18 of FAO-56 checked against the text of Chapter 4. Still to do: a systematic search on Scopus or Google Scholar before any claim of novelty.
