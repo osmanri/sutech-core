@@ -162,6 +162,26 @@ def field_for(crop: str, soil: str, method: str, day: int):
     return parse_field(payload(crop, soil, method, day))
 
 
+# Optional departure of the TRUE crop/soil from the parameters the app (and its engine) believes:
+# Kc multiplied by kc_mult, plant-available soil water by taw_mult. Default: truth = model.
+# Used by research/misspecified.py to remove the 'model checks itself' circularity.
+_TRUTH = {"kc_mult": 1.0, "taw_mult": 1.0}
+
+
+class truth_differs:
+    """Context manager: run every season inside it with a mis-specified truth."""
+    def __init__(self, kc_mult: float = 1.0, taw_mult: float = 1.0) -> None:
+        self.new = {"kc_mult": kc_mult, "taw_mult": taw_mult}
+
+    def __enter__(self):
+        self.old = dict(_TRUTH)
+        _TRUTH.update(self.new)
+        return self
+
+    def __exit__(self, *exc):
+        _TRUTH.update(self.old)
+
+
 Decide = Callable[[int, float, float, float, object], float]  # -> net mm to apply today
 
 
@@ -176,12 +196,13 @@ def run_season(crop: str, soil: str, method: str, weather: list[tuple[float, flo
     for day, ((et0, rain), (f_et0, f_rain)) in enumerate(zip(weather, forecast, strict=True)):
         field = field_for(crop, soil, method, day)
         taw, raw = root_zone_capacity(soil, field.zr, field.p)
+        taw, raw = taw * _TRUTH["taw_mult"], raw * _TRUTH["taw_mult"]
         dr = min(dr, taw)  # roots grew: depletion is relative to the new, deeper zone
         if day == 0:
             s.dr_start = dr
         net = max(0.0, decide(day, dr, f_et0, f_rain, field))
         ks = stress_coefficient(dr, taw, raw, field.p)
-        etm = et0 * field.kc
+        etm = et0 * field.kc * _TRUTH["kc_mult"]
         eta = etm * ks
         peff = 0.0 if rain < 5 else rain * 0.75
         unbounded = dr + eta - peff - net
@@ -214,7 +235,7 @@ def sutech_decider(crop: str, soil: str, method: str, app_soil: str | None = Non
             noise = rng.gauss(0.0, sensor_sd_mm) if (rng and sensor_sd_mm) else 0.0
             reading = max(0.0, true_dr + noise)
             if categorical:
-                raw = root_zone_capacity(soil, field.zr, field.p)[1]
+                raw = root_zone_capacity(soil, field.zr, field.p)[1] * _TRUTH["taw_mult"]  # the farmer judges the real soil
                 reading = min((0.0, raw / 2, raw), key=lambda level: abs(level - reading))
             state["d"] = reading
         if app_soil and app_soil != soil:
@@ -250,7 +271,7 @@ def mean_daily_demand(crop: str, soil: str, method: str, seasons: list[list[tupl
     total, n = 0.0, 0
     for w in seasons:
         for day, (et0, rain) in enumerate(w):
-            kc = field_for(crop, soil, method, day).kc
+            kc = field_for(crop, soil, method, day).kc * _TRUTH["kc_mult"]
             total += kc * et0 - (0.0 if rain < 5 else rain * 0.75)
             n += 1
     return max(0.0, total / n)
