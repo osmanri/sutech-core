@@ -2,6 +2,10 @@
 
 Dates are 2026. The engine version is the `VERSION` constant of `serverless/tgcloud/lib/balance.js` (the same string as `CALCULATION_VERSION` in `bot/water_balance.py`).
 
+## Unreleased, 18 November
+- **Mini App interface refined.** Preserved the logo and green brand palette while replacing glass, background gradients, emoji crop illustrations and the decorative ticker with readable field controls and a calmer map workspace. Added short selection and help transitions, visible keyboard focus and a skip link; reduced-motion preferences apply to live interactions and submission. RU/KZ/EN, automatic themes and the existing calculation/Telegram flows are preserved.
+- **Website verification on Windows.** Demo imports use file URLs and the results test accepts CRLF line endings; browser checks cover responsive layouts, themes, validation and motion.
+
 ## Unreleased, 17 November
 - **Engine fao56.10: greenhouse applicability applies to every crop.** Rice no longer bypasses the substrate/heated-greenhouse restrictions. Legacy saved advice is checked again before display or watering; old buttons and persisted watering conversations cannot continue a watering flow for an unsupported case. Python reports and explanations show the restriction without a volume or a fabricated cost saving. The Mini App now sends greenhouse settings for rice too. Python/JavaScript crop matrices and stored-field regressions cover the restriction.
 
