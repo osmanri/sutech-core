@@ -1,6 +1,6 @@
 import {checkNudge,needsCheck,confidence,confidenceLine,whyCard,volumeRounded,firstDayNote,detailsBlock} from './explain.js';
 import {calculate,fieldKey,number,METHODS,VERSION,economics,PUMP_MAX_HOURS_PER_DAY,salinity,applicableResult} from './balance.js';
-import {get,put,list,lock,unlock,ownerId,nonce} from './store.js';
+import {get,putGuarded,list,lock,unlock,ownerId,nonce} from './store.js';
 import {weather} from './weather.js';
 import {parseField,cleanExpert,KEYS} from './expert.js';
 import {tr,t,esc,fmt,volume} from './i18n.js';
@@ -82,38 +82,41 @@ export async function calculateField(id,payload) {
   ownerId(id);const parsed=parseField(payload),key=fieldKey(payload,parsed);
   const guard=`field-key:${id}:${key}`,token=await lock(guard,45);if(!token)throw new Error('busy');
   try {
-    const existing=(await list(id,'field',100)).find(f=>f.key===key);
+    let existing=(await list(id,'field',100)).find(f=>f.key===key);
     const lat=number(payload.latitude??payload.lat,'latitude',-90,90),lon=number(payload.longitude??payload.lon,'longitude',-180,180);
     const w=await weather(lat,lon),clean={...payload,latitude:lat,longitude:lon};
     if(existing){
-      migrate(existing,w.day);
       // The planting date is kept from the stored field (the form may resend a stale day count from a
       // saved draft); only a change of the field itself restarts the balance.
-      if(PHYSICAL.some(k=>!same(existing.payload[k],payload[k]))){
-        // The farmer corrected the field itself: start the balance again from the new inputs.
-        if(existing.payload.expert)clean.expert=existing.payload.expert;
-        const row=freshRow(existing.id,key,clean,w,parsed);
-        Object.assign(row,{events:existing.events??[],checks:existing.checks??[],reset_at:Date.now(),revision:(existing.revision??1)+1,submit:'reset'});
-        await put(`field:${row.id}`,id,'field',row);await saveCalculation(id,row);return row;
-      }
-      if(COSTS.some(k=>!same(existing.payload[k],payload[k]))){
+      if(PHYSICAL.some(k=>!same(existing.payload[k],payload[k]))||COSTS.some(k=>!same(existing.payload[k],payload[k]))){
         const guard2=`field:${existing.id}`,t2=await lock(guard2,45);if(!t2)throw new Error('busy');
         try{
-          const row=await ownedField(id,existing.id);migrate(row,w.day);
+          // A soil check/watering may have completed while weather was loading.
+          existing=await ownedField(id,existing.id);migrate(existing,w.day);
+          if(PHYSICAL.some(k=>!same(existing.payload[k],payload[k]))){
+            // The farmer corrected the field itself: start from the new inputs.
+            if(existing.payload.expert)clean.expert=existing.payload.expert;
+            const row=freshRow(existing.id,key,clean,w,parsed);
+            Object.assign(row,{events:existing.events??[],checks:existing.checks??[],reset_at:Date.now(),revision:(existing.revision??1)+1,submit:'reset'});
+            const fence={lease:[guard2,t2],parentLease:[guard,token]};
+            await putGuarded(`field:${row.id}`,id,'field',row,fence);await saveCalculation(id,row,fence);return row;
+          }
+          const row=existing;
           for(const k of COSTS)row.payload[k]=payload[k]??null;
           recompute(row,w);row.revision++;row.submit='costs';
-          await put(`field:${row.id}`,id,'field',row);return row;
+          await putGuarded(`field:${row.id}`,id,'field',row,{lease:[guard2,t2],parentLease:[guard,token]});return row;
         } finally {await unlock(guard2,t2);}
       }
-      const row=await refresh(id,existing.id,w);row.submit='existing';return row;
+      const row=await refresh(id,existing.id,w,[guard,token]);row.submit='existing';return row;
     }
     const row=freshRow(Date.now()*100+Math.floor(Math.random()*100),key,clean,w,parsed);row.submit='new';
-    await put(`field:${row.id}`,id,'field',row);
-    await saveCalculation(id,row);
+    const fence={lease:[guard,token]};
+    await putGuarded(`field:${row.id}`,id,'field',row,fence);
+    await saveCalculation(id,row,fence);
     return row;
   } finally {await unlock(guard,token);}
 }
-export async function refresh(id,fieldId,w=null) {
+export async function refresh(id,fieldId,w=null,parentLease=null) {
   const guard=`field:${fieldId}`,token=await lock(guard,45);if(!token)throw new Error('busy');
   try {
     const row=await ownedField(id,fieldId);w??=await weather(row.payload.latitude,row.payload.longitude);
@@ -123,7 +126,8 @@ export async function refresh(id,fieldId,w=null) {
     if(!legacy&&row.last_day===w.day&&row.weather?.et0===w.et0&&row.weather?.rain===w.rain)return row;
     const newDay=row.last_day!==w.day;
     recompute(row,w);row.revision++;
-    await put(`field:${fieldId}`,id,'field',row);if(newDay)await saveCalculation(id,row);return row;
+    const fence={lease:[guard,token],parentLease};
+    await putGuarded(`field:${fieldId}`,id,'field',row,fence);if(newDay)await saveCalculation(id,row,fence);return row;
   } finally {await unlock(guard,token);}
 }
 export async function waterField(id,fieldId,applied,expected,revision=null) {
@@ -137,7 +141,7 @@ export async function waterField(id,fieldId,applied,expected,revision=null) {
     const f=parseField(row.payload),before=row.deficit,net_mm=applied*METHODS[f.method][1]/(10*f.area_ha);
     row.events=[...(row.events??[]),{time:Date.now(),day:row.last_day,applied_m3:applied,net_mm,before}].slice(-365);
     row.deficit=stepDay(row,row.last_day,row.closed_deficit,row.weather).end;row.events.at(-1).after=row.deficit;row.revision++;
-    await put(`field:${fieldId}`,id,'field',row);return row;
+    await putGuarded(`field:${fieldId}`,id,'field',row,{lease:[guard,token]});return row;
   } finally {await unlock(guard,token);}
 }
 export async function checkMoisture(id,fieldId,level,revision=null) {
@@ -151,11 +155,11 @@ export async function checkMoisture(id,fieldId,level,revision=null) {
     const base=currentResult(row),before=row.deficit,value_mm=Math.min(base.taw,SOIL_LEVELS[level]*base.raw);
     row.checks=[...(row.checks??[]),{time:Date.now(),day:row.last_day,level,value_mm,before}].slice(-365);
     row.deficit=stepDay(row,row.last_day,row.closed_deficit,row.weather).end;row.checks.at(-1).after=row.deficit;row.revision++;
-    await put(`field:${fieldId}`,id,'field',row);return row;
+    await putGuarded(`field:${fieldId}`,id,'field',row,{lease:[guard,token]});return row;
   } finally {await unlock(guard,token);}
 }
-export async function saveCalculation(id,row) {
-  await put(`report:${nonce()}`,id,'report',{field_id:row.id,payload:row.payload,result:row.result,weather:row.weather,created:Date.now()});
+export async function saveCalculation(id,row,fence) {
+  await putGuarded(`report:${nonce()}`,id,'report',{field_id:row.id,payload:row.payload,result:row.result,weather:row.weather,created:Date.now()},fence);
 }
 export async function card(id,fieldId) {
   const row=await refresh(id,fieldId),f=parseField(row.payload),r=currentResult(row);
@@ -198,6 +202,6 @@ export async function setExpert(id,fieldId,key,value) {
     parseField(row.payload);
     row.expert_log=[...(row.expert_log??[]),{time:Date.now(),key,from:was[key]??null,to:next[key]??null}].slice(-100);
     recompute(row,w);row.revision++;
-    await put(`field:${fieldId}`,id,'field',row);return row;
+    await putGuarded(`field:${fieldId}`,id,'field',row,{lease:[guard,token]});return row;
   } finally {await unlock(guard,token);}
 }

@@ -14,6 +14,24 @@ export async function put(id,owner,kind,value) {
 export async function list(owner,kind,limit=50,offset=0) {
   return (await db.all('SELECT id,body,updated FROM records WHERE owner=:owner AND kind=:kind ORDER BY updated DESC,id DESC LIMIT :limit OFFSET :offset',{':owner':owner,':kind':kind,':limit':Math.min(100,Math.max(1,limit)),':offset':Math.max(0,offset)})).map(decode);
 }
+// Fence a delayed writer in the same statement as its write. An expired worker
+// must not overwrite a retry that has already acquired a new lease token.
+export async function putGuarded(id,owner,kind,value,{lease=null,parentLease=null,generation=null,mode=null}={}) {
+  const {_id,_updated,...body}=value;
+  const result=await db.run(`INSERT INTO records(id,owner,kind,body,updated)
+    SELECT :id,:owner,:kind,:body,:time WHERE (:guard IS NULL OR EXISTS(
+      SELECT 1 FROM leases WHERE id=:guard AND token=:token AND until>:time))
+    AND (:parent IS NULL OR EXISTS(
+      SELECT 1 FROM leases WHERE id=:parent AND token=:parentToken AND until>:time))
+    AND (:generation IS NULL OR EXISTS(
+      SELECT 1 FROM records WHERE id=:user AND owner=:owner
+      AND json_extract(body,'$.generation')=:generation AND (:mode IS NULL OR json_extract(body,'$.mode')=:mode)))
+    ON CONFLICT(id) DO UPDATE SET body=excluded.body,updated=excluded.updated
+      WHERE records.owner=excluded.owner AND records.kind=excluded.kind RETURNING id`,{
+    ':id':id,':owner':owner,':kind':kind,':body':JSON.stringify(body),':time':now(),':guard':lease?.[0]??null,':token':lease?.[1]??null,
+    ':parent':parentLease?.[0]??null,':parentToken':parentLease?.[1]??null,':user':`user:${owner}`,':generation':generation,':mode':mode});
+  if(!result.rows?.length)throw new Error(generation===null?'busy':'stale');
+}
 export async function remove(id,owner,kind) {await db.run('DELETE FROM records WHERE id=:id AND owner=:owner AND kind=:kind',{':id':id,':owner':owner,':kind':kind});}
 export function nonce() {return `${now().toString(36)}-${Math.random().toString(36).slice(2)}-${Math.random().toString(36).slice(2)}`;}
 export async function lock(id,seconds=60) {

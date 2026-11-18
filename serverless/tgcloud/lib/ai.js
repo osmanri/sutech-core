@@ -1,5 +1,5 @@
 import {fetch,api} from 'sdk';
-import {get,put,list,lock,unlock,setting,reserveAI,user,saveUser,nonce} from './store.js';
+import {get,putGuarded,list,lock,unlock,setting,reserveAI,user,saveUser,nonce} from './store.js';
 import {inScope} from './scope.js';
 import {PROMPTS} from './knowledge.js';
 import {screen,aiKeys} from './ui.js';
@@ -22,11 +22,15 @@ export async function providerReply({key,model,text,lang,history=[],image=null,d
  const parts=[{text}];
  if(image)parts.unshift({inlineData:{mimeType:imageMime(image),data:base64(image)}});
  const gen=model.startsWith('gemini-3')?{maxOutputTokens:4096,thinkingConfig:{thinkingLevel:deep?'MEDIUM':'LOW'}}:{temperature:.25,maxOutputTokens:1200};
+ // Acceptance deadline only: SDK fetch cannot be interrupted on the live host.
+ const deadline=Date.now()+25000;
  const response=await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`,{
   method:'POST',headers:{'Content-Type':'application/json','x-goog-api-key':key},
   body:JSON.stringify({systemInstruction:{parts:[{text:(PROMPTS[lang]??PROMPTS.ru)+CONVERSATION_STYLE+evidence}]},contents:[...history,{role:'user',parts}],generationConfig:gen})});
+ if(Date.now()>=deadline)throw new Error('unavailable');
  if(!response.ok){const error=new Error(response.status===429?'quota':[400,401,403,404].includes(response.status)?'configuration':'unavailable');error.httpStatus=response.status;throw error;}
- const data=await response.json(),candidate=data.candidates?.[0];
+ const data=await response.json();if(Date.now()>=deadline)throw new Error('unavailable');
+ const candidate=data.candidates?.[0];
  if(!candidate||!['STOP','MAX_TOKENS',undefined].includes(candidate.finishReason))throw new Error('no_answer');
  const answer=(candidate.content?.parts??[]).filter(p=>typeof p.text==='string'&&!p.thought).map(p=>p.text).join('\n').trim().slice(0,3500);
  if(!answer)throw new Error('no_answer');
@@ -36,6 +40,7 @@ export async function providerReply({key,model,text,lang,history=[],image=null,d
 export async function generate(id,text,lang,image=null,deep=false) {
  if(text.length>2000)throw new Error('long_text');
  const guard=`ai:${id}`,token=await lock(guard,75);if(!token)throw new Error('busy');
+ const deadline=Date.now()+60000;
  try {
   const u=await user(id),generation=u.generation;
   const local=image?null:quickReply(text,lang);
@@ -55,12 +60,16 @@ export async function generate(id,text,lang,image=null,deep=false) {
   await api.sendChatAction({chat_id:id,action:'typing'});
   const outcome=image?await recognize(image,u.photoCrop,await diagnosisConfig(id)):null;
   if((await user(id)).generation!==generation)return {cancelled:true};
+  if(Date.now()>=deadline)throw new Error('unavailable');
   const evidence=(image?cropPrompt(u.photoCrop):'')+diagnosisPrompt(outcome);
   let reply;
   try{reply=await providerReply({key,model,text,lang,history,image,deep,evidence});}
   catch(e){
-   if(!deep&&![500,502,503,504].includes(e.httpStatus))throw e;
+   // One explicit transient failure can be retried. Unknown network failures,
+   // expired responses, auth and quota errors must not start another request.
+   if(![500,502,503,504,...(deep?[400,404]:[])].includes(e.httpStatus))throw e;
    if((await user(id)).generation!==generation)return {cancelled:true};
+   if(Date.now()>=deadline)throw new Error('unavailable');
    if(deep){model=await setting('gemini_model');history=image?[]:session?.model===model?session.history:[];reply=await providerReply({key,model,text,lang,history,image,deep:false,evidence});reply.answer=a(lang,'deep_fallback')+'\n\n'+reply.answer;}
    else reply=await providerReply({key,model,text,lang,history,image,deep,evidence});
   }
@@ -70,13 +79,16 @@ export async function generate(id,text,lang,image=null,deep=false) {
   const latest=await user(id);
   // A late AI response must not replace a screen the farmer has navigated to.
   if(latest.generation!==generation||latest.mode!=='ai')return {cancelled:true};
+  if(Date.now()>=deadline)throw new Error('unavailable');
   history=[...history,{role:'user',parts:[{text:(image?'[new plant photo] ':'')+text}]},{role:'model',parts:responseParts}].slice(-8);
-  await put(`ai-context:${id}`,id,'ai-context',{history,model});
+  const fence={lease:[guard,token],generation,mode:'ai'};
+  await putGuarded(`ai-context:${id}`,id,'ai-context',{history,model},fence);
   const answerId=`ai-answer:${nonce()}`;
-  await put(answerId,id,'ai-answer',{question:text,answer,model,has_image:!!image,created:Date.now()});
+  await putGuarded(answerId,id,'ai-answer',{question:text,answer,model,has_image:!!image,created:Date.now()},fence);
   try{await recordComparison(id,outcome,answerId);}catch{/* Optional shadow telemetry must not discard an answer. */}
   await screen(id,answer,aiKeys(lang),generation,true);return {ok:true,characters:answer.length};
- } finally {await unlock(guard,token);}
+ } catch(e){if(e.message==='stale')return {cancelled:true};throw e;}
+ finally {await unlock(guard,token);}
 }
 export async function aiHistory(id,lang,page=0) {
  const items=await list(id,'ai-answer',5,page*5);

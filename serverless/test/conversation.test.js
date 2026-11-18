@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {db,messages,setFetch} from 'sdk';
+import {db,messages,liveMessages,setFetch} from 'sdk';
 import {user,get,put,saveUser} from '../tgcloud/lib/store.js';
 import {navigate,homeKeys,button} from '../tgcloud/lib/ui.js';
 import {generate} from '../tgcloud/lib/ai.js';
@@ -21,7 +21,8 @@ test('analysis requests without photos explain both options instead of rejecting
  for(const [index,lang,text,expected] of [[0,'ru','сможешь сделать анализ без фото?',/Да.*(?:могу|помогу)/s],[1,'ru','Привет! Можешь сделать анализ?',/Да.*(?:могу|помогу)/s],[2,'kz','Фотосыз талдау жасай аласың ба?',/Иә/],[3,'en','Can you analyze without a photo?',/Yes/]]){
   const id=2210+index;await user(id,lang);const u=await navigate(id,'ai');u.keyboardReset=true;u.aiDeep=true;await saveUser(id,u);
   await message({message_id:900+index,chat:{id,type:'private'},from:{id},text},{});
-  assert.match(messages.at(-1).params.text,expected);assert.equal((await user(id)).aiDeep,true);
+  const current=await user(id);
+  assert.match(liveMessages.get(`${id}:${current.screen}`).text,expected);assert.equal(current.aiDeep,true);
   assert.equal((await db.get('SELECT COUNT(*) n FROM ai_usage_v2 WHERE owner=:owner',{':owner':id})).n,0);
  }
 });
