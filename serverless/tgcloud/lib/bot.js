@@ -151,6 +151,7 @@ export async function action(id,data) {
   if(type==='delete')return show(tr(lang,'Удалить это поле?','Бұл алқап жойылсын ба?','Delete this field?'),keyboard([[button(tr(lang,'Удалить','Жою','Delete'),`confirmdelete:${value}`),button(t(lang,'btn_cancel'),`field:${value}`)]]));
   if(type==='confirmdelete'){await remove(`field:${value}`,id,'field');return fieldsScreen(id,lang,0,u.generation);}
   if(type==='water'){
+   if(currentResult(row).status==='unsupported')return show(report(row,lang),fieldButtons(row,lang));
    u.mode='water';u.water={id:row.id,expected:row.deficit,revision:row.revision};await saveUser(id,u);
    return show(tr(lang,'Сколько воды подали на самом деле? Введите объём в м³. Например: 0.2\n\nПодтверждайте только выполненный полив.','Нақты қанша су берілді? Көлемді м³-пен жазыңыз. Мысалы: 0.2\n\nТек орындалған суаруды растаңыз.','How much water did you actually apply? Enter m³, for example: 0.2.\n\nRecord only completed irrigation.'),keyboard([[button(t(lang,'btn_cancel'),`field:${value}`)]]));
   }
@@ -225,8 +226,14 @@ export async function message(m,ctx) {
   }catch(e){const [lo,hi]=LIMITS[u.expert.key];return screen(id,e.message==='busy'?tr(u.lang,'Поле занято, повторите.','Алқап бос емес, қайталаңыз.','The field is busy, try again.'):tr(u.lang,`Введите число от ${lo} до ${hi}.`,`${lo}-ден ${hi}-ге дейінгі санды енгізіңіз.`,`Enter a number from ${lo} to ${hi}.`),keyboard([[button(t(u.lang,'btn_cancel'),`expert:${u.expert.id}`)]]),u.generation);}
  }
  if(u.mode==='water'){
-  try{const f=await waterField(id,u.water.id,text,u.water.expected,u.water.revision);await navigate(id);return screen(id,report(f,u.lang),fieldButtons(f,u.lang));}
-  catch(e){return screen(id,e.message==='balance_changed'?tr(u.lang,'Баланс изменился. Откройте поле снова.','Баланс өзгерді. Алқапты қайта ашыңыз.','The balance changed. Reopen the field.'):tr(u.lang,'Введите фактический объём в м³, например 0.2.','Нақты көлемді м³-пен жазыңыз, мысалы 0.2.','Enter the actual volume in m³, such as 0.2.'),keyboard([back(u.lang)]));}
+  try{
+   const row=await ownedField(id,u.water.id);
+   if(currentResult(row).status==='unsupported'){await navigate(id);return screen(id,report(row,u.lang),fieldButtons(row,u.lang));}
+   const f=await waterField(id,u.water.id,text,u.water.expected,u.water.revision);await navigate(id);return screen(id,report(f,u.lang),fieldButtons(f,u.lang));
+  }catch(e){
+   if(e.message==='unsupported'){const row=await ownedField(id,u.water.id);await navigate(id);return screen(id,report(row,u.lang),fieldButtons(row,u.lang));}
+   return screen(id,e.message==='balance_changed'?tr(u.lang,'Баланс изменился. Откройте поле снова.','Баланс өзгерді. Алқапты қайта ашыңыз.','The balance changed. Reopen the field.'):tr(u.lang,'Введите фактический объём в м³, например 0.2.','Нақты көлемді м³-пен жазыңыз, мысалы 0.2.','Enter the actual volume in m³, such as 0.2.'),keyboard([back(u.lang)]));
+  }
  }
  if(u.mode!=='ai'){
   u=await navigate(id,'ai');

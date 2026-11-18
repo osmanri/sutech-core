@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {calculate,parseField} from '../tgcloud/lib/balance.js';
+import {calculate,parseField,VERSION} from '../tgcloud/lib/balance.js';
 import {confidence,assumptions,sensitivity,whyCard} from '../tgcloud/lib/explain.js';
 import {report} from '../tgcloud/lib/fields.js';
 
@@ -51,7 +51,7 @@ test('polish: rounded volumes, localized units and names, stage and roots, first
   assert.match(firstDayNote(big.f,big.r,'ru'),/накопленный дефицит/);
   const sprinkler=mk({irrigation_type:'furrow',moisture_condition:'dry'});assert.equal(firstDayNote(sprinkler.f,sprinkler.r,'ru'),'');
   const csv=fieldCsv(x.row);
-  assert.match(csv,/^# Su-Tech field export\. Engine fao56\.9/);assert.match(csv,/crop,cotton/);assert.match(csv,/watering: time,applied_m3/);assert.match(csv,/soil_check: time,day,level/);assert.match(csv,/,dry,118\.2,65\.4,118\.2/);
+  assert.ok(csv.startsWith('# Su-Tech field export. Engine '+VERSION+'.'));assert.match(csv,/crop,cotton/);assert.match(csv,/watering: time,applied_m3/);assert.match(csv,/soil_check: time,day,level/);assert.match(csv,/,dry,118\.2,65\.4,118\.2/);
 });
 
 import {selfCheck,selfCheckLines} from '../tgcloud/lib/explain.js';

@@ -7,7 +7,7 @@ No recommendation is treated as evidence that irrigation actually occurred.
 import math
 from dataclasses import dataclass
 
-CALCULATION_VERSION = 'fao56.9'
+CALCULATION_VERSION = 'fao56.10'
 
 # Default screening model for a film-covered greenhouse when no calibrated
 # indoor ET0 measurement is available. The farmer can still supply a measured
@@ -267,6 +267,7 @@ def calculate_balance(field, et0, rain):
     if field.field_type == 'greenhouse':
         et0 = field.greenhouse_et0 if field.greenhouse_et0 is not None else et0 * GREENHOUSE_ET0_FACTOR
         rain = 0.
+    reason = greenhouse_unsupported(field)
     if field.crop == 'rice':
         seepage_map = {'clay': 3.0, 'loam': 6.0, 'sand': 12.0}
         seepage = seepage_map.get(field.soil, 6.0)
@@ -276,9 +277,12 @@ def calculate_balance(field, et0, rain):
         efficiency = 0.50
         net_m3 = net_mm * 10 * field.area_ha
         gross_m3 = net_m3 / efficiency
+        if reason:
+            net_m3, gross_m3 = 0., 0.
         economy = calculate_economics(gross_m3, net_mm, field.area_ha, field.power_price,
                                       field.pump_power_kw, field.pump_productivity_m3h)
-        return dict(status='rice', is_rice=True, water_layer_cm=12, seepage=seepage,
+        return dict(status='unsupported' if reason else 'rice', unsupported_reason=reason,
+                    is_rice=True, water_layer_cm=12, seepage=seepage,
                     etc=etc, et0=et0, rain=rain, peff=peff, net_mm=net_mm,
                     efficiency=efficiency, net_m3=net_m3, gross_m3=gross_m3,
                     raw=0.0, deficit=net_mm, threshold=net_mm, **economy)
@@ -305,7 +309,6 @@ def calculate_balance(field, et0, rain):
     gross = net / salt['effective_efficiency']
     economy = calculate_economics(gross, deficit, field.area_ha, field.power_price,
                                   field.pump_power_kw, field.pump_productivity_m3h)
-    reason = greenhouse_unsupported(field)
     if reason:
         status, net, gross = 'unsupported', 0., 0.
         economy = calculate_economics(0., deficit, field.area_ha, field.power_price,

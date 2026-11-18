@@ -83,14 +83,17 @@ def pump_limit_note(lang, result):
 def format_balance_report(lang, field, result, weather):
     """One decision card; formulas and economics live in its saved explanation."""
     status = result['status']
+    if status == 'unsupported':
+        crop = escape(t(lang, f'report_crop_{field.crop}'))
+        unit = 'ha' if lang == 'en' else 'га'
+        reason = t(lang, f"decision_reason_{result['unsupported_reason']}")
+        return f"<b>{t(lang, 'decision_unsupported')}</b>\n{crop} · {fmt_area(field.area_ha)} {unit}\n\n{reason}"
     if status == 'rice':
         decision = 'rice' if result['gross_m3'] > 0 else 'rice_deferred'
     else:
         decision = status
     reason = decision
-    if status == 'unsupported':
-        reason = result['unsupported_reason']
-    elif status == 'deferred' and result.get('peff', 0) > 0:
+    if status == 'deferred' and result.get('peff', 0) > 0:
         reason = 'rain'
     raw_date = str(weather.get('date', ''))
     try:
@@ -124,6 +127,8 @@ def format_balance_report(lang, field, result, weather):
 
 
 def format_balance_explanation(lang, field, result, weather):
+    if result['status'] == 'unsupported':
+        return format_balance_report(lang, field, result, weather)
     inputs = t(lang, 'balance_rice_inputs', area=fmt_area(field.area_ha),
                soil=escape(t(lang, f'balance_soil_{field.soil}'))) if result['status'] == 'rice' else t(
         lang, 'balance_inputs', area=fmt_area(field.area_ha),

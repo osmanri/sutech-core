@@ -2,7 +2,7 @@
 import unittest
 from dataclasses import replace
 
-from bot.water_balance import CALCULATION_VERSION, calculate_balance, parse_field, stress_coefficient
+from bot.water_balance import calculate_balance, parse_field, stress_coefficient
 
 # Wheat day 60 on loam: Zr = 1.25 m, p = 0.55 -> TAW = 187.5 mm, RAW = 103.125 mm.
 PAYLOAD = dict(balance_version=2, crop='wheat', soil_type='loam', irrigation_type='drip', area=1,
@@ -32,7 +32,6 @@ class StressCoefficient(unittest.TestCase):
         r = calculate_balance(parse_field(PAYLOAD), 5., 0.)
         self.assertEqual(r['ks'], 1.)
         self.assertAlmostEqual(r['deficit'], 108.875)
-        self.assertEqual(CALCULATION_VERSION, 'fao56.9')
 
 
 if __name__ == '__main__':
