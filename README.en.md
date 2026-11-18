@@ -19,7 +19,7 @@ A farmer needs three answers: **irrigate now or wait, how much water to apply, a
 - irrigate / wait decision and volume in m³;
 - pump time, energy and cost;
 - saved fields, daily updates, irrigation log;
-- **soil-moisture check** (wet / normal / dry) that removes accumulated forecast error;
+- **soil-moisture check** (wet / normal / dry) that updates the model from a farmer observation;
 - Russian, Kazakh and English interface;
 - a **jury demo**: `/demo`, step-by-step calculation.
 
@@ -43,17 +43,20 @@ A computer study on **real weather** from five irrigated regions of Kazakhstan, 
 - At equal yield Su-Tech uses **15–28% less water**, in **25 of 25 seasons** for every crop/method combination; in the worst season the saving is 9–20%.
 - Across two soil types and three planting dates (36 combinations) the saving is 14–42% and holds in every season.
 - Against a plain calendar with the same mean dose Su-Tech uses 2–9% **more** water but has no stress days (the calendar has 38–65) and no deep-percolation loss. The saving only exists at equal yield, and should always be stated that way.
-- Random forecast errors are nearly harmless; a **systematic** bias accumulates. A weekly soil-moisture check removes it:
+- Random forecast errors are nearly harmless; a **systematic** bias accumulates. A weekly soil-moisture check compensated for it in the tested simulations. Real farmer classification errors have not been measured:
 
 <p align="center"><img src="docs/img/sensitivity_stress.svg" alt="Stress days under input errors" width="760"></p>
 
 > ⚠️ **This is model-versus-model, not a field measurement.** Weather is NASA POWER reanalysis for regional centres; yield is estimated with the FAO-33 relation. See [research/README.md](research/README.md) (Russian) for the method, limitations and how to reproduce.
 
+
+The published 15–28% uses the study configuration without the initial-Kc wetted-fraction correction. The live fao56.10 engine includes that correction. Reproduction settings and evidence limits: [REPRODUCE.md](REPRODUCE.md), [EVIDENCE.md](docs/EVIDENCE.md).
+
 ## Validation
 
-- Penman–Monteith ET₀ (`bot/et0.py`) reproduces FAO-56 Example 18 (Brussels, 6 July): 3.88 mm/day against a reference of about 3.9. Intermediate values are confirmed by an independent source; the final figure is still being checked against the printed book. See [docs/audits/VALIDATION.md](docs/audits/VALIDATION.md).
+- Penman–Monteith ET₀ (`bot/et0.py`) reproduces FAO-56 Example 18 (Brussels, 6 July): 3.88 mm/day against a reference of about 3.9. Intermediate values are confirmed by an independent source; the final figure has been checked against the example text; this validates one reference calculation. See [docs/audits/VALIDATION.md](docs/audits/VALIDATION.md).
 - The seasonal water balance closes to 10⁻¹² mm over all 500 simulation runs.
-- The Python and JavaScript engines agree on 675 reference scenarios.
+- The Python and JavaScript engines agree on 1,425 reference scenarios.
 
 ## Bench experiment
 
@@ -86,7 +89,7 @@ cd serverless && npm ci --ignore-scripts && npm test
 | Bot, Mini App, calculation, demo | working |
 | ET₀ and balance checked against FAO-56 | yes (Example 18 and tests); CROPWAT comparison **not done yet** |
 | Water saving at equal yield | **model estimate**, not a measurement |
-| Pot experiment | protocol and tools ready, **data still being collected** |
+| Pot experiment | protocol and tools ready, **no measured results published yet** |
 | Crop and soil parameters | project values, not a local calibration |
 | Farm field trial | planned for the 2027 season |
 

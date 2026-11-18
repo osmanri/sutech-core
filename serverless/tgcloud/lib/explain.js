@@ -1,4 +1,4 @@
-// "Why this?": how much to trust today's advice, what was assumed, where each number comes from, and what would change if
+// "Why this?": input completeness, what was assumed, where each number comes from, and what would change if
 // the assumptions were wrong. Pure functions of the stored field: no new calculation, no invented numbers.
 import {CROP_STATUS} from './crops-data.js';
 import {METHODS,SALT_TOLERANCE} from './balance.js';
@@ -6,8 +6,9 @@ import {parseField,describe} from './expert.js';
 import {tr,t,fmt,esc,volume} from './i18n.js';
 
 const DAY=86400000;
+const latestCheck=row=>(row.checks??[]).filter(c=>!(row.reset_at&&c.time<row.reset_at)).at(-1);
 export function confidence(row,field,r,now=Date.now()) {
-  const reasons=[],last=row.checks?.at(-1),ageDays=last?(now-last.time)/DAY:null;
+  const reasons=[],last=latestCheck(row),ageDays=last?(now-last.time)/DAY:null;
   if(r.status==='unsupported'||r.leaching_impossible)return {level:'low',reasons:['unsupported'],raise:'agronomist'};
   if(field.crop!=='rice'&&field.crop!=='other'&&CROP_STATUS[field.crop]!=='FAO-56')reasons.push('crop_stages');
   if(field.crop==='other')reasons.push('crop_custom');
@@ -20,11 +21,11 @@ export function confidence(row,field,r,now=Date.now()) {
   const raise=reasons.includes('no_check')||reasons.includes('old_check')?'check':reasons.includes('saline_unmeasured')?'salinity':reasons.includes('gap')?'gap':reasons.length?'assumptions':null;
   return {level,reasons,raise};
 }
-const LEVEL={high:['🟢','Доверие высокое','Сенімділік жоғары','Confidence: high'],medium:['🟡','Доверие среднее: есть допущения','Сенімділік орташа: болжамдар бар','Confidence: medium, there are assumptions'],low:['🔴','Нужен агроном или проверка','Агроном немесе тексеру қажет','An agronomist or a check is needed']};
+const LEVEL={high:['🟢','Данные указаны, проверка влажности свежая','Деректер енгізілген, ылғал жақында тексерілген','Inputs provided; soil moisture checked recently'],medium:['🟡','Данные: есть допущения или пропуски','Деректер: болжамдар немесе олқылықтар бар','Inputs: assumptions or gaps remain'],low:['🔴','Нужен агроном или проверка данных','Агроном немесе деректерді тексеру қажет','An agronomist or an input check is needed']};
 const RAISE={check:['Подтвердите влажность почвы кнопкой «Проверил влажность почвы».','«Топырақ ылғалын тексердім» батырмасымен ылғалды растаңыз.','Confirm soil moisture with the “I checked the soil moisture” button.'],
   salinity:['Если почва солёная, укажите анализ воды и почвы (ECw, ECe).','Топырақ сортаң болса, су мен топырақ талдауын (ECw, ECe) көрсетіңіз.','If the soil is saline, enter a water and soil analysis (ECw, ECe).'],
   gap:['Проверьте влажность почвы: были дни без данных погоды.','Топырақ ылғалын тексеріңіз: ауа райы деректері жоқ күндер болды.','Check the soil moisture: some days had no weather data.'],
-  assumptions:['Уточните допущения ниже, чтобы поднять доверие.','Сенімділікті көтеру үшін төмендегі болжамдарды нақтылаңыз.','Refine the assumptions below to raise confidence.'],
+  assumptions:['Уточните допущения ниже.','Төмендегі болжамдарды нақтылаңыз.','Refine the assumptions below.'],
   agronomist:['Для этого случая метод расчёта не подходит: обратитесь к агроному.','Бұл жағдайға есеп әдісі жарамайды: агрономға жүгініңіз.','The calculation method does not fit this case: ask an agronomist.']};
 export function confidenceLine(c,lang) {
   const [icon,...text]=LEVEL[c.level],i={ru:0,kz:1,en:2}[lang]??0;
@@ -40,7 +41,7 @@ export function assumptions(row,field,r,lang) {
   lines.push(tr(lang,`КПД полива ${fmt(m[1]*100)}% и порог технологии ${fmt(m[0])} мм: выбор проекта.`,`Суару ПӘК-і ${fmt(m[1]*100)}% және технология шегі ${fmt(m[0])} мм: жоба таңдауы.`,`Irrigation efficiency ${fmt(m[1]*100)}% and technology threshold ${fmt(m[0])} mm are project choices.`));
   lines.push(tr(lang,'Дождь меньше 5 мм не учитывается, иначе 75%: правило проекта.','5 мм-ден аз жауын ескерілмейді, әйтпесе 75%: жоба ережесі.','Rain under 5 mm is ignored, otherwise 75%: a project rule.'));
   if(field.field_type==='greenhouse'&&field.greenhouse_et0==null)lines.push(tr(lang,'Теплица: ET₀ = 0,70 от уличного (допущение, в теплицах не проверено).','Жылыжай: ET₀ = сыртқының 0,70 бөлігі (болжам, жылыжайда тексерілмеген).','Greenhouse: ET₀ = 0.70 of the outdoor value (an assumption, not checked in greenhouses).'));
-  if(!row.checks?.length)lines.push(tr(lang,'Начальная влажность взята по вашему ответу; проверок руками ещё не было.','Бастапқы ылғал сіздің жауабыңыз бойынша алынды; қолмен тексеру әлі болған жоқ.','The starting moisture is your answer; there has been no hand check yet.'));
+  if(!latestCheck(row))lines.push(tr(lang,'Начальная влажность взята по вашему ответу; проверок руками ещё не было.','Бастапқы ылғал сіздің жауабыңыз бойынша алынды; қолмен тексеру әлі болған жоқ.','The starting moisture is your answer; there has been no hand check yet.'));
   return lines;
 }
 export function sources(field,lang) {
@@ -59,7 +60,8 @@ export function sensitivity(field,r,lang) {
 }
 export function whyCard(row,field,r,lang) {
   const c=confidence(row,field,r);
-  return [`<b>${tr(lang,'Почему так? Допущения и источники','Неге осылай? Болжамдар мен дереккөздер','Why this? Assumptions and sources')}</b>`,confidenceLine(c,lang),'',
+  return [`<b>${tr(lang,'Почему так? Допущения и источники','Неге осылай? Болжамдар мен дереккөздер','Why this? Assumptions and sources')}</b>`,confidenceLine(c,lang),
+    tr(lang,'Статус описывает входные данные. Точность модели на этом участке ещё не измерена.','Күй кіріс деректерін сипаттайды. Модельдің осы алқаптағы дәлдігі әлі өлшенбеген.','The status describes the inputs. Model accuracy for this field has not been measured.'),'',
     `<b>${tr(lang,'Мы предположили','Біз болжадық','We assumed')}</b>`,...assumptions(row,field,r,lang).map(x=>'• '+x),'',
     `<b>${tr(lang,'Откуда числа','Сандар қайдан','Where the numbers come from')}</b>`,...sources(field,lang).map(x=>'• '+x),'',
     ...(selfCheckLines(row,r,lang).length?[`<b>${tr(lang,'Самопроверка по полю','Алқап бойынша өзін-өзі тексеру','Field self-check')}</b>`,...selfCheckLines(row,r,lang).map(x=>'• '+x),'']:[]),
@@ -141,5 +143,5 @@ export const needsCheck=(row,now=Date.now())=>{
 export function checkNudge(row,lang,now=Date.now()) {
   if(!needsCheck(row,now))return '';
   const a=checkAge(row,now);
-  return '🔔 '+(a===null?tr(lang,'Влажность почвы ещё ни разу не проверяли. Проверьте и нажмите «Проверил влажность почвы»: так бот точнее.','Топырақ ылғалы әлі тексерілмеген. Тексеріп, «Топырақ ылғалын тексердім» батырмасын басыңыз: бот дәлірек болады.','The soil moisture has not been checked yet. Check it and press “I checked the soil moisture”: the bot gets more accurate.'):tr(lang,`Влажность почвы проверяли ${a} дн. назад. Проверьте снова и нажмите «Проверил влажность почвы».`,`Топырақ ылғалы ${a} күн бұрын тексерілген. Қайта тексеріп, «Топырақ ылғалын тексердім» батырмасын басыңыз.`,`The soil moisture was checked ${a} days ago. Check again and press “I checked the soil moisture”.`));
+  return '🔔 '+(a===null?tr(lang,'Влажность почвы ещё ни разу не проверяли. Проверьте и нажмите «Проверил влажность почвы»: это обновит оценку влажности по вашему наблюдению.','Топырақ ылғалы әлі тексерілмеген. Тексеріп, «Топырақ ылғалын тексердім» батырмасын басыңыз: бұл ылғал бағасын сіздің бақылауыңыз бойынша жаңартады.','The soil moisture has not been checked yet. Check it and press “I checked the soil moisture”: this updates the moisture estimate from your observation.'):tr(lang,`Влажность почвы проверяли ${a} дн. назад. Проверьте снова и нажмите «Проверил влажность почвы».`,`Топырақ ылғалы ${a} күн бұрын тексерілген. Қайта тексеріп, «Топырақ ылғалын тексердім» батырмасын басыңыз.`,`The soil moisture was checked ${a} days ago. Check again and press “I checked the soil moisture”.`));
 }

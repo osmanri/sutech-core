@@ -8,6 +8,26 @@ const P=(c={})=>({balance_version:2,crop:'cotton',soil_type:'loam',irrigation_ty
 const mk=(c={},rowExtra={})=>{const p=P(c),f=parseField(p),r=calculate(f,6,0);return {p,f,r,row:{payload:p,result:r,deficit:r.deficit,last_day:'2026-07-01',weather:{timezone:'Asia/Almaty',et0:6,rain:0},checks:[],gap_days:0,...rowExtra}};};
 const NOW=Date.now();
 
+test('fresh inputs describe data completeness without claiming measured accuracy',()=>{
+ const x=mk({},{checks:[{time:NOW,level:'normal'}]});
+ for(const [lang,label,limit] of [['ru',/Данные/,/точность.*не измерена/i],['kz',/Деректер/,/дәлдігі.*өлшенбеген/i],['en',/Inputs/,/accuracy.*not been measured/i]]){
+  const summary=report(x.row,lang),details=whyCard(x.row,x.f,x.r,lang);
+  assert.match(summary,label);assert.match(details,limit);
+  assert.doesNotMatch(summary,/Доверие высокое|Сенімділік жоғары|Confidence: high/);
+ }
+});
+
+test('checks before a field reset cannot make the new inputs look checked',()=>{
+ const x=mk({},{reset_at:NOW,checks:[{time:NOW-1000,level:'normal'}]});
+ assert.ok(confidence(x.row,x.f,x.r,NOW).reasons.includes('no_check'));
+ assert.match(assumptions(x.row,x.f,x.r,'en').join('\n'),/no hand check/);
+});
+
+test('a manual-check reminder does not promise measured accuracy improvement',()=>{
+ const x=mk();
+ for(const lang of ['ru','kz','en'])assert.doesNotMatch(report(x.row,lang),/так бот точнее|бот дәлірек болады|the bot gets more accurate/i);
+});
+
 test('confidence: high only with FAO-56 crop data and a fresh soil check; each missing piece lowers it and says what raises it',()=>{
   const fresh=mk({},{checks:[{time:NOW-2*86400000,level:'normal'}]});
   assert.equal(confidence(fresh.row,fresh.f,fresh.r,NOW).level,'high');                       // cotton: every number from the tables
