@@ -1,6 +1,7 @@
 # Changelog
 
 ## Unreleased, 18 November
+- External-service failures preserve the original AI question/photo in Telegram. Late weather/Gemini responses are rejected before use, automatic retries exclude quota/auth and uncertain network failures, and delayed database writes cannot take over a newer lease or AI conversation. Field parameter resets preserve checks/watering logged during weather loading. The live SDK has no timers/HTTP cancellation; these are response acceptance deadlines, not hard request timeouts (see `docs/SERVICE_RELIABILITY.md`).
 - Field status now describes input completeness rather than unmeasured confidence. "Why this?" states that field accuracy has not been measured; soil checks before a field reset no longer count as current checks.
 - README, agronomist brief, jury notes and public site copy distinguish simulation results, formula checks and field measurements. `docs/EVIDENCE.md` records the published study configuration versus the live engine. Published result values are unchanged; historical PDF/PPTX regeneration remains in readiness Task 10.
 

@@ -23,6 +23,13 @@ export async function weather(lat,lon) {
   const id=`weather:v2:${lat.toFixed(4)}:${lon.toFixed(4)}`,cached=await get(id,0);
   if(cached&&Date.now()-cached._updated<900000&&new Date(Date.now()+(cached.utc_offset_seconds??0)*1000).toISOString().slice(0,10)===cached.day)return cached;
   const url=`https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&daily=et0_fao_evapotranspiration,precipitation_sum&timezone=auto&forecast_days=1&past_days=${PAST_DAYS}`;
-  try {const r=await fetch(url);if(!r.ok)throw new Error('weather');const data=validateWeather(await r.json());await put(id,0,'weather',data);return data;}
+  // The live SDK has no timers or abort signal. This is a response acceptance
+  // deadline, not transport cancellation; never cache/use a late response.
+  const deadline=Date.now()+15000;
+  try {
+    const r=await fetch(url);if(Date.now()>=deadline||!r.ok)throw new Error('weather');
+    const body=await r.json();if(Date.now()>=deadline)throw new Error('weather');
+    const data=validateWeather(body);await put(id,0,'weather',data);return data;
+  }
   catch {throw new Error('weather');}
 }

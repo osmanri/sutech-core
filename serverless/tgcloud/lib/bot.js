@@ -1,5 +1,5 @@
 import {api,db,InputFile} from 'sdk';
-import {user,saveUser,get,put,list,remove,ownerId,eraseUserData} from './store.js';
+import {user,saveUser,get,putGuarded,list,remove,ownerId,eraseUserData} from './store.js';
 import {tr,t,a,esc,volume,fmt,language} from './i18n.js';
 import {STRINGS,AI_STRINGS} from './copy.js';
 import {screen,navigate,home,homeKeys,languages,aiKeys,button,keyboard,back,ignoreDelete,APP_URL} from './ui.js';
@@ -36,10 +36,10 @@ export async function expertScreen(id,lang,row,show,notice='') {
   [button(t(lang,'btn_cancel'),`field:${row.id}`)]]));
 }
 export async function deliverCalculation(id,payload) {
- const u=await user(id);const generation=u.generation;
- await put(`pending:${id}`,id,'pending',{payload});
- await screen(id,tr(u.lang,'Считаю по погоде поля…','Алқап ауа райы бойынша есептеп жатырмын…','Calculating with field weather…'),keyboard([back(u.lang)]),generation);
+ const u=await navigate(id);const generation=u.generation;
  try {
+  await putGuarded(`pending:${id}`,id,'pending',{payload},{generation});
+  await screen(id,tr(u.lang,'Считаю по погоде поля…','Алқап ауа райы бойынша есептеп жатырмын…','Calculating with field weather…'),keyboard([back(u.lang)]),generation);
   const row=await calculateField(id,payload);
   const notice={reset:tr(u.lang,'Параметры поля изменились — расчёт начат заново по новым данным.','Алқап параметрлері өзгерді — есеп жаңа деректермен басынан басталды.','The field parameters changed, so the balance was restarted from the new data.'),
    costs:tr(u.lang,'Данные насоса обновлены, запас влаги сохранён.','Сорғы деректері жаңартылды, ылғал қоры сақталды.','Pump data updated; the soil-water balance was kept.'),
@@ -47,6 +47,7 @@ export async function deliverCalculation(id,payload) {
   await screen(id,(notice?esc(notice)+'\n\n':'')+report(row,u.lang),fieldButtons(row,u.lang),generation);
   return {ok:true,bot_replied:true,field_id:row.id};
  } catch(e) {
+  if(e.message==='stale')return {ok:false,bot_replied:true,cancelled:true};
   const recoverable=e.message==='weather'||e.message==='busy';
   await screen(id,recoverable?tr(u.lang,'Сейчас не удалось получить погоду. Ввод сохранён — можно повторить.','Ауа райын алу мүмкін болмады. Енгізілген деректер сақталды — қайталауға болады.','Weather is unavailable. Your inputs are saved; you can retry.'):tr(u.lang,'Проверьте параметры участка: культуру, возраст, площадь и координаты.','Алқап параметрлерін тексеріңіз: дақыл, жас, аудан және координаттар.','Check the crop, age, area and coordinates.'),keyboard([[button(tr(u.lang,'Повторить','Қайталау','Retry'),'retry')],back(u.lang)]),generation);
   return {ok:false,bot_replied:true,recoverable};
@@ -200,11 +201,14 @@ function matchingButton(text){
 export async function message(m,ctx) {
  if(m.chat?.type!=='private'||m.chat.id!==m.from?.id)return;
  const id=ownerId(m.from.id),text=(m.text??m.caption??'').trim();let u=await user(id,m.from.language_code);
+ // Keep an AI question/photo in Telegram until its answer is safely saved.
+ // Do not register it for the renderer's sweep while a request can still fail.
+ const keepInput=!text.startsWith('/')&&!matchingButton(text)&&!m.web_app_data&&!['plan','expert','water'].includes(u.mode);
  if(!u.keyboardReset){
   const notice=await api.sendMessage({chat_id:id,text:'Su-Tech',reply_markup:{remove_keyboard:true}});
   await ignoreDelete(id,notice.message_id);u.keyboardReset=true;await saveUser(id,u);
  }
- if(!await ignoreDelete(id,m.message_id))await rememberMessage(id,m.message_id,m.date);
+ if(!keepInput&&!await ignoreDelete(id,m.message_id))await rememberMessage(id,m.message_id,m.date);
  if(text.startsWith('/start')){
   const entry=text.split(/\s+/)[1]??'',match=entry.match(/^(app|ai|pilot|demo)_(ru|kz|en)$/);
   if(match){u.lang=match[2];await saveUser(id,u);return action(id,match[1]);}
@@ -244,7 +248,8 @@ export async function message(m,ctx) {
   if(photo){if(photo.file_size>4194304)throw new Error('large_image');image=await api.getFileContent(photo.file_id);}
   else if(!text)throw new Error('unsupported');
   const deep=!!u.aiDeep;
-  await generate(id,text||(a(u.lang,'photo_prompt')),u.lang,image,deep);
+  const result=await generate(id,text||(a(u.lang,'photo_prompt')),u.lang,image,deep);
+  if(result.ok&&!await ignoreDelete(id,m.message_id))await rememberMessage(id,m.message_id,m.date);
  }catch(e){
   const known=['large_image','bad_image','long_text','busy','cooldown','daily_limit','quota','configuration','not_configured','no_answer','unsupported'];
   const answer=e.message==='off_topic'?tr(u.lang,'С этим не помогу, зато могу подсказать по растениям, поливу и Su-Tech 🌱 Что хочешь узнать?','Бұл сұраққа көмектесе алмаймын, бірақ өсімдік, суару және Su-Tech туралы айта аламын 🌱 Не білгің келеді?','That’s outside my area, but I can help with plants, watering and Su-Tech 🌱 What would you like to know?'):a(u.lang,known.includes(e.message)?e.message:'unavailable');
