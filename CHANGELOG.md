@@ -3,6 +3,7 @@
 Dates are 2026. The engine version is the `VERSION` constant of `serverless/tgcloud/lib/balance.js` (the same string as `CALCULATION_VERSION` in `bot/water_balance.py`).
 
 ## Unreleased, 18 November
+- **Previous Mini App design restored at the owner's request.** Restored the complete pre-unslop layout, copy, typography, crop illustrations and original glass/green surfaces. Kept animation improvements in a separate motion-only stylesheet: transform-based selection continuity, short help reveals, stable controls and live reduced-motion support. Calculation fixes and Windows test compatibility are retained.
 - **Mini App interface refined.** Preserved the logo and green brand palette while replacing glass, background gradients, emoji crop illustrations and the decorative ticker with readable field controls and a calmer map workspace. Added short selection and help transitions, visible keyboard focus and a skip link; reduced-motion preferences apply to live interactions and submission. RU/KZ/EN, automatic themes and the existing calculation/Telegram flows are preserved.
 - **Website verification on Windows.** Demo imports use file URLs and the results test accepts CRLF line endings; browser checks cover responsive layouts, themes, validation and motion.
 
