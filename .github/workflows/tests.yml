@@ -24,11 +24,26 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          submodules: recursive
       - uses: actions/setup-node@v4
         with:
           node-version: "22"
-      - name: Tests that do not need the frontend submodule
+      - name: Bot, calculation engine parity and Mini App transport
         working-directory: serverless
         run: |
           npm ci --ignore-scripts
-          node --experimental-loader ./test/sdk-loader.mjs --test $(ls test/*.test.js | grep -v transport)
+          npm test
+      - name: Frontend regression tests and production build
+        working-directory: serverless
+        run: |
+          for script in ../frontend/test_*.cjs ../frontend/test_*.js; do
+            if [ -f "$script" ]; then node "$script"; fi
+          done
+          npm run build
+      - name: Chromium mobile smoke test
+        working-directory: serverless
+        run: |
+          npm install --no-save --package-lock=false --ignore-scripts playwright@1.55.1
+          npx playwright install --with-deps chromium
+          node test/demo-browser.cjs
