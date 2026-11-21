@@ -21,7 +21,7 @@ jobs:
         working-directory: firmware/host_test
         run: g++ -std=c++17 -Wall -I. test_firmware.cpp -o test_firmware && ./test_firmware
   serverless:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
         with:

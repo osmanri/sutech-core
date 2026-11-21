@@ -215,6 +215,18 @@ class AnalysisTests(unittest.TestCase):
         self.assertIsNone(report["water_ml_per_pot"]["cohens_d"])
         self.assertEqual(json.loads((out / "summary.json").read_text(encoding="utf-8")), report)
 
+    def test_full_analysis(self):
+        self._build()
+        out = self.dir / "results"
+        s = analyse(self.path, 100.0, None, out)
+        self.assertEqual(s["water_ml_per_pot"]["sutech"]["mean"], 40.0)
+        self.assertEqual(s["water_ml_per_pot"]["control"]["mean"], 80.0)
+        self.assertAlmostEqual(s["water_ml_per_pot"]["difference_pct"], -50.0)
+        self.assertLess(s["water_ml_per_pot"]["welch"]["p"], 0.05)
+        self.assertAlmostEqual(s["model_accuracy"]["bias_mm"], 0.5, places=6)
+        for name in ("summary.json", "report.md", "cumulative_water.svg"):
+            self.assertTrue((out / name).exists())
+
 
 class CollectionTests(unittest.TestCase):
     def test_missing_immediate_drainage_is_saved_as_an_unmeasured_dose(self):
@@ -235,19 +247,6 @@ class CollectionTests(unittest.TestCase):
             _, note = load_rows(log)
             self.assertEqual(note["event"], "note")
             self.assertIn("MISSING_IRRIGATION_VOLUME: immediate drainage was not measured", note["note"])
-
-    def test_full_analysis(self):
-        self._build()
-        out = self.dir / "results"
-        s = analyse(self.path, 100.0, None, out)
-        self.assertEqual(s["water_ml_per_pot"]["sutech"]["mean"], 40.0)
-        self.assertEqual(s["water_ml_per_pot"]["control"]["mean"], 80.0)
-        self.assertAlmostEqual(s["water_ml_per_pot"]["difference_pct"], -50.0)
-        self.assertLess(s["water_ml_per_pot"]["welch"]["p"], 0.05)
-        self.assertAlmostEqual(s["model_accuracy"]["bias_mm"], 0.5, places=6)
-        for name in ("summary.json", "report.md", "cumulative_water.svg"):
-            self.assertTrue((out / name).exists())
-
 
 if __name__ == "__main__":
     unittest.main()

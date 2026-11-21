@@ -127,7 +127,13 @@ def main() -> None:
         input("Wait for immediate drainage to finish, then weigh the pot without its catch tray. Press Enter... ")
         try:
             after = stable_weight(bridge)
-            drained = read_volume("  Measured immediate drainage, ml (0 if checked and none): ")
+            drained = read_volume("  Measured immediate drainage, ml (0 if checked and none, Enter if unknown): ",
+                                  allow_blank=True)
+            if drained is None:
+                log.append(pot_id=pot, group=group, event="note",
+                           note=f"MISSING_IRRIGATION_VOLUME: immediate drainage was not measured; post weight {after:.1f} g; {note}")
+                print(f"  ! {pot}: gross water volume is unknown and was logged as missing.")
+                continue
             if reference == 0 and drained == 0 and round(after, 1) == round(weight, 1):
                 log.append(pot_id=pot, group=group, event="note", note=f"No water delivered. {note}")
                 continue
