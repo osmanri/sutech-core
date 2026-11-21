@@ -25,6 +25,8 @@
 extern uint8_t PINC, PCMSK1, PCICR;
 extern unsigned long fake_millis, fake_micros;
 extern int fake_analog[3];
+extern int fake_output[20];
+extern unsigned long fake_output_changed_at[20];
 
 inline unsigned long millis() { return fake_millis; }
 inline unsigned long micros() { return fake_micros += 10; }
@@ -33,7 +35,10 @@ inline void delayMicroseconds(unsigned int) {}
 inline void noInterrupts() {}
 inline void interrupts() {}
 inline void pinMode(int, int) {}
-inline void digitalWrite(int, int) {}
+inline void digitalWrite(int pin, int value) {
+  if (fake_output[pin] != value) fake_output_changed_at[pin] = fake_millis;
+  fake_output[pin] = value;
+}
 inline int digitalRead(int) { return LOW; }
 inline int analogRead(int pin) { return fake_analog[pin - A0]; }
 inline void tone(int, unsigned int, unsigned long) {}
@@ -50,6 +55,7 @@ class String {
     s = (a == std::string::npos) ? "" : s.substr(a, b - a + 1);
   }
   unsigned int length() const { return s.size(); }
+  const char* c_str() const { return s.c_str(); }
   bool startsWith(const char* p) const { return s.rfind(p, 0) == 0; }
   String substring(unsigned int from) const { return from >= s.size() ? String() : String(s.substr(from)); }
   float toFloat() const { return (float)atof(s.c_str()); }
