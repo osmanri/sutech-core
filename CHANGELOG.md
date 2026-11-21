@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased, 21 November
+
+- Deletion now blocks writes from an old session, including deferred calculations and AI answers. Interrupted erasure resumes on the next owner operation. Operational data expire on activity. The private backup tool supports authenticated encryption and offline staging recovery. See `docs/DATA_RECOVERY.md` for verified behavior and deployment limits.
+- The offline browser demo includes three greenhouse examples, shared crop names and an explicit substrate restriction. CI checks the frontend together with the bot and exercises the demo in a mobile browser.
+- The greenhouse presentation and English brief tie each claim to its evidence and include a worked seasonal cost example for scheduling and pump replacement.
+- Research reports show how observation mistakes and delayed irrigation affect the historical and current models. The experiment analysis validates drainage and observation intervals and reports the dry-mass non-inferiority bound.
+- Uncertain classifier results withhold candidate labels. Pump firmware rejects conflicting commands while running and validates flow calibration before using it for volume control.
+
 ## Unreleased, 18 November
 - External-service failures preserve the original AI question/photo in Telegram. Late weather/Gemini responses are rejected before use, automatic retries exclude quota/auth and uncertain network failures, and delayed database writes cannot take over a newer lease or AI conversation. Field parameter resets preserve checks/watering logged during weather loading. The live SDK has no timers/HTTP cancellation; these are response acceptance deadlines, not hard request timeouts (see `docs/SERVICE_RELIABILITY.md`).
 - Field status now describes input completeness rather than unmeasured confidence. "Why this?" states that field accuracy has not been measured; soil checks before a field reset no longer count as current checks.

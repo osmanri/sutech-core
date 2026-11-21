@@ -61,8 +61,8 @@ export async function planScreen(id,error=false) {
  else if(d.step>0)rows.push([button(phrase(lang,'back'),cb('back'))]);
  rows.push(back(lang));await screen(id,text,keyboard(rows),u.generation);
 }
-export async function planInput(id,raw,expected=null) {
- const u=await user(id);if(u.mode!=='plan'||!u.draft)throw new Error('stale');
+export async function planInput(id,raw,expected=null,expectedEpoch=null) {
+ const u=await user(id,null,expectedEpoch);if(u.mode!=='plan'||!u.draft)throw new Error('stale');
  if(expected&&(u.generation!==expected.generation||u.draft.step!==expected.step))throw new Error('stale');
  const d=u.draft,key=d.refine??steps(d.values)[d.step];
  if(raw==='back'){if(d.refine)d.refine=null;else d.step=Math.max(0,d.step-1);await saveUser(id,u);await planScreen(id);return;}

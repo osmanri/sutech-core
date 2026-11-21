@@ -35,6 +35,7 @@
  *   - FLOW_CAL:<ml>     -> OK:FLOW_CAL:PPML=<pulses per ml>
  *                          Run WATER:<sec> into a measuring cylinder first, read the ml, then send this.
  *   - WATER_ML:<ml>     -> OK:PUMP_ON:TARGET_ML=<ml>   (stops itself when the flow meter counts <ml>)
+ *   Start commands, FLOW_RESET and FLOW_CAL return ERR:PUMP_RUNNING during a run.
  *
  * Messages the Arduino sends on its own, without a command, start with "EVT:" so the
  * PC never mistakes them for the answer to its next command:
@@ -43,6 +44,8 @@
  */
 
 #include <EEPROM.h>
+#include <math.h>
+#include <stdlib.h>
 
 #define RELAY_PIN 8
 #define BUZZER_PIN 9
@@ -80,7 +83,7 @@ float flowPulsesPerMl = 0.0f;       // 0 = not calibrated
 bool volumeMode = false;            // pump started by WATER_ML
 unsigned long runStartPulses = 0;
 unsigned long targetPulses = 0;
-unsigned long lastRunPulses = 0;    // pulses of the last finished pump run (for FLOW_CAL)
+unsigned long calibrationRunPulses = 0;  // only timed runs can supply a calibration sample
 
 ISR(PCINT1_vect) {
   uint8_t state = PINC & _BV(PC2);
@@ -95,10 +98,17 @@ unsigned long readFlowPulses() {
   return p;
 }
 
+bool validFlowFactor(float factor) {
+  // The largest dose must fit the 32-bit pulse counter on the target board.
+  return factor > 0.0f && MAX_DOSE_ML * factor + 0.5f < 4294967296.0f;
+}
+
 void loadFlowCalibration() {
+  float stored = 0.0f;
   if (EEPROM.read(EEPROM_FLOW_MAGIC_ADDR) == EEPROM_FLOW_MAGIC) {
-    EEPROM.get(EEPROM_FLOW_FACTOR_ADDR, flowPulsesPerMl);
+    EEPROM.get(EEPROM_FLOW_FACTOR_ADDR, stored);
   }
+  flowPulsesPerMl = validFlowFactor(stored) ? stored : 0.0f;
 }
 
 void saveFlowCalibration() {
@@ -332,8 +342,8 @@ void loop() {
       stopPump("VOLUME_REACHED", true);
     } else if (elapsed >= pumpDurationMs) {
       if (volumeMode) {
-        playAlarm();  // the dose was not reached: empty tank, air in the hose or a blocked sensor
         stopPump("TIMEOUT_BEFORE_VOLUME", true);
+        playAlarm();  // the dose was not reached: empty tank, air in the hose or a blocked sensor
       } else {
         stopPump("TIMER_COMPLETED", true);
       }
@@ -351,6 +361,13 @@ void loop() {
       handleCommand(input);
     }
   }
+}
+
+bool parsePositiveNumber(const String& input, float& result) {
+  const char* start = input.c_str();
+  char* end;
+  result = strtod(start, &end);
+  return end != start && end == start + input.length() && isfinite(result) && result > 0.0f;
 }
 
 void handleCommand(String cmd) {
@@ -461,40 +478,29 @@ void handleCommand(String cmd) {
     playChirp(1500, 200);
     Serial.println("OK:BEEP");
   }
-  else if (cmd.startsWith("WATER:")) {
-    String secStr = cmd.substring(6);
-    float seconds = secStr.toFloat();
-    if (seconds <= 0.0f) {
+  else if (cmd.startsWith("WATER:") || cmd.startsWith("WATER_FORCE:")) {
+    const bool force = cmd.startsWith("WATER_FORCE:");
+    float seconds;
+    if (!parsePositiveNumber(cmd.substring(force ? 12 : 6), seconds)) {
       Serial.println("ERR:INVALID_DURATION");
+      return;
+    }
+    if (pumpActive) {
+      Serial.println("ERR:PUMP_RUNNING");
       return;
     }
     if (seconds > MAX_PUMP_SECONDS) {
       seconds = MAX_PUMP_SECONDS;
     }
 
-    // Safety: check water level in reservoir
-    int waterLvl = readWaterLevelPercent();
-    // If water sensor is reading < threshold, block pump
-    if (waterLvl < MIN_WATER_LEVEL_PCT) {
-      playAlarm();
-      Serial.print("ERR:WATER_EMPTY:LEVEL=");
-      Serial.println(waterLvl);
-      return;
-    }
-
-    startPump(seconds, false, 0);
-    Serial.print("OK:PUMP_ON:DURATION=");
-    Serial.println(seconds, 2);
-  }
-  else if (cmd.startsWith("WATER_FORCE:")) {
-    String secStr = cmd.substring(12);
-    float seconds = secStr.toFloat();
-    if (seconds <= 0.0f) {
-      Serial.println("ERR:INVALID_DURATION");
-      return;
-    }
-    if (seconds > MAX_PUMP_SECONDS) {
-      seconds = MAX_PUMP_SECONDS;
+    if (!force) {
+      int waterLvl = readWaterLevelPercent();
+      if (waterLvl < MIN_WATER_LEVEL_PCT) {
+        playAlarm();
+        Serial.print("ERR:WATER_EMPTY:LEVEL=");
+        Serial.println(waterLvl);
+        return;
+      }
     }
     startPump(seconds, false, 0);
     Serial.print("OK:PUMP_ON:DURATION=");
@@ -513,14 +519,18 @@ void handleCommand(String cmd) {
     Serial.println(flowPulsesPerMl, 4);
   }
   else if (cmd == "FLOW_RESET") {
+    if (pumpActive) {
+      Serial.println("ERR:PUMP_RUNNING");
+      return;
+    }
     noInterrupts();
     flowPulses = 0;
     interrupts();
     Serial.println("OK:FLOW_RESET");
   }
   else if (cmd.startsWith("FLOW_CAL:")) {
-    float ml = cmd.substring(9).toFloat();
-    if (ml <= 0.0f) {
+    float ml;
+    if (!parsePositiveNumber(cmd.substring(9), ml)) {
       Serial.println("ERR:INVALID_VOLUME");
       return;
     }
@@ -528,18 +538,23 @@ void handleCommand(String cmd) {
       Serial.println("ERR:PUMP_RUNNING");
       return;
     }
-    if (lastRunPulses == 0) {
+    if (calibrationRunPulses == 0) {
       Serial.println("ERR:NO_FLOW_PULSES");
       return;
     }
-    flowPulsesPerMl = (float)lastRunPulses / ml;
+    const float factor = (float)calibrationRunPulses / ml;
+    if (!validFlowFactor(factor)) {
+      Serial.println("ERR:INVALID_FLOW_CALIBRATION");
+      return;
+    }
+    flowPulsesPerMl = factor;
     saveFlowCalibration();
     Serial.print("OK:FLOW_CAL:PPML=");
     Serial.println(flowPulsesPerMl, 4);
   }
   else if (cmd.startsWith("WATER_ML:")) {
-    float ml = cmd.substring(9).toFloat();
-    if (ml <= 0.0f || ml > MAX_DOSE_ML) {
+    float ml;
+    if (!parsePositiveNumber(cmd.substring(9), ml) || ml > MAX_DOSE_ML) {
       Serial.println("ERR:INVALID_VOLUME");
       return;
     }
@@ -588,18 +603,20 @@ void startPump(float seconds, bool byVolume, unsigned long pulsesNeeded) {
 void stopPump(const char* reason, bool unsolicited) {
   bool wasActive = pumpActive;
   pumpActive = false;
-  volumeMode = false;
   digitalWrite(RELAY_PIN, RELAY_INACTIVE);
   digitalWrite(LED_INDICATOR, LOW);
+  unsigned long deliveredPulses = 0;
   if (wasActive) {
-    lastRunPulses = readFlowPulses() - runStartPulses;
+    deliveredPulses = readFlowPulses() - runStartPulses;
+    calibrationRunPulses = volumeMode ? 0 : deliveredPulses;
   }
+  volumeMode = false;
   playChirp(900, 180);
 
   Serial.print(unsolicited ? "EVT:PUMP_OFF:REASON=" : "OK:PUMP_OFF:REASON=");
   Serial.print(reason);
   Serial.print(":ML=");
-  printMlOrNA(wasActive ? lastRunPulses : 0);
+  printMlOrNA(deliveredPulses);
   Serial.print(":PULSES=");
-  Serial.println(wasActive ? lastRunPulses : 0);
+  Serial.println(deliveredPulses);
 }

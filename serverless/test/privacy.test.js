@@ -43,7 +43,10 @@ test('buttons: privacy screen explains what is stored, deletion asks twice and t
  assert.match(visible(id).at(-1).text,/What Su-Tech stores/);assert.match(visible(id).at(-1).text,/Open-Meteo/);assert.match(visible(id).at(-1).text,/Gemini/);
  await send('wipe');assert.match(visible(id).at(-1).text,/cannot be undone/);
  assert.ok((await list(id,'field')).length>=1,'nothing is deleted before the second confirmation');
- await send('wipe:yes');
+ const confirm=visible(id).at(-1).reply_markup.inline_keyboard[0][0].callback_data;
+ await send('privacy');await send(confirm);
+ assert.equal((await list(id,'field')).length,1,'old confirmation cannot delete a field');
+ await send('wipe');await send(visible(id).at(-1).reply_markup.inline_keyboard[0][0].callback_data);
  assert.match(visible(id).at(-1).text,/records deleted/);
  assert.equal((await list(id,'field')).length,0);
 });

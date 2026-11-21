@@ -39,6 +39,7 @@ from datetime import date, timedelta
 from pathlib import Path
 from statistics import mean, stdev
 from collections.abc import Callable
+from contextlib import contextmanager
 from typing import cast
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -54,6 +55,27 @@ from bot.water_balance import (CROPS, METHODS, calculate_balance, parse_field,  
 # (drip saving then rises: cotton 25 -> 31 %, maize 15 -> 20 %; furrow unchanged).
 import os  # noqa: E402
 from bot import water_balance as _engine  # noqa: E402
+
+_CURRENT_WETTED_FRACTIONS = _engine.WETTED_FRACTION.copy()
+
+
+@contextmanager
+def engine_variant(variant: str):
+    """Temporarily select published-study coefficients or the current open-field coefficients."""
+    if variant == "historical":
+        fractions = dict.fromkeys(_CURRENT_WETTED_FRACTIONS, 1.0)
+    elif variant == "current":
+        fractions = _CURRENT_WETTED_FRACTIONS
+    else:
+        raise ValueError(f"unknown study engine variant: {variant}")
+    previous = _engine.WETTED_FRACTION.copy()
+    _engine.WETTED_FRACTION.update(fractions)
+    field_for.cache_clear()
+    try:
+        yield
+    finally:
+        _engine.WETTED_FRACTION.update(previous)
+        field_for.cache_clear()
 
 
 def apply_study_engine() -> None:

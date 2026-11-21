@@ -1,15 +1,16 @@
 // Durable, coalesced rendering. A single worker edits one message per chat;
 // concurrent handlers only replace the desired view in its mailbox.
 import {api,db} from 'sdk';
-import {get,put,remove,list,user,setScreen,lock,unlock,nonce} from './store.js';
+import {get,putGuarded,remove,list,user,ownerState,setScreen,lock,unlock,nonce} from './store.js';
 const errorText=e=>String(e.description??e.message??'').toLowerCase().replaceAll('_',' ');
 const unchanged=e=>e.code===400&&/not modified/.test(errorText(e));
 const unavailableMessage=e=>e.code===400&&/can.?t be edited|cannot be edited|message to edit not found|message (?:id invalid|edit time expired)|not a text message|message not found/.test(errorText(e));
 
-export async function rememberMessage(id,messageId,date=null) {
+export async function rememberMessage(id,messageId,date=null,expectedEpoch=null) {
  if(!Number.isSafeInteger(messageId)||messageId<=0)return;
+ const epoch=expectedEpoch??(await ownerState(id)).epoch;
  const key=`ui-message:${id}:${messageId}`;
- if(!await get(key,id))await put(key,id,'ui-message',{message_id:messageId,created:date?Number(date)*1000:Date.now()});
+ if(!await get(key,id))await putGuarded(key,id,'ui-message',{message_id:messageId,created:date?Number(date)*1000:Date.now()},{epoch});
 }
 export async function retireMessage(id,messageId) {
  if(!messageId)return true;
@@ -25,45 +26,49 @@ export async function retireMessage(id,messageId) {
   return false; // Cleanup failures must not block normal navigation.
  }
 }
-async function sweep(id,current) {
+async function sweep(id,current,epoch) {
+ await ownerState(id,epoch);
  for(const row of await list(id,'ui-message',12)){
   if(row.message_id===current)continue;
+  await ownerState(id,epoch);
   if(await retireMessage(id,row.message_id))await remove(row._id,id,'ui-message');
  }
 }
-async function adoptLegacy(id,current) {
+async function adoptLegacy(id,current,expectedEpoch) {
+ const {epoch}=await ownerState(id,expectedEpoch);
  const marker=`ui-migrated:${id}`;if(await get(marker,id))return;
  // Legacy rows were archived under owner 0. Require the exact chat_id before
  // adopting an ID; no cross-chat cleanup or guessed message IDs is allowed.
  const rows=await db.all("SELECT body FROM records WHERE owner=0 AND kind='legacy:chat_ui_messages' AND json_extract(body,'$.chat_id')=:owner",{':owner':id});
- for(const row of rows){const old=JSON.parse(row.body);if(old.kind==='bot')await rememberMessage(id,Number(old.message_id),Number(old.created_at));}
- if(current)await rememberMessage(id,current);
- await put(marker,id,'ui-migrated',{done:true});
+ for(const row of rows){const old=JSON.parse(row.body);if(old.kind==='bot')await rememberMessage(id,Number(old.message_id),Number(old.created_at),epoch);}
+ if(current)await rememberMessage(id,current,null,epoch);
+ await putGuarded(marker,id,'ui-migrated',{done:true},{epoch});
 }
 async function render(id,view) {
- let current=(await user(id)).screen;
+ const u=await user(id,null,view.epoch);let current=u.screen;
  if(current){
-  await rememberMessage(id,current);
+  await rememberMessage(id,current,null,u.epoch);
   try{await api.editMessageText({...view.params,message_id:current});return current;}
   catch(e){if(unchanged(e))return current;if(!unavailableMessage(e))throw e;}
  }
  const sent=await api.sendMessage(view.params);
  if(!Number.isSafeInteger(sent?.message_id)||sent.message_id<=0)throw new Error('INVALID_SCREEN_RESPONSE');
- await rememberMessage(id,sent.message_id,sent.date);
- await setScreen(id,sent.message_id);
+ await rememberMessage(id,sent.message_id,sent.date,u.epoch);
+ await setScreen(id,sent.message_id,u.epoch);
  return sent.message_id;
 }
-export async function flushScreen(id) {
+export async function flushScreen(id,expectedEpoch=null) {
+ const context=await user(id,null,expectedEpoch);
  const leaseId=`ui-render:${id}`,token=await lock(leaseId,45);
- if(!token)return (await user(id)).screen;
+ if(!token)return (await user(id,null,context.epoch)).screen;
  try{
-  const initial=(await user(id)).screen;await adoptLegacy(id,initial);
+  const initial=context.screen;await adoptLegacy(id,initial,context.epoch);
   for(let pass=0;pass<24;pass++){
-   const view=await get(`ui-view:${id}`,id),u=await user(id);
+   const view=await get(`ui-view:${id}`,id),u=await user(id,null,context.epoch);
    if(!view)break;
    let current=u.screen;
-   if(view.generation===u.generation)current=await render(id,view);
-   await sweep(id,current);
+   if(view.generation===u.generation&&view.epoch===u.epoch)current=await render(id,view);
+   await sweep(id,current,context.epoch);
    // Atomic release closes the lost-wakeup window: a later view either keeps
    // this worker running, or acquires the lease itself after this DELETE.
    const released=await db.run(`DELETE FROM leases WHERE id=:id AND token=:token
@@ -75,13 +80,14 @@ export async function flushScreen(id) {
  }finally{await unlock(leaseId,token);}
 }
 export async function renderScreen(id,params,generation) {
- await user(id);
- const view={params,generation,token:nonce()};
+ const u=await user(id);
+ const view={params,generation,epoch:u.epoch,token:nonce()};
  const saved=await db.run(`INSERT INTO records(id,owner,kind,body,updated)
    SELECT :id,:owner,'ui-view',:body,:time WHERE EXISTS(
-     SELECT 1 FROM records WHERE id=:user AND owner=:owner AND json_extract(body,'$.generation')=:generation)
+     SELECT 1 FROM records WHERE id=:user AND owner=:owner AND json_extract(body,'$.generation')=:generation AND json_extract(body,'$.epoch')=:epoch)
+   AND EXISTS(SELECT 1 FROM records WHERE id=:marker AND owner=0 AND json_extract(body,'$.epoch')=:epoch AND json_extract(body,'$.deleting')=0)
    ON CONFLICT(id) DO UPDATE SET body=excluded.body,updated=excluded.updated WHERE records.owner=excluded.owner RETURNING id`,{
-   ':id':`ui-view:${id}`,':owner':id,':user':`user:${id}`,':body':JSON.stringify(view),':time':Date.now(),':generation':generation});
+   ':id':`ui-view:${id}`,':owner':id,':user':`user:${id}`,':body':JSON.stringify(view),':time':Date.now(),':generation':generation,':epoch':u.epoch,':marker':`lifecycle:${id}`});
  if(!saved.rows?.length)return null;
- return flushScreen(id);
+ return flushScreen(id,u.epoch);
 }

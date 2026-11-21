@@ -1,6 +1,6 @@
 import {checkNudge,needsCheck,confidence,confidenceLine,whyCard,volumeRounded,firstDayNote,detailsBlock} from './explain.js';
 import {calculate,fieldKey,number,METHODS,VERSION,economics,PUMP_MAX_HOURS_PER_DAY,salinity,applicableResult} from './balance.js';
-import {get,putGuarded,list,lock,unlock,ownerId,nonce} from './store.js';
+import {get,putGuarded,list,lock,unlock,ownerId,ownerState,nonce} from './store.js';
 import {weather} from './weather.js';
 import {parseField,cleanExpert,KEYS} from './expert.js';
 import {tr,t,esc,fmt,volume} from './i18n.js';
@@ -78,8 +78,9 @@ function freshRow(fieldId,key,payload,w,parsed) {
     closed_deficit:parsed.yesterday,revision:1,events:[],checks:[],version:VERSION};
   recompute(row,w);return row;
 }
-export async function calculateField(id,payload) {
+export async function calculateField(id,payload,expectedEpoch=null) {
   ownerId(id);const parsed=parseField(payload),key=fieldKey(payload,parsed);
+  const {epoch}=await ownerState(id,expectedEpoch);
   const guard=`field-key:${id}:${key}`,token=await lock(guard,45);if(!token)throw new Error('busy');
   try {
     let existing=(await list(id,'field',100)).find(f=>f.key===key);
@@ -98,25 +99,26 @@ export async function calculateField(id,payload) {
             if(existing.payload.expert)clean.expert=existing.payload.expert;
             const row=freshRow(existing.id,key,clean,w,parsed);
             Object.assign(row,{events:existing.events??[],checks:existing.checks??[],reset_at:Date.now(),revision:(existing.revision??1)+1,submit:'reset'});
-            const fence={lease:[guard2,t2],parentLease:[guard,token]};
-            await putGuarded(`field:${row.id}`,id,'field',row,fence);await saveCalculation(id,row,fence);return row;
+            const fence={lease:[guard2,t2],parentLease:[guard,token],epoch};
+            await putGuarded(`field:${row.id}`,id,'field',row,{...fence,existing:true});await saveCalculation(id,row,fence);return row;
           }
           const row=existing;
           for(const k of COSTS)row.payload[k]=payload[k]??null;
           recompute(row,w);row.revision++;row.submit='costs';
-          await putGuarded(`field:${row.id}`,id,'field',row,{lease:[guard2,t2],parentLease:[guard,token]});return row;
+          await putGuarded(`field:${row.id}`,id,'field',row,{lease:[guard2,t2],parentLease:[guard,token],epoch,existing:true});return row;
         } finally {await unlock(guard2,t2);}
       }
-      const row=await refresh(id,existing.id,w,[guard,token]);row.submit='existing';return row;
+      const row=await refresh(id,existing.id,w,[guard,token],epoch);row.submit='existing';return row;
     }
     const row=freshRow(Date.now()*100+Math.floor(Math.random()*100),key,clean,w,parsed);row.submit='new';
-    const fence={lease:[guard,token]};
+    const fence={lease:[guard,token],epoch};
     await putGuarded(`field:${row.id}`,id,'field',row,fence);
     await saveCalculation(id,row,fence);
     return row;
   } finally {await unlock(guard,token);}
 }
-export async function refresh(id,fieldId,w=null,parentLease=null) {
+export async function refresh(id,fieldId,w=null,parentLease=null,expectedEpoch=null) {
+  const {epoch}=await ownerState(id,expectedEpoch);
   const guard=`field:${fieldId}`,token=await lock(guard,45);if(!token)throw new Error('busy');
   try {
     const row=await ownedField(id,fieldId);w??=await weather(row.payload.latitude,row.payload.longitude);
@@ -126,11 +128,12 @@ export async function refresh(id,fieldId,w=null,parentLease=null) {
     if(!legacy&&row.last_day===w.day&&row.weather?.et0===w.et0&&row.weather?.rain===w.rain)return row;
     const newDay=row.last_day!==w.day;
     recompute(row,w);row.revision++;
-    const fence={lease:[guard,token],parentLease};
-    await putGuarded(`field:${fieldId}`,id,'field',row,fence);if(newDay)await saveCalculation(id,row,fence);return row;
+    const fence={lease:[guard,token],parentLease,epoch};
+    await putGuarded(`field:${fieldId}`,id,'field',row,{...fence,existing:true});if(newDay)await saveCalculation(id,row,fence);return row;
   } finally {await unlock(guard,token);}
 }
-export async function waterField(id,fieldId,applied,expected,revision=null) {
+export async function waterField(id,fieldId,applied,expected,revision=null,expectedEpoch=null) {
+  const {epoch}=await ownerState(id,expectedEpoch);
   applied=number(applied,'applied_m3',.000001,1e9);expected=number(expected,'expected_deficit',.00000001,3000);
   const guard=`field:${fieldId}`,token=await lock(guard,30);if(!token)throw new Error('busy');
   try {
@@ -141,10 +144,11 @@ export async function waterField(id,fieldId,applied,expected,revision=null) {
     const f=parseField(row.payload),before=row.deficit,net_mm=applied*METHODS[f.method][1]/(10*f.area_ha);
     row.events=[...(row.events??[]),{time:Date.now(),day:row.last_day,applied_m3:applied,net_mm,before}].slice(-365);
     row.deficit=stepDay(row,row.last_day,row.closed_deficit,row.weather).end;row.events.at(-1).after=row.deficit;row.revision++;
-    await putGuarded(`field:${fieldId}`,id,'field',row,{lease:[guard,token]});return row;
+    await putGuarded(`field:${fieldId}`,id,'field',row,{lease:[guard,token],epoch,existing:true});return row;
   } finally {await unlock(guard,token);}
 }
-export async function checkMoisture(id,fieldId,level,revision=null) {
+export async function checkMoisture(id,fieldId,level,revision=null,expectedEpoch=null) {
+  const {epoch}=await ownerState(id,expectedEpoch);
   if(!Object.hasOwn(SOIL_LEVELS,level))throw new Error('bad_level');
   const guard=`field:${fieldId}`,token=await lock(guard,30);if(!token)throw new Error('busy');
   try {
@@ -155,7 +159,7 @@ export async function checkMoisture(id,fieldId,level,revision=null) {
     const base=currentResult(row),before=row.deficit,value_mm=Math.min(base.taw,SOIL_LEVELS[level]*base.raw);
     row.checks=[...(row.checks??[]),{time:Date.now(),day:row.last_day,level,value_mm,before}].slice(-365);
     row.deficit=stepDay(row,row.last_day,row.closed_deficit,row.weather).end;row.checks.at(-1).after=row.deficit;row.revision++;
-    await putGuarded(`field:${fieldId}`,id,'field',row,{lease:[guard,token]});return row;
+    await putGuarded(`field:${fieldId}`,id,'field',row,{lease:[guard,token],epoch,existing:true});return row;
   } finally {await unlock(guard,token);}
 }
 export async function saveCalculation(id,row,fence) {
@@ -191,7 +195,8 @@ export function report(row,lang,details=false) {
 }
 
 // Expert mode: set one override (value) or remove it (null). Past closed days stay as they were; the change applies from today.
-export async function setExpert(id,fieldId,key,value) {
+export async function setExpert(id,fieldId,key,value,expectedEpoch=null) {
+  const {epoch}=await ownerState(id,expectedEpoch);
   if(!KEYS.includes(key))throw new Error('bad_key');
   const guard=`field:${fieldId}`,token=await lock(guard,45);if(!token)throw new Error('busy');
   try {
@@ -202,6 +207,6 @@ export async function setExpert(id,fieldId,key,value) {
     parseField(row.payload);
     row.expert_log=[...(row.expert_log??[]),{time:Date.now(),key,from:was[key]??null,to:next[key]??null}].slice(-100);
     recompute(row,w);row.revision++;
-    await putGuarded(`field:${fieldId}`,id,'field',row,{lease:[guard,token]});return row;
+    await putGuarded(`field:${fieldId}`,id,'field',row,{lease:[guard,token],epoch,existing:true});return row;
   } finally {await unlock(guard,token);}
 }

@@ -35,12 +35,12 @@ export async function expertScreen(id,lang,row,show,notice='') {
   ...(f.manual.length?[[button(tr(lang,'↩️ Вернуть значения FAO','↩️ FAO мәндерін қайтару','↩️ Back to FAO values'),`exreset:${row.id}`)]]:[]),
   [button(t(lang,'btn_cancel'),`field:${row.id}`)]]));
 }
-export async function deliverCalculation(id,payload) {
- const u=await navigate(id);const generation=u.generation;
+export async function deliverCalculation(id,payload,expectedEpoch=null) {
+ const u=await navigate(id,'home',expectedEpoch);const generation=u.generation;
  try {
-  await putGuarded(`pending:${id}`,id,'pending',{payload},{generation});
+  await putGuarded(`pending:${id}`,id,'pending',{payload},{generation,epoch:u.epoch});
   await screen(id,tr(u.lang,'Считаю по погоде поля…','Алқап ауа райы бойынша есептеп жатырмын…','Calculating with field weather…'),keyboard([back(u.lang)]),generation);
-  const row=await calculateField(id,payload);
+  const row=await calculateField(id,payload,u.epoch);
   const notice={reset:tr(u.lang,'Параметры поля изменились — расчёт начат заново по новым данным.','Алқап параметрлері өзгерді — есеп жаңа деректермен басынан басталды.','The field parameters changed, so the balance was restarted from the new data.'),
    costs:tr(u.lang,'Данные насоса обновлены, запас влаги сохранён.','Сорғы деректері жаңартылды, ылғал қоры сақталды.','Pump data updated; the soil-water balance was kept.'),
    existing:tr(u.lang,'Это поле уже сохранено, расчёт продолжается. Чтобы поправить влажность, нажмите «Проверил влажность почвы».','Бұл алқап сақталған, есеп жалғасады. Ылғалды түзету үшін «Топырақ ылғалын тексердім» батырмасын басыңыз.','This field is already saved and the balance continues. To correct the moisture, use "I checked the soil moisture".')}[row.submit];
@@ -66,8 +66,14 @@ async function historyScreen(id,lang,page=0,generation=null) {
  if(page||rows.length===5)keys.push([...(page?[button('‹',`history:${page-1}`)]:[]),...(rows.length===5?[button('›',`history:${page+1}`)]:[])]);
  keys.push(back(lang));await screen(id,rows.length?`<b>${esc(t(lang,'btn_history'))}</b>`:tr(lang,'Расчётов пока нет.','Әзірге есеп жоқ.','No calculations yet.'),keyboard(keys),generation);
 }
-export async function action(id,data) {
- const u=await navigate(id,['ai','ai:new','ai:deep','ai:crop','ai:photo-data'].includes(data)||data.startsWith('ai:crop:')?'ai':'home'),lang=u.lang;
+export async function action(id,data,expectedEpoch=null) {
+ if(data.startsWith('wipe:yes')){
+  const current=await user(id,null,expectedEpoch);
+  if(data!==`wipe:yes:${current.generation}`||current.mode!=='wipe')return home(id,current.lang,current.generation);
+  const n=await eraseUserData(id,current.epoch),next=await user(id,current.lang);
+  return screen(id,tr(next.lang,`Готово. Удалено записей: ${n}.`,`Дайын. Жойылған жазбалар: ${n}.`,`Done. ${n} records deleted.`),keyboard([back(next.lang)]),next.generation);
+ }
+ const u=await navigate(id,['ai','ai:new','ai:deep','ai:crop','ai:photo-data'].includes(data)||data.startsWith('ai:crop:')?'ai':'home',expectedEpoch),lang=u.lang;
  const show=(text,markup,plain=false)=>screen(id,text,markup,u.generation,plain);
  if(data==='home')return home(id,lang,u.generation);
  if(data==='languages')return show('Русский / Қазақша / English',languages(lang));
@@ -95,7 +101,7 @@ export async function action(id,data) {
   await db.run("DELETE FROM records WHERE owner=:owner AND kind IN ('ai-answer','ai-context','photo-comparison','legacy:ai_exchanges','legacy:ai_conversations')",{':owner':id});
   return show(esc(a(lang,'deleted')),aiKeys(lang));
  }
- if(data==='pilot'||data.startsWith('pilot:'))return pilot(id,lang,data.split(':')[1]??'back',u.generation);
+ if(data==='pilot'||data.startsWith('pilot:'))return pilot(id,lang,data.split(':')[1]??'back',u.generation,u.epoch);
  if(data==='ai:history'||data.startsWith('aih:')){
   const page=data==='ai:history'?0:Math.max(0,Number(data.slice(4))||0),items=await aiHistory(id,lang,page);
   return show(items.length?tr(lang,'Сохранённые ответы ИИ','ЖИ сақталған жауаптары','Saved AI answers'):tr(lang,'История пока пуста.','Тарих әзірге бос.','No AI history yet.'),keyboard([...items.map((r,i)=>[button(`${page*5+i+1}. ${r.text.replace(/<[^>]+>/g,'').slice(0,65)}`,`ah:${r.id}`)]),[...(page?[button('‹',`aih:${page-1}`)]:[]),...(items.length===5?[button('›',`aih:${page+1}`)]:[])],[button(a(lang,'new_button'),'ai:new')],[button(a(lang,'history_delete'),'ai:delete')],back(lang)]));
@@ -105,7 +111,7 @@ export async function action(id,data) {
   return show(row.answer,keyboard([[button(tr(lang,'История ИИ','ЖИ тарихы','AI history'),'ai:history')],back(lang)]),true);
  }
  if(data==='plan'){u.mode='plan';u.draft={step:0,values:{}};await saveUser(id,u);return planScreen(id);}
- if(data==='retry'){const row=await get(`pending:${id}`,id);return row?deliverCalculation(id,row.payload):home(id,lang,u.generation);}
+ if(data==='retry'){const row=await get(`pending:${id}`,id);return row?deliverCalculation(id,row.payload,u.epoch):home(id,lang,u.generation);}
  if(data==='fields'||data.startsWith('fields:'))return fieldsScreen(id,lang,Number(data.split(':')[1])||0,u.generation);
  if(data==='history'||data.startsWith('history:'))return historyScreen(id,lang,Number(data.split(':')[1])||0,u.generation);
  if(data.startsWith('rh:')){
@@ -115,9 +121,11 @@ export async function action(id,data) {
  }
  if(data==='demo'||data==='demo:steps'){const d=data==='demo'?demoScreen(lang):demoSteps(lang);return show(d.text,d.markup);}
  if(data==='more')return show(tr(lang,'Настройки и помощь','Баптаулар мен көмек','Settings and help'),keyboard([[button(t(lang,'btn_lang'),'languages'),button(t(lang,'btn_help'),'help')],[button(t(lang,'btn_about'),'about'),button(p(lang,'join'),'pilot')],[button(tr(lang,'Демо для жюри','Қазылар үшін демо','Jury demo'),'demo'),button(tr(lang,'🔒 Мои данные','🔒 Деректерім','🔒 My data'),'privacy')],back(lang)]));
- if(data==='privacy')return show(tr(lang,'<b>Какие данные хранит Su-Tech</b>\n• Ваш номер в Telegram и язык.\n• Поля: культура, площадь, почва, способ полива, точка на карте, отметки о поливе и проверке влажности.\n• Расчёты и погода за эти дни.\n• Запросы к ИИ-агроному на время обработки; в историю чата попадают ваши вопросы и ответы.\n\nКоординаты уходят в Open-Meteo за погодой, вопросы и фото ИИ-агроному в Google Gemini. Данные не продаются и не передаются рекламным сервисам.\n\nКнопка ниже удаляет всё, что хранится о вас, без возможности вернуть. Полная политика: сайт, страница «Конфиденциальность».','<b>Su-Tech қандай деректерді сақтайды</b>\n• Telegram нөміріңіз және тіл.\n• Алқаптар: дақыл, аудан, топырақ, суару тәсілі, картадағы нүкте, суару мен ылғал тексеру белгілері.\n• Осы күндердегі есептер мен ауа райы.\n• ЖИ-агрономға сұраулар өңдеу уақытында; чат тарихына сұрақтарыңыз бен жауаптар түседі.\n\nКоординаттар ауа райы үшін Open-Meteo-ға, сұрақтар мен фото ЖИ-агрономға Google Gemini-ге жіберіледі. Деректер сатылмайды және жарнама қызметтеріне берілмейді.\n\nТөмендегі түйме сіз туралы сақталғанның бәрін қайтарусыз өшіреді. Толық саясат: сайт, «Құпиялылық» беті.','<b>What Su-Tech stores</b>\n• Your Telegram id and language.\n• Fields: crop, area, soil, irrigation method, map point, watering and soil-check marks.\n• Calculations and weather for those days.\n• AI agronomist requests while they are processed; your questions and answers enter the chat history.\n\nCoordinates go to Open-Meteo for weather, questions and photos to Google Gemini for the AI agronomist. Data is not sold and not shared with advertisers.\n\nThe button below deletes everything stored about you and cannot be undone. Full policy: the website, page “Privacy”.'),keyboard([[button(tr(lang,'🗑 Удалить мои данные','🗑 Деректерімді жою','🗑 Delete my data'),'wipe','danger')],back(lang)]));
- if(data==='wipe')return show(tr(lang,'Удалить все ваши данные: поля, расчёты, историю и настройки? Это нельзя отменить.','Барлық деректеріңізді жою керек пе: алқаптар, есептер, тарих және баптаулар? Мұны қайтару мүмкін емес.','Delete all your data: fields, calculations, history and settings? This cannot be undone.'),keyboard([[button(tr(lang,'Да, удалить всё','Иә, бәрін жою','Yes, delete everything'),'wipe:yes','danger')],[button(t(lang,'btn_cancel'),'privacy')]]));
- if(data==='wipe:yes'){const n=await eraseUserData(id);const next=await user(id,lang);return screen(id,tr(lang,`Готово: удалено записей — ${n}. Бот снова пуст, как при первом запуске.`,`Дайын: жазбалар жойылды — ${n}. Бот алғашқы іске қосудағыдай бос.`,`Done: ${n} records deleted. The bot is empty again, as on first start.`),keyboard([back(next.lang)]),null);}
+ if(data==='privacy')return show(tr(lang,'<b>Какие данные хранит Su-Tech</b>\n• Ваш номер в Telegram и язык.\n• Поля: культура, площадь, почва, способ полива, точка на карте, отметки о поливе и проверке влажности.\n• Расчёты и погода за эти дни.\n• Запросы к ИИ-агроному на время обработки; в историю чата попадают ваши вопросы и ответы.\n\nКоординаты уходят в Open-Meteo за погодой, вопросы и фото ИИ-агроному в Google Gemini. Данные не продаются и не передаются рекламным сервисам.\n\nКнопка ниже удаляет поля, историю, отзывы и настройки. Для суточного лимита остаются отметки запросов за 24 часа; для защиты от возврата удалённых данных — ваш номер Telegram и минимальная служебная отметка без содержимого. Полная политика: сайт, страница «Конфиденциальность».','<b>Su-Tech қандай деректерді сақтайды</b>\n• Telegram нөміріңіз және тіл.\n• Алқаптар: дақыл, аудан, топырақ, суару тәсілі, картадағы нүкте, суару мен ылғал тексеру белгілері.\n• Осы күндердегі есептер мен ауа райы.\n• ЖИ-агрономға сұраулар өңдеу уақытында; чат тарихына сұрақтарыңыз бен жауаптар түседі.\n\nКоординаттар ауа райы үшін Open-Meteo-ға, сұрақтар мен фото ЖИ-агрономға Google Gemini-ге жіберіледі. Деректер сатылмайды және жарнама қызметтеріне берілмейді.\n\nТөмендегі түйме алқаптарды, тарихты, пікірлерді және баптауларды жояды. Тәуліктік лимит үшін соңғы 24 сағаттағы сұрау уақыттары, ал жойылған деректердің қайта оралуын болдырмау үшін Telegram нөміріңіз бен мазмұнсыз қызметтік белгі қалады. Толық саясат: сайт, «Құпиялылық» беті.','<b>What Su-Tech stores</b>\n• Your Telegram id and language.\n• Fields: crop, area, soil, irrigation method, map point, watering and soil-check marks.\n• Calculations and weather for those days.\n• AI agronomist requests while they are processed; your questions and answers enter the chat history.\n\nCoordinates go to Open-Meteo for weather, questions and photos to Google Gemini for the AI agronomist. Data is not sold and not shared with advertisers.\n\nThe button below deletes fields, history, feedback and settings. Request timestamps for the last 24 hours remain for the daily limit. Your Telegram id and a minimal service marker without content remain to prevent deleted data from returning. Full policy: the website, page “Privacy”.'),keyboard([[button(tr(lang,'🗑 Удалить мои данные','🗑 Деректерімді жою','🗑 Delete my data'),'wipe','danger')],back(lang)]));
+ if(data==='wipe'){
+  u.mode='wipe';await saveUser(id,u);
+  return show(tr(lang,'Удалить поля, расчёты, историю и настройки? Это нельзя отменить.','Алқаптар, есептер, тарих және баптаулар жойылсын ба? Мұны қайтару мүмкін емес.','Delete fields, calculations, history and settings? This cannot be undone.'),keyboard([[button(tr(lang,'Да, удалить','Иә, жою','Yes, delete'),`wipe:yes:${u.generation}`,'danger')],[button(t(lang,'btn_cancel'),'privacy')]]));
+ }
  if(data==='help'||data==='about')return show(data==='help'?tr(lang,'1. Добавьте участок: культура, площадь, почва и точка на карте.\n2. Откройте «Мои поля» для актуального расчёта.\n3. После полива отметьте объём.\n4. Для вопросов и фото растений откройте ИИ-агронома.','1. Алқап қосыңыз: дақыл, аудан, топырақ және картадағы нүкте.\n2. Жаңа есеп үшін «Менің алқаптарым» бөліміне өтіңіз.\n3. Суарған соң көлемін белгілеңіз.\n4. Өсімдік фотосы мен сұрақтар үшін ЖИ-агрономды ашыңыз.','1. Add a field: crop, area, soil and map location.\n2. Open My fields for a current calculation.\n3. After watering, record the amount.\n4. Open AI agronomist for plant photos and questions.'):tr(lang,'Su-Tech рассчитывает потребность в поливе по погоде Open-Meteo, культуре и почве. Методика: FAO-56. ИИ помогает с уходом и видимыми симптомами растений.','Su-Tech Open-Meteo ауа райы, дақыл және топырақ бойынша суару қажеттілігін есептейді. Әдістеме: FAO-56. ЖИ өсімдік күтімі мен көрінетін белгілерді түсіндіреді.','Su-Tech estimates irrigation needs using Open-Meteo weather, crop and soil. Method: FAO-56. AI helps with plant care and visible symptoms.'),keyboard([back(lang)]));
  if(data.startsWith('soil:')||data.startsWith('soilset:')){
   const [kind,fid,level]=data.split(':');
@@ -131,7 +139,7 @@ export async function action(id,data) {
     [button(t(lang,'btn_cancel'),`field:${row.id}`)]]));
   }
   if(!Object.hasOwn(SOIL_LEVELS,level))return home(id,lang,u.generation);
-  const row=await checkMoisture(id,fid,level);
+  const row=await checkMoisture(id,fid,level,null,u.epoch);
   return show(tr(lang,'✅ Баланс скорректирован по вашей проверке.','✅ Баланс сіздің тексеруіңіз бойынша түзетілді.','✅ Balance corrected from your check.')+'\n\n'+report(row,lang),fieldButtons(row,lang));
  }
  const [exk,exid,exkey]=data.split(':');
@@ -142,13 +150,13 @@ export async function action(id,data) {
   return show(tr(lang,`Введите значение: ${NAME[exkey][0]}. От ${lo} до ${hi}. Например: ${exkey==='kc_factor'?'1.1':exkey==='p'?'0.5':'0.8'}`,`Мәнді енгізіңіз: ${NAME[exkey][1]}. ${lo}-ден ${hi}-ге дейін. Мысалы: ${exkey==='kc_factor'?'1.1':exkey==='p'?'0.5':'0.8'}`,`Enter a value: ${NAME[exkey][2]}. From ${lo} to ${hi}. For example: ${exkey==='kc_factor'?'1.1':exkey==='p'?'0.5':'0.8'}`),keyboard([[button(t(lang,'btn_cancel'),`expert:${exid}`)]]));
  }
  if(exk==='exreset'){
-  let row=await ownedField(id,exid);for(const k of Object.keys(row.payload.expert??{}))row=await setExpert(id,exid,k,null);
+  let row=await ownedField(id,exid);for(const k of Object.keys(row.payload.expert??{}))row=await setExpert(id,exid,k,null,u.epoch);
   return expertScreen(id,lang,row,show,tr(lang,'✅ Возвращены значения FAO-56.','✅ FAO-56 мәндері қайтарылды.','✅ FAO-56 values restored.'));
  }
  const [type,value]=data.split(':');
- if(type==='vote'){await feedback(id,value,data.split(':')[2]==='y');const row=await ownedField(id,value);return show(p(lang,'thanks')+'\n\n'+report(row,lang),fieldButtons(row,lang));}
+ if(type==='vote'){await feedback(id,value,data.split(':')[2]==='y',u.epoch);const row=await ownedField(id,value);return show(p(lang,'thanks')+'\n\n'+report(row,lang),fieldButtons(row,lang));}
  if(['field','explain','water','delete','confirmdelete','export'].includes(type)){
-  const row=type==='field'?await refresh(id,value):await ownedField(id,value);
+  const row=type==='field'?await refresh(id,value,null,null,u.epoch):await ownedField(id,value);
   if(type==='delete')return show(tr(lang,'Удалить это поле?','Бұл алқап жойылсын ба?','Delete this field?'),keyboard([[button(tr(lang,'Удалить','Жою','Delete'),`confirmdelete:${value}`),button(t(lang,'btn_cancel'),`field:${value}`)]]));
   if(type==='confirmdelete'){await remove(`field:${value}`,id,'field');return fieldsScreen(id,lang,0,u.generation);}
   if(type==='water'){
@@ -173,15 +181,15 @@ export async function callback(q,ctx) {
  await rememberMessage(id,q.message.message_id,q.message.date);
  const u=await user(id,q.from.language_code),data=String(q.data??'');
  if(data.startsWith('p:')){
-  if(u.mode!=='plan'||!u.draft)return action(id,'home');
+  if(u.mode!=='plan'||!u.draft)return action(id,'home',u.epoch);
   const [,generation,step,...raw]=data.split(':');
   if(u.generation!==Number(generation)||u.draft.step!==Number(step))return planScreen(id);
-  const payload=await planInput(id,raw.join(':'),{generation:Number(generation),step:Number(step)});
-  if(payload)await deliverCalculation(id,payload);return;
+  const payload=await planInput(id,raw.join(':'),{generation:Number(generation),step:Number(step)},u.epoch);
+  if(payload)await deliverCalculation(id,payload,u.epoch);return;
  }
  for(const mid of u.attachments??[])await ignoreDelete(id,mid);
  if(u.attachments?.length){u.attachments=[];await saveUser(id,u);}
- try{await action(id,data);}
+ try{await action(id,data,u.epoch);}
  catch(e){
   if(e.message==='stale'){
    const fresh=await user(id);
@@ -211,36 +219,36 @@ export async function message(m,ctx) {
  if(!keepInput&&!await ignoreDelete(id,m.message_id))await rememberMessage(id,m.message_id,m.date);
  if(text.startsWith('/start')){
   const entry=text.split(/\s+/)[1]??'',match=entry.match(/^(app|ai|pilot|demo)_(ru|kz|en)$/);
-  if(match){u.lang=match[2];await saveUser(id,u);return action(id,match[1]);}
-  if(u.languageChosen||u.screen)return action(id,'home');
-  const initial=await navigate(id);return screen(id,'Su-Tech\nРусский / Қазақша / English',languages(u.lang),initial.generation);
+  if(match){u.lang=match[2];await saveUser(id,u);return action(id,match[1],u.epoch);}
+  if(u.languageChosen||u.screen)return action(id,'home',u.epoch);
+  const initial=await navigate(id,'home',u.epoch);return screen(id,'Su-Tech\nРусский / Қазақша / English',languages(u.lang),initial.generation);
  }
  const command=text.split(/\s|@/)[0].toLowerCase();
  const route=matchingButton(text)??({'/menu':'home','/exit':'home','/cancel':'home','/app':'app','/help':'help','/about':'about','/language':'languages','/ai':'ai','/newchat':'ai:new','/pilot':'pilot','/demo':'demo','/plan':'plan','/fields':'fields','/history':'history'}[command]);
- if(route)return action(id,route);
- if(m.web_app_data){let payload;try{payload=JSON.parse(m.web_app_data.data);}catch{return action(id,'app');}return deliverCalculation(id,payload);}
+ if(route)return action(id,route,u.epoch);
+ if(m.web_app_data){let payload;try{payload=JSON.parse(m.web_app_data.data);}catch{return action(id,'app',u.epoch);}return deliverCalculation(id,payload,u.epoch);}
  if(u.mode==='plan'){
   const input=m.location?`${m.location.latitude} ${m.location.longitude}`:text;
-  const payload=await planInput(id,input);if(payload)return deliverCalculation(id,payload);return;
+  const payload=await planInput(id,input,null,u.epoch);if(payload)return deliverCalculation(id,payload,u.epoch);return;
  }
  if(u.mode==='expert'&&u.expert){
   try{
-   const row=await setExpert(id,u.expert.id,u.expert.key,String(text).replace(',','.'));u.mode='home';u.expert=null;await saveUser(id,u);await navigate(id);
+   const row=await setExpert(id,u.expert.id,u.expert.key,String(text).replace(',','.'),u.epoch);u.mode='home';u.expert=null;await saveUser(id,u);u=await navigate(id,'home',u.epoch);
    return expertScreen(id,u.lang,row,(tx,kb)=>screen(id,tx,kb),tr(u.lang,'✅ Сохранено, отмечено «вручную».','✅ Сақталды, «қолмен» деп белгіленді.','✅ Saved, marked “manual”.'));
   }catch(e){const [lo,hi]=LIMITS[u.expert.key];return screen(id,e.message==='busy'?tr(u.lang,'Поле занято, повторите.','Алқап бос емес, қайталаңыз.','The field is busy, try again.'):tr(u.lang,`Введите число от ${lo} до ${hi}.`,`${lo}-ден ${hi}-ге дейінгі санды енгізіңіз.`,`Enter a number from ${lo} to ${hi}.`),keyboard([[button(t(u.lang,'btn_cancel'),`expert:${u.expert.id}`)]]),u.generation);}
  }
  if(u.mode==='water'){
   try{
    const row=await ownedField(id,u.water.id);
-   if(currentResult(row).status==='unsupported'){await navigate(id);return screen(id,report(row,u.lang),fieldButtons(row,u.lang));}
-   const f=await waterField(id,u.water.id,text,u.water.expected,u.water.revision);await navigate(id);return screen(id,report(f,u.lang),fieldButtons(f,u.lang));
+   if(currentResult(row).status==='unsupported'){u=await navigate(id,'home',u.epoch);return screen(id,report(row,u.lang),fieldButtons(row,u.lang),u.generation);}
+   const f=await waterField(id,u.water.id,text,u.water.expected,u.water.revision,u.epoch);u=await navigate(id,'home',u.epoch);return screen(id,report(f,u.lang),fieldButtons(f,u.lang),u.generation);
   }catch(e){
-   if(e.message==='unsupported'){const row=await ownedField(id,u.water.id);await navigate(id);return screen(id,report(row,u.lang),fieldButtons(row,u.lang));}
+   if(e.message==='unsupported'){const row=await ownedField(id,u.water.id);u=await navigate(id,'home',u.epoch);return screen(id,report(row,u.lang),fieldButtons(row,u.lang),u.generation);}
    return screen(id,e.message==='balance_changed'?tr(u.lang,'Баланс изменился. Откройте поле снова.','Баланс өзгерді. Алқапты қайта ашыңыз.','The balance changed. Reopen the field.'):tr(u.lang,'Введите фактический объём в м³, например 0.2.','Нақты көлемді м³-пен жазыңыз, мысалы 0.2.','Enter the actual volume in m³, such as 0.2.'),keyboard([back(u.lang)]));
   }
  }
  if(u.mode!=='ai'){
-  u=await navigate(id,'ai');
+  u=await navigate(id,'ai',u.epoch);
  }
  let photo=m.photo?.slice(-1)[0],image=null;
  if(!photo&&m.document&&['image/jpeg','image/png'].includes(m.document.mime_type))photo=m.document;
@@ -248,7 +256,7 @@ export async function message(m,ctx) {
   if(photo){if(photo.file_size>4194304)throw new Error('large_image');image=await api.getFileContent(photo.file_id);}
   else if(!text)throw new Error('unsupported');
   const deep=!!u.aiDeep;
-  const result=await generate(id,text||(a(u.lang,'photo_prompt')),u.lang,image,deep);
+  const result=await generate(id,text||(a(u.lang,'photo_prompt')),u.lang,image,deep,u.epoch);
   if(result.ok&&!await ignoreDelete(id,m.message_id))await rememberMessage(id,m.message_id,m.date);
  }catch(e){
   const known=['large_image','bad_image','long_text','busy','cooldown','daily_limit','quota','configuration','not_configured','no_answer','unsupported'];
