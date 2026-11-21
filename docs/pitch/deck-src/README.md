@@ -1,5 +1,12 @@
 # Presentation sources
 
+The current greenhouse pilot deck is built with `pptxgenjs@3.12.0` using
+`node greenhouse-en.cjs ../files/Su-Tech-Greenhouse-EN.pptx`. Export that deck
+to PDF in PowerPoint so the two files contain the same six slides. Its cost
+scenario and evidence references are in `../GREENHOUSE_BRIEF_EN.md`.
+
+The original competition presentation below is kept for historical reference.
+
 The Su-Tech pitch deck (PowerPoint, native objects) is generated, not drawn by hand.
 
 | File | Role |
