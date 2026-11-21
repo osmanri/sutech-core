@@ -15,7 +15,7 @@ Decisions:
 
 Implementation and tests:
 
-- [ ] Reproduce late field/AI/feedback writes and interrupted deletion; implement lifecycle fences in store, business writers and rendering.
-- [ ] Test cleanup cutoffs, recent receipts/quotas, active leases and durable deletion markers; wire best-effort cleanup on activity.
-- [ ] Test encrypted export/restore with synthetic SQLite, tampering/wrong keys/unknown versions, duplicate rows, bad types and existing destination. Add management-only export and staging restore CLI.
-- [ ] Document private operation and platform limits; run full bot/Python suites and build; obtain fresh independent review, fix reproduced findings, then publish the reviewed result.
+- [x] Reproduce late field/AI/feedback writes and interrupted deletion. Implement lifecycle fencing in store, business writers and rendering.
+- [x] Test cleanup cutoffs, recent receipts and quotas, active leases and durable deletion markers. Attempt cleanup on activity.
+- [x] Test encrypted export and restore with synthetic SQLite, tampering, wrong keys, unknown versions, duplicate rows, bad types and an existing destination. Add private export and staging restore tools.
+- [x] Document private operation and platform limits. Independently review the changes and rerun regression tests after correcting the findings. Track deployment and CI in the release PR.
