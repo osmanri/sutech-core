@@ -49,6 +49,8 @@ try {
   const r=await run(`import {put,setting} from '../lib/store.js';export default async function(input){for(const [name,value] of Object.entries(input.settings))await put('config:'+name,0,'config',{value});return {configured:!!(await setting('gemini_key')),models:[await setting('gemini_model'),await setting('gemini_deep_model')]};}`,{settings:{gemini_key:env.GEMINI_API_KEY,gemini_model:env.GEMINI_MODEL||'gemini-3.5-flash-lite',gemini_deep_model:env.GEMINI_DEEP_MODEL||'gemini-3.7-flash'}});
   console.log(JSON.stringify(r));
  }else if(command==='import'){
+  const guard=resultOf(await run(`import {db} from 'sdk';export default async function(){return {blocked:!!(await db.get("SELECT id FROM records WHERE owner=0 AND kind='lifecycle' LIMIT 1"))};}`));
+  if(guard.blocked)throw new Error('Legacy import disabled after lifecycle protection is initialized; use a reviewed recovery procedure');
   const legacy=JSON.parse(fs.readFileSync(path.join(root,'.tgcloud/legacy-backup.json'),'utf8'));
   const records=[];const add=(id,owner,kind,body,updated=Date.now())=>records.push({id,owner:Number(owner),kind,body:JSON.stringify(body),updated});
   for(const [table,rows] of Object.entries(legacy)){

@@ -1,12 +1,13 @@
 import {db} from 'sdk';
-import {get,put,list,remove} from './store.js';
+import {get,putGuarded,list,remove,ownerState} from './store.js';
 import {ownedField} from './fields.js';
 import {PILOT_COPY} from './pilot-copy.js';
 import {button,keyboard,back,APP_URL,screen} from './ui.js';
 import {tr} from './i18n.js';
 export const p=(lang,key,values={})=>(PILOT_COPY[lang]??PILOT_COPY.ru)[key].replace(/\{(\w+)\}/g,(m,k)=>values[k]??m);
-export async function pilot(id,lang,action,generation){
- if(action==='join')await put(`pilot:${id}`,id,'pilot',{lang,joined:Date.now()});
+export async function pilot(id,lang,action,generation,expectedEpoch=null){
+ const {epoch}=await ownerState(id,expectedEpoch);
+ if(action==='join')await putGuarded(`pilot:${id}`,id,'pilot',{lang,joined:Date.now()},{epoch,generation});
  if(action==='delete'){
   await remove(`pilot:${id}`,id,'pilot');
   await db.run("DELETE FROM records WHERE owner=:owner AND kind='feedback'",{':owner':id});
@@ -18,7 +19,8 @@ export async function pilot(id,lang,action,generation){
   [button(p(lang,joined?'leave':'join'),joined?'pilot:leave':'pilot:join')],
   [{text:p(lang,'back'),web_app:{url:APP_URL+'?lang='+lang}}],back(lang)]),generation);
 }
-export async function feedback(id,fieldId,useful){
+export async function feedback(id,fieldId,useful,expectedEpoch=null){
+ const {epoch}=await ownerState(id,expectedEpoch);
  if(typeof useful!=='boolean')throw new Error('invalid');const row=await ownedField(id,fieldId);
- await put(`feedback:${id}:${row.id}:${row.last_day}`,id,'feedback',{field_id:row.id,date:row.last_day,useful,created:Date.now()});
+ await putGuarded(`feedback:${id}:${row.id}:${row.last_day}`,id,'feedback',{field_id:row.id,date:row.last_day,useful,created:Date.now()},{epoch});
 }

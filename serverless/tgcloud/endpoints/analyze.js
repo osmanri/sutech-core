@@ -6,5 +6,5 @@ export default async function(input,ctx){
  const id=caller(ctx,input),payload=input?.payload;
  if(!payload||typeof payload!=='object'||Array.isArray(payload))throw new EndpointError('Missing field',{code:'INVALID_INPUT'});
  const u=await user(id);if(['ru','kz','en'].includes(payload.lang)){u.lang=payload.lang;await saveUser(id,u);}
- return deliverCalculation(id,payload);
+ return deliverCalculation(id,payload,u.epoch);
 }

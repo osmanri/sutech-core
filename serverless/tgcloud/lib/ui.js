@@ -22,7 +22,7 @@ export async function screen(id,text,markup,expectedGeneration=null,plain=false)
   const params={chat_id:id,text:text.slice(0,4000),...(plain?{}:{parse_mode:'HTML'}),reply_markup:markup??keyboard([back(u.lang)]),link_preview_options:{is_disabled:true}};
   return renderScreen(id,params,expectedGeneration??u.generation);
 }
-export const navigate=(id,mode='home')=>navigateUser(id,mode);
+export const navigate=(id,mode='home',expectedEpoch=null)=>navigateUser(id,mode,expectedEpoch);
 export const home=(id,lang,generation=null)=>screen(id,tr(lang,'<b>Su-Tech</b>\nПолив, поля и помощь по растениям. Выберите действие.','<b>Su-Tech</b>\nСуару, алқаптар және өсімдіктерге көмек. Әрекетті таңдаңыз.','<b>Su-Tech</b>\nIrrigation, fields and plant advice. Choose an action.'),homeKeys(lang),generation);
 export function languages(lang) {return keyboard([[button('Русский','lang:ru',lang==='ru'?'primary':undefined),button('Қазақша','lang:kz',lang==='kz'?'primary':undefined),button('English','lang:en',lang==='en'?'primary':undefined)],back(lang)]);}
 export function aiKeys(lang){return keyboard([[button(a(lang,'new_button'),'ai:new'),button(tr(lang,'История ИИ','ЖИ тарихы','AI history'),'ai:history')],[button(a(lang,'deep_button'),'ai:deep')],[button(tr(lang,'Культура на фото','Фотодағы дақыл','Crop in photo'),'ai:crop'),button(tr(lang,'Фото для обучения','Оқытуға арналған фото','Training photos'),'ai:photo-data')],[button(tr(lang,'Рассчитать полив в чате','Чатта суару есебі','Calculate in chat'),'plan')],back(lang)]);}

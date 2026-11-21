@@ -1,5 +1,5 @@
 import {fetch,api} from 'sdk';
-import {get,putGuarded,list,lock,unlock,setting,reserveAI,user,saveUser,nonce} from './store.js';
+import {get,putGuarded,list,lock,unlock,setting,reserveAI,user,saveUser,ownerState,nonce} from './store.js';
 import {inScope} from './scope.js';
 import {PROMPTS} from './knowledge.js';
 import {screen,aiKeys} from './ui.js';
@@ -37,12 +37,13 @@ export async function providerReply({key,model,text,lang,history=[],image=null,d
  const responseParts=candidate.content.parts.filter(p=>typeof p.text==='string'||p.thoughtSignature).map(p=>Object.fromEntries(Object.entries(p).filter(([k])=>['text','thought','thoughtSignature'].includes(k))));
  return {answer,responseParts};
 }
-export async function generate(id,text,lang,image=null,deep=false) {
+export async function generate(id,text,lang,image=null,deep=false,expectedEpoch=null) {
  if(text.length>2000)throw new Error('long_text');
+ const {epoch}=await ownerState(id,expectedEpoch);
  const guard=`ai:${id}`,token=await lock(guard,75);if(!token)throw new Error('busy');
  const deadline=Date.now()+60000;
  try {
-  const u=await user(id),generation=u.generation;
+  const u=await user(id,null,epoch),generation=u.generation;
   const local=image?null:quickReply(text,lang);
   if(local){await screen(id,local,aiKeys(lang),generation,true);return {ok:true,local:true,characters:local.length};}
   const session=await get(`ai-context:${id}`,id);
@@ -81,11 +82,11 @@ export async function generate(id,text,lang,image=null,deep=false) {
   if(latest.generation!==generation||latest.mode!=='ai')return {cancelled:true};
   if(Date.now()>=deadline)throw new Error('unavailable');
   history=[...history,{role:'user',parts:[{text:(image?'[new plant photo] ':'')+text}]},{role:'model',parts:responseParts}].slice(-8);
-  const fence={lease:[guard,token],generation,mode:'ai'};
+  const fence={lease:[guard,token],generation,mode:'ai',epoch};
   await putGuarded(`ai-context:${id}`,id,'ai-context',{history,model},fence);
   const answerId=`ai-answer:${nonce()}`;
   await putGuarded(answerId,id,'ai-answer',{question:text,answer,model,has_image:!!image,created:Date.now()},fence);
-  try{await recordComparison(id,outcome,answerId);}catch{/* Optional shadow telemetry must not discard an answer. */}
+  try{await recordComparison(id,outcome,answerId,epoch);}catch{/* Optional shadow telemetry must not discard an answer. */}
   await screen(id,answer,aiKeys(lang),generation,true);return {ok:true,characters:answer.length};
  } catch(e){if(e.message==='stale')return {cancelled:true};throw e;}
  finally {await unlock(guard,token);}

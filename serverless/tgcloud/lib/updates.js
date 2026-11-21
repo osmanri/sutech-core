@@ -1,8 +1,10 @@
 import {db} from 'sdk';
 import {lock,unlock} from './store.js';
+import {pruneOperationalData} from './retention.js';
 export async function once(ctx,handle) {
  const id=ctx?.update?.update_id;
  if(!Number.isSafeInteger(id))throw new Error('UPDATE_CONTEXT_REQUIRED');
+ try{await pruneOperationalData();}catch{/* A maintenance failure must not discard the user's update. */}
  if(await db.get('SELECT id FROM update_receipts WHERE id=:id',{':id':String(id)}))return;
  const token=await lock(`update:${id}`,90);if(!token)throw new Error('UPDATE_IN_PROGRESS');
  try{

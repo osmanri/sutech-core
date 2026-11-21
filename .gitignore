@@ -6,6 +6,9 @@
 
 # Telegram Serverless local access credentials and CLI cache
 **/.tgcloud/
+*.sutech-backup
+*.sutech-key
+*.recovery.sqlite
 serverless/node_modules/
 serverless/dist/
 
