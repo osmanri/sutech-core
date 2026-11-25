@@ -13,6 +13,13 @@ import {rememberMessage} from './screens.js';
 import {aiIntro} from './conversation.js';
 import {demoScreen,demoSteps} from './demo.js';
 import {CROP_IDS} from './diagnosis.js';
+const appliedWaterPrompt=lang=>tr(lang,'Сколько воды подали? Например: 200 л или 0,2 м³. Число без единицы считается кубометрами.','Қанша су берілді? Мысалы: 200 л немесе 0,2 м³. Өлшем бірлігі көрсетілмесе, сан текше метр деп алынады.','How much water did you apply? Enter 200 L or 0.2 m³, for example. A number without a unit means cubic metres.');
+function appliedWaterM3(text){
+ const match=/^([0-9]+(?:[.,][0-9]+)?)\s*(л|l|литр(?:а|ов)?|lit(?:re|er)s?|[мm][³3])$/iu.exec(text);
+ if(!match)return text;
+ const [,amount,unit]=match;
+ return Number(amount.replace(',','.'))/(/^[мm]/i.test(unit)?1:1000);
+}
 const fieldButtons=(row,lang)=>keyboard([
  [button(t(lang,'btn_explain'),`explain:${row.id}`)],
  [button(p(lang,'useful'),`vote:${row.id}:y`),button(p(lang,'unhelpful'),`vote:${row.id}:n`)],
@@ -162,7 +169,7 @@ export async function action(id,data,expectedEpoch=null) {
   if(type==='water'){
    if(currentResult(row).status==='unsupported')return show(report(row,lang),fieldButtons(row,lang));
    u.mode='water';u.water={id:row.id,expected:row.deficit,revision:row.revision};await saveUser(id,u);
-   return show(tr(lang,'Сколько воды подали на самом деле? Введите объём в м³. Например: 0.2\n\nПодтверждайте только выполненный полив.','Нақты қанша су берілді? Көлемді м³-пен жазыңыз. Мысалы: 0.2\n\nТек орындалған суаруды растаңыз.','How much water did you actually apply? Enter m³, for example: 0.2.\n\nRecord only completed irrigation.'),keyboard([[button(t(lang,'btn_cancel'),`field:${value}`)]]));
+   return show(appliedWaterPrompt(lang),keyboard([[button(t(lang,'btn_cancel'),`field:${value}`)]]));
   }
   if(type==='export'){
    const csv=fieldCsv(row);
@@ -218,7 +225,7 @@ export async function message(m,ctx) {
  }
  if(!keepInput&&!await ignoreDelete(id,m.message_id))await rememberMessage(id,m.message_id,m.date);
  if(text.startsWith('/start')){
-  const entry=text.split(/\s+/)[1]??'',match=entry.match(/^(app|ai|pilot|demo)_(ru|kz|en)$/);
+  const entry=text.split(/\s+/)[1]??'',match=entry.match(/^(app|ai|pilot|demo|plan)_(ru|kz|en)$/);
   if(match){u.lang=match[2];await saveUser(id,u);return action(id,match[1],u.epoch);}
   if(u.languageChosen||u.screen)return action(id,'home',u.epoch);
   const initial=await navigate(id,'home',u.epoch);return screen(id,'Su-Tech\nРусский / Қазақша / English',languages(u.lang),initial.generation);
@@ -241,10 +248,10 @@ export async function message(m,ctx) {
   try{
    const row=await ownedField(id,u.water.id);
    if(currentResult(row).status==='unsupported'){u=await navigate(id,'home',u.epoch);return screen(id,report(row,u.lang),fieldButtons(row,u.lang),u.generation);}
-   const f=await waterField(id,u.water.id,text,u.water.expected,u.water.revision,u.epoch);u=await navigate(id,'home',u.epoch);return screen(id,report(f,u.lang),fieldButtons(f,u.lang),u.generation);
+   const f=await waterField(id,u.water.id,appliedWaterM3(text),u.water.expected,u.water.revision,u.epoch);u=await navigate(id,'home',u.epoch);return screen(id,report(f,u.lang),fieldButtons(f,u.lang),u.generation);
   }catch(e){
    if(e.message==='unsupported'){const row=await ownedField(id,u.water.id);u=await navigate(id,'home',u.epoch);return screen(id,report(row,u.lang),fieldButtons(row,u.lang),u.generation);}
-   return screen(id,e.message==='balance_changed'?tr(u.lang,'Баланс изменился. Откройте поле снова.','Баланс өзгерді. Алқапты қайта ашыңыз.','The balance changed. Reopen the field.'):tr(u.lang,'Введите фактический объём в м³, например 0.2.','Нақты көлемді м³-пен жазыңыз, мысалы 0.2.','Enter the actual volume in m³, such as 0.2.'),keyboard([back(u.lang)]));
+   return screen(id,e.message==='balance_changed'?tr(u.lang,'Баланс изменился. Откройте поле снова.','Баланс өзгерді. Алқапты қайта ашыңыз.','The balance changed. Reopen the field.'):appliedWaterPrompt(u.lang),keyboard([back(u.lang)]));
   }
  }
  if(u.mode!=='ai'){
