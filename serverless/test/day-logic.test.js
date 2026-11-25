@@ -112,3 +112,14 @@ test('re-sending the same field with a stale day count does not wipe the balance
     assert.equal(r.submit,'existing');assert.equal(r.payload.day_of_growth,57);assert.ok(r.deficit>a.deficit);
   }finally{home();}
 });
+
+test('changing the display units or sending explicit outdoor defaults keeps an existing watering',async()=>{
+  const payload={...base(),area:6,area_unit:'sotka'};
+  serve({0:[6,0]});
+  const field=await calculateField(809,payload);
+  const watered=await waterField(809,field.id,0.3,field.deficit,field.revision);
+  const roundtrip=await calculateField(809,{...payload,area:.06,area_unit:'hectare',field_type:'open',is_saline:'no',greenhouse_medium:'soil',greenhouse_heated:'no'});
+  assert.equal(roundtrip.submit,'existing');
+  assert.equal(roundtrip.id,field.id);
+  assert.equal(roundtrip.deficit,watered.deficit);
+});

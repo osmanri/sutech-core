@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased, 25 November
+
+- The Telegram home menu opens a guided irrigation calculation. Enter plot size in hectares, square metres, sotkas or rectangular dimensions, send the plot pin, and use a planting date or an approximate growth stage. The setup asks whether the crop is outdoors, in greenhouse soil, or on a substrate before recommending a dose. Heated greenhouses require measured indoor ET₀. Reported doses are labelled as estimates, and actual watering can be entered in litres or cubic metres.
+
 ## Unreleased, 21 November
 
 - Deletion now blocks writes from an old session, including deferred calculations and AI answers. Interrupted erasure resumes on the next owner operation. Operational data expire on activity. The private backup tool supports authenticated encryption and offline staging recovery. See `docs/DATA_RECOVERY.md` for verified behavior and deployment limits.

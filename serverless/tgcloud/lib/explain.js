@@ -12,6 +12,7 @@ export function confidence(row,field,r,now=Date.now()) {
   if(r.status==='unsupported'||r.leaching_impossible)return {level:'low',reasons:['unsupported'],raise:'agronomist'};
   if(field.crop!=='rice'&&field.crop!=='other'&&CROP_STATUS[field.crop]!=='FAO-56')reasons.push('crop_stages');
   if(field.crop==='other')reasons.push('crop_custom');
+  if(row.payload.growth_estimated===true)reasons.push('estimated_growth');
   if(ageDays===null)reasons.push('no_check');else if(ageDays>7)reasons.push('old_check');
   if(field.saline&&field.water_ec==null&&field.soil_ec==null)reasons.push('saline_unmeasured');
   if(field.field_type==='greenhouse'&&field.greenhouse_et0==null)reasons.push('greenhouse_estimate');

@@ -11,6 +11,7 @@ export const button=(text,data,style=buttonStyle(data))=>({text,callback_data:da
 export const keyboard=rows=>({inline_keyboard:rows.filter(row=>row.length).map(row=>row.map(item=>item.web_app&&!item.style?{...item,style:'success'}:item))});
 export const back=lang=>[button(tr(lang,'‹ Назад','‹ Артқа','‹ Back'),'home')];
 export function homeKeys(lang) {return keyboard([
+  [button(tr(lang,'Рассчитать полив','Суаруды есептеу','Calculate irrigation'),'plan')],
   [{text:t(lang,'btn_webapp'),web_app:{url:`${APP_URL}?lang=${language(lang)}`}}],
   [button(a(lang,'button'),'ai')],
   [button(t(lang,'btn_fields'),'fields'),button(t(lang,'btn_history'),'history')],

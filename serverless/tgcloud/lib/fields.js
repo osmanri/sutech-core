@@ -4,6 +4,7 @@ import {get,putGuarded,list,lock,unlock,ownerId,ownerState,nonce} from './store.
 import {weather} from './weather.js';
 import {parseField,cleanExpert,KEYS} from './expert.js';
 import {tr,t,esc,fmt,volume} from './i18n.js';
+import {q} from './planner-extra.js';
 export async function ownedField(id,fieldId) {
   ownerId(id);const row=await get(`field:${String(fieldId)}`,id);
   if(!row)throw new Error('not_found');return row;
@@ -70,9 +71,15 @@ function recompute(row,w) {
   row.result=today.result;row.deficit=today.end;row.last_day=w.day;row.weather=forecast;
   row.payload.day_of_growth=diffDays(w.day,row.planting);row.gap_days=gaps;row.version=VERSION;
 }
-const PHYSICAL=['crop','soil_type','irrigation_type','field_type','is_saline','greenhouse_et0','greenhouse_medium','greenhouse_heated','water_ec','soil_ec','custom_kc','custom_root_depth','custom_p','stage_days','area','area_unit'];
+const PHYSICAL=['crop','soil_type','irrigation_type','water_ec','soil_ec','custom_kc','custom_root_depth','custom_p','stage_days'];
 const COSTS=['power_price','pump_power_kw','pump_productivity_m3h'];
 const same=(a,b)=>JSON.stringify(a??null)===JSON.stringify(b??null)||(a!==null&&b!==null&&a!==undefined&&b!==undefined&&a!==''&&b!==''&&Number(a)===Number(b));
+function physicalChange(previous,payload,parsed) {
+  if(PHYSICAL.some(k=>!same(previous[k],payload[k])))return true;
+  const before=parseField(previous);
+  return Math.abs(before.area_ha-parsed.area_ha)>1e-12||before.field_type!==parsed.field_type||before.saline!==parsed.saline||
+    (parsed.field_type==='greenhouse'&&['greenhouse_et0','greenhouse_medium','greenhouse_heated'].some(k=>before[k]!==parsed[k]));
+}
 function freshRow(fieldId,key,payload,w,parsed) {
   const row={id:fieldId,key,payload,planting:addDays(w.day,-parsed.day),closed_day:addDays(w.day,-1),
     closed_deficit:parsed.yesterday,revision:1,events:[],checks:[],version:VERSION};
@@ -89,12 +96,12 @@ export async function calculateField(id,payload,expectedEpoch=null) {
     if(existing){
       // The planting date is kept from the stored field (the form may resend a stale day count from a
       // saved draft); only a change of the field itself restarts the balance.
-      if(PHYSICAL.some(k=>!same(existing.payload[k],payload[k]))||COSTS.some(k=>!same(existing.payload[k],payload[k]))){
+      if(physicalChange(existing.payload,payload,parsed)||COSTS.some(k=>!same(existing.payload[k],payload[k]))){
         const guard2=`field:${existing.id}`,t2=await lock(guard2,45);if(!t2)throw new Error('busy');
         try{
           // A soil check/watering may have completed while weather was loading.
           existing=await ownedField(id,existing.id);migrate(existing,w.day);
-          if(PHYSICAL.some(k=>!same(existing.payload[k],payload[k]))){
+          if(physicalChange(existing.payload,payload,parsed)){
             // The farmer corrected the field itself: start from the new inputs.
             if(existing.payload.expert)clean.expert=existing.payload.expert;
             const row=freshRow(existing.id,key,clean,w,parsed);
@@ -176,7 +183,8 @@ export function report(row,lang,details=false) {
     deferred:tr(lang,'Сегодня можно не поливать','Бүгін суармаса болады','No irrigation needed today'),rice:tr(lang,'Расчёт для риса','Күрішке арналған есеп','Rice water estimate'),unsupported:tr(lang,'Совет по поливу не выдаётся','Суару кеңесі берілмейді','No irrigation advice is given')}[r.status];
   let s=`<b>${esc(state)}</b>\n${esc(t(lang,'report_crop_'+field.crop))} · ${fmt(field.area_ha,6)} ${tr(lang,'га','га','ha')}\n${esc(row.last_day)} · ${esc(row.weather.timezone??'')}\n\n`;
   if(r.status==='unsupported')return s+(r.unsupported_reason==='substrate'?tr(lang,'Теплица на субстрате (минвата, кокос): метод водного баланса почвы не подходит. Поливом на субстрате управляют по доле дренажа, обратитесь к агроному.','Субстраттағы жылыжай (минвата, кокос): топырақ су балансы әдісі жарамайды. Субстратта суаруды дренаж үлесімен басқарады, агрономға жүгініңіз.','Greenhouse on a substrate (rockwool, coco): the soil water balance does not apply. Substrate irrigation is managed by the drainage fraction; ask an agronomist.'):tr(lang,'Отапливаемая теплица: оценка по уличной погоде здесь неверна (растения пьют из-за отопления и света, а не уличной жары). Введите измеренный ET₀ теплицы или обратитесь к агроному; пока совет не выдаётся.','Жылытылатын жылыжай: сыртқы ауа райымен бағалау мұнда дұрыс емес (өсімдік жылыту мен жарыққа байланысты су ішеді). Жылыжайдың өлшенген ET₀ мәнін енгізіңіз немесе агрономға жүгініңіз; әзірге кеңес берілмейді.','Heated greenhouse: an estimate from outdoor weather is wrong here (the crop drinks because of heating and light, not outdoor heat). Enter a measured greenhouse ET₀ or ask an agronomist; no advice is given for now.'));
-  if(r.status!=='deferred')s+=`<b>${tr(lang,'Подать воды','Берілетін су','Apply water')}: ${volumeRounded(r.gross_m3,lang)}</b>\n`+firstDayNote(field,r,lang);
+  if(r.status!=='deferred')s+=`<b>${tr(lang,'Подать воды','Берілетін су','Apply water')}: ≈ ${volumeRounded(r.gross_m3,lang)}</b>\n`+firstDayNote(field,r,lang);
+  if(row.payload.growth_estimated===true)s+=esc(q(lang,'growth_estimated'))+'\n';
   if(r.irrigation_days>1)s+=tr(lang,`⚠️ Насос за сутки подаёт не больше ${fmt(r.max_daily_m3,0)} м³ (${PUMP_MAX_HOURS_PER_DAY} ч работы). Объём больше: разделите полив на ${r.irrigation_days} дн., около ${fmt(r.gross_m3/r.irrigation_days,0)} м³ в день.\n`,`⚠️ Сорғы тәулігіне ${fmt(r.max_daily_m3,0)} м³-ден артық бере алмайды (${PUMP_MAX_HOURS_PER_DAY} сағ жұмыс). Көлем одан көп: суаруды ${r.irrigation_days} күнге бөліңіз, күніне шамамен ${fmt(r.gross_m3/r.irrigation_days,0)} м³.\n`,`⚠️ The pump delivers at most ${fmt(r.max_daily_m3,0)} m³ per day (${PUMP_MAX_HOURS_PER_DAY} h of running). The volume is larger: split the watering over ${r.irrigation_days} days, about ${fmt(r.gross_m3/r.irrigation_days,0)} m³ a day.\n`);
   if(!details&&r.status!=='unsupported'){const c=confidence(row,field,r);s+=confidenceLine(needsCheck(row)&&c.raise==='check'?{...c,raise:null}:c,lang)+'\n\n';}
   s+=tr(lang,'После полива отметьте фактический объём.','Суарғаннан кейін нақты көлемді белгілеңіз.','After watering, record the actual amount.');
